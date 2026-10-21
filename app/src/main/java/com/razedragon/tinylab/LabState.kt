@@ -143,6 +143,15 @@ class LabState(context: Context) {
     var nextContest = 0L
     var lastContest: List<Entrant> = emptyList()
 
+    /** The garden diary: newest entries first. */
+    val diary = ArrayList<String>()
+
+    fun addDiary(text: String) {
+        val date = java.text.SimpleDateFormat("MMM d", java.util.Locale.getDefault()).format(java.util.Date())
+        diary.add(0, "$date · $text")
+        while (diary.size > 60) diary.removeAt(diary.size - 1)
+    }
+
     /** Messages for the screen to show (expedition returns, auto-feeder...). */
     val events = ArrayList<String>()
 
@@ -286,7 +295,9 @@ class LabState(context: Context) {
                 val d = Random.nextInt(Data.DECOR.size); decorOwned[d]++; parts.add("a ${Data.DECOR[d].name}!")
             }
         }
-        events.add("${s.name} is back from ${z.name}! It ${Data.STORIES.random()} and brought ${parts.joinToString(", ")}")
+        val story = Data.STORIES.random()
+        events.add("${s.name} is back from ${z.name}! It $story and brought ${parts.joinToString(", ")}")
+        addDiary("${s.name} explored ${z.name} and $story.")
         s.awayZone = -1
         s.gx = if (Random.nextBoolean()) 0.06f else 0.94f
         s.gz = 0.3f + Random.nextFloat() * 0.5f
@@ -404,6 +415,7 @@ class LabState(context: Context) {
         dust += intArrayOf(120, 60, 30, 10)[place - 1]
         s.happy = min(100f, s.happy + 10f)
         if (place == 1) contestWins++
+        addDiary("${s.name} came ${arrayOf("1st 🥇", "2nd 🥈", "3rd 🥉", "4th")[place - 1]} in the beauty contest.")
         nextContest = System.currentTimeMillis() + 3 * 3600_000L
         return place
     }
@@ -437,6 +449,7 @@ class LabState(context: Context) {
             achieved[i] = true
             dust += Data.ACHIEVEMENTS[i].reward
             out.add(i)
+            addDiary("Earned the \"${Data.ACHIEVEMENTS[i].name}\" award! 🏆")
         }
         return out
     }
@@ -490,6 +503,7 @@ class LabState(context: Context) {
             })
         }
         o.put("garden", g)
+        o.put("diary", JSONArray(diary))
         prefs.edit().putString("save", o.toString()).apply()
     }
 
@@ -537,6 +551,7 @@ class LabState(context: Context) {
             lastLoginDay = o.optInt("login"); streak = o.optInt("streak"); giftDay = o.optInt("gift"); nextContest = o.optLong("contest")
             nextId = o.optLong("nextId", 1L)
             lastTick = o.optLong("lastTick", System.currentTimeMillis())
+            o.optJSONArray("diary")?.let { a -> for (i in 0 until a.length()) diary.add(a.optString(i)) }
             o.optJSONArray("garden")?.let { a ->
                 for (i in 0 until a.length()) {
                     val s = a.getJSONObject(i)

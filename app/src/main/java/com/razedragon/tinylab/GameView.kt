@@ -358,6 +358,12 @@ class GameView(context: Context) : View(context) {
         val shiny = Random.nextFloat() < 0.02f + 0.25f * q * q
         if (shiny) lab.shinyFound[sp] = true
         val s = lab.newShroom(sp, q * 30f, shiny, pa, pb)
+        lab.addDiary(when {
+            shiny -> "A shiny ${Data.SPECIES[sp].name} named ${s.name} sprouted! ✨"
+            isNew -> "Discovered a new species: ${Data.SPECIES[sp].name}! Named it ${s.name}."
+            pa != null && pb != null -> "${pa.name} and ${pb.name} had a baby ${Data.SPECIES[sp].name}: ${s.name}!"
+            else -> "${s.name} the ${Data.SPECIES[sp].name} sprouted in the lab."
+        })
         if (q >= 1f) lab.perfect++
         lab.garden.add(s)
         popup = Popup(sp, isNew, s.id, crossed, shiny, q)
@@ -411,6 +417,7 @@ class GameView(context: Context) : View(context) {
             val idx = lab.garden.indexOf(s)
             if (idx >= 0) { val (x, y) = shroomPos(idx); burst(x, y - 30f * dp, MINT, 30, P_SPARK) }
             if (after == 2) toast("Grown mushrooms can crossbreed in the Lab!", DUST)
+            if (after >= 2) lab.addDiary("${s.name} grew into ${if (after == 2) "a Grown" else "an Elder"} ${Data.SPECIES[s.species].name}.")
         }
     }
 
@@ -481,7 +488,17 @@ class GameView(context: Context) : View(context) {
     private fun buildButtons(): List<Button> {
         val w = width.toFloat()
         val h = height.toFloat()
+        if (splashT > 0f) return ArrayList()
+        if (mini > 0) return ArrayList<Button>().also { miniButtons(it, w, h) }
         if (settingsOpen) return ArrayList<Button>().also { settingsButtons(it, w, h) }
+        if (cardFor >= 0) return ArrayList<Button>().also { l ->
+            val r = cardRect(w, h)
+            val bw = (r.width() - 12f * dp) / 2
+            l.add(Button("c_share", RectF(r.left, r.bottom + 14f * dp, r.left + bw, r.bottom + 62f * dp), "SHARE", STYLE_PRIMARY) {
+                shroom(cardFor)?.let { shareCard(it) }
+            })
+            l.add(Button("c_close", RectF(r.right - bw, r.bottom + 14f * dp, r.right, r.bottom + 62f * dp), "CLOSE") { cardFor = -1 })
+        }
         if (tutStep == T_WELCOME || tutStep == T_DONE) return ArrayList<Button>().also { tutorialButtons(it, w, h) }
         val list = buildButtonsInner(w, h)
         if (tutStep >= 0 && !photoMode) tutorialButtons(list, w, h)
@@ -536,7 +553,16 @@ class GameView(context: Context) : View(context) {
         return list
     }
 
-    private fun panelTop() = height * 0.58f
+    private var panelAnim = 1f
+    private var lastPanelKey = -1L
+    private val chatted = HashSet<String>()
+    private var shownDust = -1f
+    private var cardAnim = 0f
+
+    /** How far the bottom panel is still sliding up (0 once it's in place). */
+    private fun panelSlide() = (1f - easeOutBack(panelAnim)) * (navTop - height * 0.58f)
+    private fun panelTop() = height * 0.58f + panelSlide()
+    private fun panelBottom() = navTop - 6f * dp + panelSlide()
 
     private fun gardenButtons(list: ArrayList<Button>, w: Float, h: Float) {
         list.add(Button("decorate", RectF(14f * dp, topBar + 8f * dp, 134f * dp, topBar + 48f * dp),
@@ -569,7 +595,7 @@ class GameView(context: Context) : View(context) {
         val s = shroom(selected) ?: return
         val top = panelTop()
         val pad = 16f * dp
-        val by = navTop - 62f * dp
+        val by = navTop - 62f * dp + panelSlide()
         if (styling) { styleButtons(list, s, w, top, by); return }
         if (exploring) { exploreButtons(list, s, w, top, by); return }
         if (feeding) {
@@ -587,7 +613,7 @@ class GameView(context: Context) : View(context) {
             fun cell(col: Int, row: Int) = RectF(pad + col * (bw + 8f * dp), by - (1 - row) * 54f * dp,
                 pad + col * (bw + 8f * dp) + bw, by - (1 - row) * 54f * dp + 46f * dp)
             list.add(Button("feed", cell(0, 0), "FEED", STYLE_PRIMARY) { feeding = true; confirmRelease = false })
-            list.add(Button("pet", cell(1, 0), "PET") { pet(s); confirmRelease = false })
+            list.add(Button("card", cell(1, 0), "CARD") { cardFor = s.id; confirmRelease = false })
             list.add(Button("style", cell(2, 0), "STYLE") { styling = true; confirmRelease = false })
             list.add(Button("explore", cell(0, 1), "EXPLORE") { exploring = true; confirmRelease = false })
             list.add(Button("rename", cell(1, 1), "NAME") { renameDialog(s); confirmRelease = false })
@@ -980,6 +1006,25 @@ class GameView(context: Context) : View(context) {
 
     override fun onTouchEvent(e: MotionEvent): Boolean {
         val x = e.x; val y = e.y
+        if (splashT > 0f) {
+            if (e.actionMasked == MotionEvent.ACTION_UP) splashT = min(splashT, 0.45f)
+            return true
+        }
+        if (mini > 0) {
+            when (e.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    pressedId = buttons.lastOrNull { it.rect.contains(x, y) }?.id
+                    if (pressedId == null && mini == 1) catchTarget = x
+                }
+                MotionEvent.ACTION_MOVE -> if (pressedId == null && mini == 1) catchTarget = x
+                MotionEvent.ACTION_UP -> {
+                    val b = buttons.lastOrNull { it.id == pressedId && it.rect.contains(x, y) }
+                    pressedId = null
+                    b?.let { sound.play(Fx.CLICK, 0.6f); it.action() }
+                }
+            }
+            return true
+        }
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 downX = x; downY = y; dragX = x; dragY = y
@@ -1096,6 +1141,8 @@ class GameView(context: Context) : View(context) {
                         b.action()
                     } else if (id == null && popup == null && tab == Tab.GARDEN && !photoMode && !settingsOpen) {
                         tapGarden(x, y)
+                    } else if (id == null && popup == null && tab == Tab.LAB && !settingsOpen) {
+                        tapLab(x, y)
                     }
                 }
                 pressedId = null
@@ -1125,6 +1172,7 @@ class GameView(context: Context) : View(context) {
                 sound.play(Fx.BUBBLE, 0.9f, 0.9f + target * 0.2f)
                 buzz(15)
                 burst(width / 2f, flaskY() - 20f * dp, Data.INGREDIENTS[dragIndex].color, 16, P_SPARK)
+                flaskYum = 0.8f
             }
             2 -> { // food onto a mushroom
                 val s = shroomAt(x, y) ?: return
@@ -1303,6 +1351,19 @@ class GameView(context: Context) : View(context) {
             hugDone = true; pressedId = null
             shroom(dragShroom)?.let { hug(it) }
         }
+        if (splashT > 0f) splashT -= dt
+        updateMini(dt)
+        if (profSayT > 0f) profSayT -= dt
+        if (flaskYum > 0f) flaskYum -= dt
+        for (k in 0 until 6) if (jarWobble[k] > 0f) jarWobble[k] = max(0f, jarWobble[k] - dt * 1.5f)
+        if (professor.jiggle > 0f) professor.jiggle = max(0f, professor.jiggle - dt * 2.2f)
+        if (professor.exprT > 0f) { professor.exprT -= dt; if (professor.exprT <= 0f) professor.expr = 0 }
+        shownDust += (lab.dust - shownDust) * min(1f, dt * 6f)
+        if (abs(lab.dust - shownDust) < 0.5f) shownDust = lab.dust.toFloat()
+        if (cardFor >= 0) cardAnim += dt * 3f else cardAnim = 0f
+        val panelKey = if (decorating) -2L else selected
+        if (panelKey != lastPanelKey) { if (panelKey != -1L) panelAnim = 0f; lastPanelKey = panelKey }
+        panelAnim = min(1f, panelAnim + dt * 3.2f)
         updateWalkers(dt)
         updateCritters(dt)
         updateBlooms(dt)
@@ -1322,6 +1383,13 @@ class GameView(context: Context) : View(context) {
     private fun render(c: Canvas) {
         val w = width.toFloat()
         val h = height.toFloat()
+        if (mini > 0) {
+            drawMini(c, w, h)
+            drawParticles(c)
+            drawToast(c, w, h)
+            if (splashT > 0f) drawSplash(c, w, h)
+            return
+        }
         c.drawColor(BG)
         // soft lab glow at the top
         fill.color = BG_TOP
@@ -1357,17 +1425,32 @@ class GameView(context: Context) : View(context) {
         fill.color = Color.argb(40, 255, 255, 255)
         c.drawRect(0f, navTop, w, navTop + 1f * dp, fill)
 
-        if (!settingsOpen) for (b in buttons) if (!b.id.startsWith("tut_")) drawButton(c, b)
+        if (!settingsOpen && cardFor < 0) {
+            c.save(); c.clipRect(0f, 0f, w, navTop)
+            for (b in buttons) if (!b.id.startsWith("tut_") && !b.id.startsWith("nav")) drawButton(c, b)
+            c.restore()
+            for (b in buttons) if (b.id.startsWith("nav")) drawButton(c, b)
+        }
         drawParticles(c)
         if (dragging) drawDragged(c)
         popup?.let { drawPopup(c, w, h, it) ; for (b in buttons) if (!b.id.startsWith("tut_")) drawButton(c, b) }
         drawTutorial(c, w, h)
         if (settingsOpen) drawSettings(c, w, h)
+        if (cardFor >= 0) shroom(cardFor)?.let { s ->
+            fill.color = Color.argb(200, 10, 6, 24); c.drawRect(0f, 0f, w, h, fill)
+            val r = cardRect(w, h)
+            val k = easeOutBack(min(1f, cardAnim))
+            c.save(); c.scale(0.7f + 0.3f * k, 0.7f + 0.3f * k, r.centerX(), r.centerY())
+            drawProfileCard(c, r, s)
+            c.restore()
+            for (b in buttons) drawButton(c, b)
+        } ?: run { cardFor = -1 }
         if (flashT > 0f) {
             fill.color = Color.WHITE; fill.alpha = (255 * (flashT / 0.35f)).toInt().coerceIn(0, 255)
             c.drawRect(0f, 0f, w, h, fill); fill.alpha = 255
         }
         drawToast(c, w, h)
+        if (splashT > 0f) drawSplash(c, w, h)
     }
 
     private fun drawDragged(c: Canvas) {
@@ -1418,7 +1501,8 @@ class GameView(context: Context) : View(context) {
         c.drawText(title, 18f * dp, 43f * dp, text)
         // spore dust pill
         text.textSize = 18f * dp
-        val label = "${lab.dust}"
+        if (shownDust < 0f) shownDust = lab.dust.toFloat()
+        val label = "${shownDust.toInt()}"
         val pw = text.measureText(label) + 46f * dp
         val pr = RectF(w - 62f * dp - pw, 16f * dp, w - 62f * dp, 50f * dp)
         fill.color = Color.argb(110, 0, 0, 0); c.drawRoundRect(pr, 17f * dp, 17f * dp, fill)
@@ -1625,7 +1709,11 @@ class GameView(context: Context) : View(context) {
         if (act == ACT_CHAT) {
             val other = lab.home().filter { it !== s && it.act == ACT_CHAT || (it !== s && it.pendingAct == ACT_CHAT) }
                 .minByOrNull { hypot(it.gx - s.gx, it.gz - s.gz) }
-            if (other != null) s.facing = if (other.gx > s.gx) 1f else -1f
+            if (other != null) {
+                s.facing = if (other.gx > s.gx) 1f else -1f
+                val key = listOf(s.id, other.id).sorted().joinToString("-") + "-" + LabState.dayKey()
+                if (chatted.add(key)) lab.addDiary("${s.name} and ${other.name} had a little chat.")
+            }
         }
         if (act == ACT_SNIFF) lab.placed.getOrNull(target)?.let { s.facing = if (it.gx > s.gx) 1f else -1f }
         if (act == ACT_INSIDE) sound.play(Fx.POP, 0.4f, 0.8f)
@@ -2021,7 +2109,7 @@ class GameView(context: Context) : View(context) {
 
     private fun drawDecorTray(c: Canvas, w: Float) {
         val top = panelTop()
-        panel(c, RectF(8f * dp, top, w - 8f * dp, navTop - 6f * dp), 22f * dp)
+        panel(c, RectF(8f * dp, top, w - 8f * dp, panelBottom()), 22f * dp)
         text.textSize = 12f * dp; text.color = TEXT_DIM
         val msg = if (gardenItemCount() == 0) "Buy decorations in the Shop → DECOR"
         else "Drag items onto the ground · drag them back here to put away"
@@ -2180,7 +2268,7 @@ class GameView(context: Context) : View(context) {
 
     private fun drawInfoPanel(c: Canvas, w: Float, s: Shroom) {
         val top = panelTop()
-        val r = RectF(8f * dp, top, w - 8f * dp, navTop - 6f * dp)
+        val r = RectF(8f * dp, top, w - 8f * dp, panelBottom())
         panel(c, r, 22f * dp)
         val sp = Data.SPECIES[s.species]
         val pad = 24f * dp
@@ -2236,7 +2324,7 @@ class GameView(context: Context) : View(context) {
         text.textSize = 12f * dp; text.color = TEXT_DIM
         val moodText = wantText(s) ?: when (s.mood()) {
             0 -> "Feeling great! Growing fast."
-            1 -> "Doing fine."
+            1 -> "Doing fine. Hold it for a hug, or rub it to pet!"
             2 -> "Hungry! It grows slowly until you feed it."
             else -> "A little lonely. Try a pat."
         }
@@ -2310,6 +2398,7 @@ class GameView(context: Context) : View(context) {
         val spots = floatArrayOf(0.08f, 0.2f, 0.32f, 0.68f, 0.8f, 0.92f)
         for ((k, sx) in spots.withIndex()) {
             val jx = w * sx
+            c.save(); c.rotate(sin(t * 25f) * jarWobble[k] * 14f, jx, shelfY)
             val jw = 18f * dp; val jh = 30f * dp
             val sp = found.getOrNull(k)
             if (sp != null) drawShroom(c, sp, jx, shelfY - 3f * dp, 20f * dp, 0, 0f, (t + k) % 4f < 0.12f, false)
@@ -2325,6 +2414,7 @@ class GameView(context: Context) : View(context) {
             c.drawRect(jx - jw * 0.85f, shelfY - jh - 4f * dp, jx + jw * 0.85f, shelfY - jh + 1f * dp, fill)
             fill.color = Color.argb(80, 255, 255, 255)
             c.drawRect(jx - jw * 0.7f, shelfY - jh * 0.85f, jx - jw * 0.5f, shelfY - jh * 0.2f, fill)
+            c.restore()
         }
 
         // bubbling test tubes on the far sides
@@ -2428,6 +2518,7 @@ class GameView(context: Context) : View(context) {
         fill.color = Color.argb(90, 255, 255, 255)
         c.drawCircle(fx - r * 0.45f, fy - r * 0.35f, r * 0.12f, fill)
         c.drawOval(fx - r * 0.7f, fy - r * 0.15f, fx - r * 0.55f, fy + r * 0.35f, fill)
+        drawFlaskFace(c, fx, fy, r, 0f)
         c.restore()
 
         // stir meter: a ring around the flask that fills as you stir
@@ -2479,6 +2570,8 @@ class GameView(context: Context) : View(context) {
         } else "Pick two Grown mushrooms"
         if (brewing <= 0f) c.drawText(hint, fx, fy + r + 44f * dp, text)
         text.color = Color.WHITE
+
+        drawLabFriends(c, w)
 
         if (labMode == 1) {
             text.textSize = 12f * dp; text.color = TEXT_DIM
@@ -2602,6 +2695,13 @@ class GameView(context: Context) : View(context) {
     private fun drawPopup(c: Canvas, w: Float, h: Float, p: Popup) {
         fill.color = Color.argb(190, 10, 6, 24)
         c.drawRect(0f, 0f, w, h, fill)
+        val k = 0.6f + 0.4f * easeOutBack(min(1f, popupT / 0.35f))
+        c.save(); c.scale(k, k, w / 2, h * 0.47f)
+        drawPopupInner(c, w, h, p)
+        c.restore()
+    }
+
+    private fun drawPopupInner(c: Canvas, w: Float, h: Float, p: Popup) {
         val card = RectF(24f * dp, h * 0.18f, w - 24f * dp, h * 0.76f)
         fill.color = PANEL
         c.drawRoundRect(card, 28f * dp, 28f * dp, fill)
@@ -2756,6 +2856,7 @@ class GameView(context: Context) : View(context) {
             return
         }
 
+        if (pressed) { c.save(); c.scale(0.95f, 0.95f, r.centerX(), r.centerY()) }
         // colors: top of the gradient, bottom of the gradient, text
         val (top, bottom, tc) = when (b.style) {
             STYLE_PRIMARY -> if (b.enabled) Triple(shade(ACCENT, 0.18f), shade(ACCENT, -0.18f), Color.WHITE)
@@ -2804,6 +2905,7 @@ class GameView(context: Context) : View(context) {
             }
             c.drawText(b.label, r.centerX(), ty, text)
         }
+        if (pressed) c.restore()
         text.color = Color.WHITE
         text.alpha = 255
     }
@@ -3274,14 +3376,22 @@ class GameView(context: Context) : View(context) {
 
     private fun journalButtons(list: ArrayList<Button>, w: Float, h: Float) {
         val pad = 16f * dp
-        val tabs = arrayOf("TODAY", "CONTEST", "AWARDS")
-        val tw = (w - pad * 2) / 3
+        val tabs = arrayOf("TODAY", "CONTEST", "AWARDS", "DIARY", "GAMES")
+        val tw = (w - pad * 2) / tabs.size
         val ty = topBar + 6f * dp
         for ((k, nm) in tabs.withIndex()) {
             list.add(Button("j$k", RectF(pad + k * tw + 2f * dp, ty, pad + (k + 1) * tw - 2f * dp, ty + 40f * dp), nm,
                 if (journalTab == k) STYLE_TAB_ON else STYLE_NORMAL) { journalTab = k })
         }
         val top = ty + 54f * dp
+        if (journalTab == 4) {
+            for (g in 0..1) {
+                val r = RectF(pad, top + 10f * dp + g * 190f * dp, w - pad, top + 10f * dp + g * 190f * dp + 176f * dp)
+                list.add(Button("play$g", RectF(r.right - 132f * dp, r.bottom - 54f * dp, r.right - 16f * dp, r.bottom - 14f * dp), "PLAY", STYLE_PRIMARY) {
+                    startMini(g + 1)
+                })
+            }
+        }
         when (journalTab) {
             0 -> {
                 val ready = lab.giftReady()
@@ -3353,6 +3463,8 @@ class GameView(context: Context) : View(context) {
     private fun drawJournal(c: Canvas, w: Float, h: Float) {
         val pad = 16f * dp
         val top = topBar + 60f * dp
+        if (journalTab == 3) { drawDiary(c, w, top); return }
+        if (journalTab == 4) { drawGamesTab(c, w, top + 10f * dp); return }
         when (journalTab) {
             0 -> {
                 // daily gift
@@ -3894,6 +4006,503 @@ class GameView(context: Context) : View(context) {
         sound.setAmbient(inGarden && dark < 0.5f && !rain, inGarden && dark >= 0.5f && !rain, inGarden && rain, inGarden && fire)
     }
 
+    // ---------- Bouncy UI helpers ----------
+
+    private fun easeOutBack(x: Float): Float {
+        val c1 = 1.70158f; val c3 = c1 + 1f
+        val k = x.coerceIn(0f, 1f) - 1f
+        return 1f + c3 * k * k * k + c1 * k * k
+    }
+
+    // ---------- Splash screen ----------
+
+    private var splashT = 2.6f
+
+    private fun drawSplash(c: Canvas, w: Float, h: Float) {
+        val age = 2.6f - splashT
+        val alpha = (min(1f, splashT / 0.45f) * 255).toInt().coerceIn(0, 255)
+        c.saveLayerAlpha(0f, 0f, w, h, alpha)
+        fill.shader = LinearGradient(0f, 0f, 0f, h, Color.rgb(60, 38, 110), Color.rgb(24, 16, 44), Shader.TileMode.CLAMP)
+        c.drawRect(0f, 0f, w, h, fill); fill.shader = null
+        // soft glow and drifting sparkles
+        fill.shader = RadialGradient(w / 2, h * 0.45f, w * 0.6f, Color.argb(90, 255, 140, 200), Color.argb(0, 255, 140, 200), Shader.TileMode.CLAMP)
+        c.drawCircle(w / 2, h * 0.45f, w * 0.6f, fill); fill.shader = null
+        for (k in 0 until 14) {
+            val sx = w * ((k * 0.173f + age * 0.02f) % 1f)
+            val sy = h * (0.15f + ((k * 0.37f - age * 0.04f) % 0.7f + 0.7f) % 0.7f)
+            fill.color = Color.argb((120 + 100 * sin(age * 3f + k)).toInt().coerceIn(0, 255), 255, 240, 200)
+            drawSparkle(c, sx, sy, 2.5f * dp)
+        }
+        // a grassy mound and a mushroom sprouting from it
+        fill.color = Color.rgb(78, 140, 104)
+        c.drawOval(w / 2 - 110f * dp, h * 0.53f, w / 2 + 110f * dp, h * 0.53f + 50f * dp, fill)
+        val grow = easeOutBack(((age - 0.2f) / 0.9f).coerceIn(0f, 1f))
+        if (grow > 0.01f) drawShroom(c, 1, w / 2, h * 0.55f, 120f * dp * grow, 0, sin(age * 3f), (age % 2.5f) > 2.35f, false)
+        // title letters hop in one by one
+        val title = "Shroomology"
+        text.textSize = 44f * dp
+        val total = text.measureText(title)
+        var x = w / 2 - total / 2
+        text.textAlign = Paint.Align.LEFT
+        for ((k, ch) in title.withIndex()) {
+            val lt = ((age - 0.5f - k * 0.05f) / 0.35f).coerceIn(0f, 1f)
+            val hop = (1f - easeOutBack(lt)) * 30f * dp
+            text.color = Color.argb((lt * 255).toInt(), 255, 255, 255)
+            c.drawText(ch.toString(), x, h * 0.3f + hop, text)
+            x += text.measureText(ch.toString())
+        }
+        text.textAlign = Paint.Align.CENTER
+        text.textSize = 14f * dp; text.color = Color.argb((((age - 1.2f) / 0.4f).coerceIn(0f, 1f) * 200).toInt(), 255, 200, 230)
+        c.drawText("Made by Omnymara", w / 2, h * 0.88f, text)
+        text.color = Color.WHITE
+        c.restore()
+    }
+
+    // ---------- Profile cards ----------
+
+    private var cardFor = -1L
+
+    private fun cardRect(w: Float, h: Float): RectF {
+        val cw = min(w - 48f * dp, 320f * dp)
+        val ch = cw * 1.4f
+        return RectF(w / 2 - cw / 2, h * 0.08f, w / 2 + cw / 2, h * 0.08f + ch)
+    }
+
+    private fun drawProfileCard(c: Canvas, r: RectF, s: Shroom) {
+        val sp = Data.SPECIES[s.species]
+        val rad = 24f * dp
+        fill.shader = LinearGradient(0f, r.top, 0f, r.bottom, shade(sp.cap, 0.55f), shade(sp.cap, -0.25f), Shader.TileMode.CLAMP)
+        c.drawRoundRect(r, rad, rad, fill); fill.shader = null
+        stroke.color = Color.WHITE; stroke.strokeWidth = 5f * dp
+        c.drawRoundRect(r.left + 6f * dp, r.top + 6f * dp, r.right - 6f * dp, r.bottom - 6f * dp, rad - 4f * dp, rad - 4f * dp, stroke)
+        // portrait window
+        val pw = RectF(r.left + 22f * dp, r.top + 22f * dp, r.right - 22f * dp, r.top + r.width() * 0.78f)
+        fill.shader = LinearGradient(0f, pw.top, 0f, pw.bottom, Color.rgb(60, 40, 100), Color.rgb(90, 150, 110), Shader.TileMode.CLAMP)
+        c.drawRoundRect(pw, 16f * dp, 16f * dp, fill); fill.shader = null
+        for (k in 0 until 10) { fill.color = Color.argb(150, 255, 255, 230); drawSparkle(c, pw.left + pw.width() * ((k * 0.37f) % 1f), pw.top + pw.height() * ((k * 0.23f) % 0.5f), 2f * dp) }
+        drawShroom(c, s.species, pw.centerX(), pw.bottom - 18f * dp, pw.height() * 0.62f, 0, sin(t * 2f), (t % 3f) < 0.12f, false, shiny = s.shiny, who = s)
+        // name & info
+        text.textSize = 26f * dp; text.color = Color.WHITE
+        c.drawText(s.name, r.centerX(), pw.bottom + 36f * dp, text)
+        text.textSize = 14f * dp; text.color = Color.argb(230, 255, 255, 255)
+        c.drawText((if (s.shiny) "✨ Shiny " else "") + sp.name, r.centerX(), pw.bottom + 58f * dp, text)
+        val tags = ArrayList<String>()
+        tags.add(Data.STAGE_NAMES[s.stage()]); tags.add(Data.TIER_NAMES[sp.tier]); tags.add(Data.TRAITS[s.trait])
+        if (s.variant == 1) tags.add("Albino") else if (s.variant == 2) tags.add("Neon")
+        text.textSize = 12f * dp
+        c.drawText(tags.joinToString(" · "), r.centerX(), pw.bottom + 78f * dp, text)
+        for (k in 0 until 5) {
+            fill.color = if (k < s.hearts()) Color.rgb(255, 90, 140) else Color.argb(90, 255, 255, 255)
+            drawHeart(c, r.centerX() + (k - 2) * 20f * dp, pw.bottom + 94f * dp, 6f * dp)
+        }
+        text.textSize = 11f * dp; text.color = Color.argb(200, 255, 255, 255)
+        c.drawText("Shroomology · made by Omnymara", r.centerX(), r.bottom - 18f * dp, text)
+        text.color = Color.WHITE
+    }
+
+    private fun shareCard(s: Shroom) {
+        val r = cardRect(width.toFloat(), height.toFloat())
+        val bmp = android.graphics.Bitmap.createBitmap(r.width().toInt() + 2, r.height().toInt() + 2, android.graphics.Bitmap.Config.ARGB_8888)
+        val cv = Canvas(bmp)
+        cv.translate(-r.left, -r.top)
+        drawProfileCard(cv, r, s)
+        saveAndShare(bmp, "Shroomology_${s.name}", "Share ${s.name}'s card")
+    }
+
+    /** Saves a picture to Pictures/Shroomology and opens the share menu. */
+    private fun saveAndShare(bmp: android.graphics.Bitmap, fileName: String, chooser: String) {
+        if (Build.VERSION.SDK_INT < 29) { toast("Saving pictures needs Android 10 or newer"); return }
+        try {
+            val resolver = context.contentResolver
+            val values = android.content.ContentValues().apply {
+                put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, "${fileName}_${System.currentTimeMillis()}.png")
+                put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/png")
+                put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, android.os.Environment.DIRECTORY_PICTURES + "/Shroomology")
+            }
+            val uri = resolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values) ?: throw Exception()
+            resolver.openOutputStream(uri)?.use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+            flashT = 0.35f
+            sound.play(Fx.PET)
+            toast("Saved to Pictures/Shroomology", MINT)
+            val share = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                type = "image/png"
+                putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            context.startActivity(android.content.Intent.createChooser(share, chooser))
+        } catch (_: Exception) {
+            toast("Couldn't save the picture", ACCENT)
+        }
+    }
+
+    // ---------- Lab charm: Professor Spore, a flask with a face, wobbly jars ----------
+
+    private var profSay = ""
+    private var profSayT = 0f
+    private var flaskYum = 0f
+    private val jarWobble = FloatArray(6)
+    private val tips = arrayOf(
+        "Every pair of ingredients grows something!", "Stir in circles for a shiny chance ✨",
+        "Grown mushrooms can crossbreed!", "The Big Flask lets you brew with three!",
+        "Mushrooms adore their favorite food ❤", "Decorations make mushrooms happier!",
+        "Send Grown mushrooms exploring for loot!", "Check the Journal for daily gifts!",
+        "Hold a mushroom to give it a hug 🤗", "Rub a mushroom back and forth to pet it!",
+        "Toss a mushroom for a big wheee!", "Shake your phone... if you dare!",
+    )
+
+    private fun profPos(w: Float): Pair<Float, Float> = Pair(w * 0.13f, flaskY() + 62f * dp + 64f * dp)
+
+    private fun professorSay(msg: String, secs: Float = 3.5f) { profSay = msg; profSayT = secs }
+
+    private fun drawLabFriends(c: Canvas, w: Float) {
+        val (px, py) = profPos(w)
+        val hop = if (brewing > 0f) abs(sin(t * 8f)) * 8f * dp else 0f
+        val excited = popup?.let { it.isNew && popupT > 0.9f } ?: false
+        professor.expr = when { excited -> E_SPARKLE; brewing > 0f -> E_GIGGLE; else -> professor.expr }
+        professor.exprT = if (excited || brewing > 0f) 0.2f else professor.exprT
+        professor.waveT = if (profSayT > 0f) 1f else 0f
+        drawShroom(c, professor.species, px, py - hop, 46f * dp, 0, sin(t * 2f), (t % 4f) < 0.12f, false, who = professor)
+        if (brewing > 0f && profSayT <= 0f) professorSay(listOf("Stir, stir!", "Ooh, bubbly!", "Faster! Faster!", "Science!").random(), 1.5f)
+        if (profSayT > 0f && profSay.isNotEmpty()) {
+            text.textSize = 12f * dp
+            val lines = wrap(profSay, 150f * dp)
+            val bw = (lines.maxOfOrNull { text.measureText(it) } ?: 0f) + 20f * dp
+            val bh = lines.size * 15f * dp + 12f * dp
+            val bx = px - 10f * dp; val by = py - 70f * dp - bh
+            fill.color = Color.WHITE
+            c.drawRoundRect(bx, by, bx + bw, by + bh, 10f * dp, 10f * dp, fill)
+            path.reset(); path.moveTo(bx + 12f * dp, by + bh - 1f * dp); path.lineTo(bx + 18f * dp, by + bh + 9f * dp); path.lineTo(bx + 24f * dp, by + bh - 1f * dp); path.close()
+            c.drawPath(path, fill)
+            text.color = BG; text.textAlign = Paint.Align.LEFT
+            for ((k, l) in lines.withIndex()) c.drawText(l, bx + 10f * dp, by + 18f * dp + k * 15f * dp, text)
+            text.textAlign = Paint.Align.CENTER; text.color = Color.WHITE
+        }
+    }
+
+    /** A cute face on the flask that reacts to what you do. */
+    private fun drawFlaskFace(c: Canvas, fx: Float, fy: Float, r: Float, shakeX: Float) {
+        val cx = fx + shakeX; val cy = fy + r * 0.42f
+        val ex = r * 0.22f; val er = r * 0.06f
+        val q = quality()
+        fill.color = Color.rgb(45, 30, 60)
+        stroke.color = Color.rgb(45, 30, 60); stroke.strokeWidth = 2.5f * dp
+        when {
+            brewing > 0f && q >= 1f -> { fill.color = Color.rgb(255, 230, 120); drawSparkle(c, cx - ex, cy, er * 1.6f); drawSparkle(c, cx + ex, cy, er * 1.6f) }
+            brewing > 0f -> {
+                c.drawArc(cx - ex - er * 1.4f, cy - er, cx - ex + er * 1.4f, cy + er * 2f, 200f, 140f, false, stroke)
+                c.drawArc(cx + ex - er * 1.4f, cy - er, cx + ex + er * 1.4f, cy + er * 2f, 200f, 140f, false, stroke)
+            }
+            (t % 4f) < 0.12f -> { c.drawLine(cx - ex - er, cy, cx - ex + er, cy, stroke); c.drawLine(cx + ex - er, cy, cx + ex + er, cy, stroke) }
+            else -> { c.drawCircle(cx - ex, cy, er, fill); c.drawCircle(cx + ex, cy, er, fill)
+                fill.color = Color.WHITE; c.drawCircle(cx - ex + er * 0.35f, cy - er * 0.35f, er * 0.35f, fill); c.drawCircle(cx + ex + er * 0.35f, cy - er * 0.35f, er * 0.35f, fill) }
+        }
+        fill.color = Color.argb(150, 255, 130, 160)
+        c.drawOval(cx - ex * 1.8f - r * 0.06f, cy + r * 0.06f, cx - ex * 1.8f + r * 0.06f, cy + r * 0.12f, fill)
+        c.drawOval(cx + ex * 1.8f - r * 0.06f, cy + r * 0.06f, cx + ex * 1.8f + r * 0.06f, cy + r * 0.12f, fill)
+        val my = cy + r * 0.13f; val mw = r * 0.1f
+        fill.color = Color.rgb(45, 30, 60)
+        when {
+            brewing > 0f -> c.drawOval(cx - mw * 0.5f, my - mw * 0.2f, cx + mw * 0.5f, my + mw * (0.8f + 0.3f * sin(t * 20f)), fill)
+            flaskYum > 0f || slots.take(slotCount()).any { it >= 0 } -> c.drawArc(cx - mw, my - mw * 0.8f, cx + mw, my + mw, 0f, 180f, true, fill)
+            else -> c.drawArc(cx - mw, my - mw * 0.6f, cx + mw, my + mw * 0.6f, 20f, 140f, false, stroke)
+        }
+    }
+
+    private fun jarPos(k: Int, w: Float): Pair<Float, Float> {
+        val spots = floatArrayOf(0.08f, 0.2f, 0.32f, 0.68f, 0.8f, 0.92f)
+        return Pair(w * spots[k], flaskY() - 62f * dp * 1.75f)
+    }
+
+    private fun tapLab(x: Float, y: Float) {
+        val w = width.toFloat()
+        val (px, py) = profPos(w)
+        if (hypot(x - px, y - (py - 22f * dp)) < 34f * dp) {
+            professorSay(tips.random())
+            professor.jiggle = 1f
+            sound.play(Fx.GIGGLE, 0.6f, 0.9f)
+            return
+        }
+        for (k in 0 until 6) {
+            val (jx, jy) = jarPos(k, w)
+            if (abs(x - jx) < 22f * dp && y > jy - 36f * dp && y < jy + 6f * dp) {
+                jarWobble[k] = 1f
+                val found = Data.DEX_ORDER.filter { lab.discovered[it] }
+                sound.play(if (k < found.size) Fx.GIGGLE else Fx.CLINK, 0.6f, 1.2f + k * 0.08f)
+                return
+            }
+        }
+        if (hypot(x - w / 2, y - (flaskY() + 30f * dp)) < 60f * dp) { flaskYum = 0.8f; sound.play(Fx.BUBBLE, 0.5f, 1.3f) }
+    }
+
+    // ---------- Mini-games: Spore Catch & Memory Match ----------
+
+    private var mini = 0               // 0 none, 1 Spore Catch, 2 Memory Match
+    private var miniOver = false
+    private var miniScore = 0
+    private var miniReward = 0
+    private var miniT = 0f
+
+    // Spore Catch
+    private class Drop(var x: Float, var y: Float, val kind: Int, val vy: Float)   // kind: 0 spore, 1 star, 2 stinky
+    private val drops = ArrayList<Drop>()
+    private var catchX = 0f
+    private var catchTarget = 0f
+    private var dropTimer = 0f
+    private var catchDizzy = 0f
+    private var catchSpecies = 1
+
+    // Memory Match
+    private val mmCards = IntArray(16)
+    private val mmOpen = BooleanArray(16)
+    private val mmDone = BooleanArray(16)
+    private val mmFlip = FloatArray(16)
+    private var mmHide = 0f
+    private var mmMoves = 0
+
+    private fun startMini(kind: Int) {
+        mini = kind; miniOver = false; miniScore = 0; miniReward = 0; miniT = 0f
+        if (kind == 1) {
+            drops.clear(); catchX = width / 2f; catchTarget = catchX; dropTimer = 0.5f; catchDizzy = 0f
+            catchSpecies = lab.home().randomOrNull()?.species ?: 1
+            miniT = 30f
+        } else {
+            val known = Data.DEX_ORDER.filter { lab.discovered[it] }.shuffled()
+            val pool = (known + Data.SPECIES.indices.filter { Data.SPECIES[it].tier == 1 }.shuffled()).distinct().take(8)
+            val deck = (pool + pool).shuffled()
+            for (i in 0 until 16) { mmCards[i] = deck[i]; mmOpen[i] = false; mmDone[i] = false; mmFlip[i] = 0f }
+            mmHide = 0f; mmMoves = 0
+        }
+        sound.play(Fx.POP)
+    }
+
+    /** Pays out mini-game dust, up to 150 ✦ a day. */
+    private fun payMini(amount: Int): Int {
+        val today = LabState.dayKey()
+        val earned = if (prefs.getInt("mgDay", 0) == today) prefs.getInt("mgEarned", 0) else 0
+        val pay = min(amount, max(0, 150 - earned))
+        prefs.edit().putInt("mgDay", today).putInt("mgEarned", earned + pay).apply()
+        lab.dust += pay
+        markDirty()
+        return pay
+    }
+
+    private fun endMini() {
+        miniOver = true
+        if (mini == 1) {
+            val best = prefs.getInt("bestCatch", 0)
+            if (miniScore > best) prefs.edit().putInt("bestCatch", miniScore).apply()
+            miniReward = payMini(min(40, miniScore / 2))
+        } else {
+            val best = prefs.getInt("bestMemory", 999)
+            if (mmMoves < best) prefs.edit().putInt("bestMemory", mmMoves).apply()
+            miniReward = payMini(max(10, 50 - (mmMoves - 8) * 3))
+        }
+        sound.play(Fx.DISCOVER)
+        burst(width / 2f, height * 0.4f, DUST, 40, P_SPARK)
+    }
+
+    private fun updateMini(dt: Float) {
+        if (mini == 0 || miniOver) return
+        if (mini == 1) {
+            miniT -= dt
+            if (miniT <= 0f) { endMini(); return }
+            if (catchDizzy > 0f) catchDizzy -= dt
+            catchX += (catchTarget - catchX) * min(1f, dt * (if (catchDizzy > 0f) 3f else 12f))
+            dropTimer -= dt
+            val speedUp = 1f + (30f - miniT) / 25f
+            if (dropTimer <= 0f) {
+                dropTimer = (0.55f / speedUp) * (0.6f + Random.nextFloat() * 0.8f)
+                val r = Random.nextFloat()
+                val kind = when { r < 0.08f -> 1; r < 0.25f -> 2; else -> 0 }
+                drops.add(Drop(30f * dp + Random.nextFloat() * (width - 60f * dp), topBar + 40f * dp, kind, (180f + Random.nextFloat() * 90f) * dp * speedUp))
+            }
+            val catchY = height * 0.8f - 50f * dp
+            val it = drops.iterator()
+            while (it.hasNext()) {
+                val d = it.next()
+                d.y += d.vy * dt
+                if (d.y > catchY - 10f * dp && d.y < catchY + 30f * dp && abs(d.x - catchX) < 46f * dp) {
+                    it.remove()
+                    when (d.kind) {
+                        0 -> { miniScore += 1; sound.play(Fx.COIN, 0.5f, 1f + (miniScore % 8) * 0.05f) }
+                        1 -> { miniScore += 5; sound.play(Fx.GROW, 0.7f); burst(d.x, d.y, DUST, 14, P_SPARK) }
+                        else -> { miniScore = max(0, miniScore - 3); catchDizzy = 0.8f; sound.play(Fx.SNEEZE, 0.6f); buzz(40) }
+                    }
+                    continue
+                }
+                if (d.y > height) it.remove()
+            }
+        } else {
+            for (i in 0 until 16) {
+                val target = if (mmOpen[i] || mmDone[i]) 1f else 0f
+                mmFlip[i] += (target - mmFlip[i]) * min(1f, dt * 10f)
+            }
+            if (mmHide > 0f) {
+                mmHide -= dt
+                if (mmHide <= 0f) for (i in 0 until 16) if (!mmDone[i]) mmOpen[i] = false
+            }
+        }
+    }
+
+    private fun tapMemory(i: Int) {
+        if (miniOver || mmDone[i] || mmOpen[i] || mmHide > 0f) return
+        mmOpen[i] = true
+        sound.play(Fx.POP, 0.6f, 1.2f)
+        val open = (0 until 16).filter { mmOpen[it] && !mmDone[it] }
+        if (open.size == 2) {
+            mmMoves++
+            val (a, b) = open
+            if (mmCards[a] == mmCards[b]) {
+                mmDone[a] = true; mmDone[b] = true
+                sound.play(Fx.GROW, 0.7f)
+                if (mmDone.all { it }) endMini()
+            } else mmHide = 0.8f
+        }
+    }
+
+    private fun miniButtons(list: ArrayList<Button>, w: Float, h: Float) {
+        if (miniOver) {
+            list.add(Button("mg_again", RectF(w / 2 - 150f * dp, h * 0.62f, w / 2 - 6f * dp, h * 0.62f + 52f * dp), "PLAY AGAIN", STYLE_PRIMARY) { startMini(mini) })
+            list.add(Button("mg_done", RectF(w / 2 + 6f * dp, h * 0.62f, w / 2 + 150f * dp, h * 0.62f + 52f * dp), "DONE") { mini = 0 })
+            return
+        }
+        list.add(Button("mg_quit", RectF(w - 98f * dp, 16f * dp, w - 14f * dp, 52f * dp), "QUIT") { mini = 0 })
+        if (mini == 2) {
+            val gw = min(w - 32f * dp, 380f * dp)
+            val cell = gw / 4
+            val gx = w / 2 - gw / 2; val gy = topBar + 70f * dp
+            for (i in 0 until 16) {
+                val r = RectF(gx + (i % 4) * cell + 4f * dp, gy + (i / 4) * cell * 1.15f + 4f * dp, gx + (i % 4 + 1) * cell - 4f * dp, gy + (i / 4 + 1) * cell * 1.15f - 4f * dp)
+                list.add(Button("mm$i", r, "", STYLE_CARD, custom = { c, rr -> drawMemoryCard(c, rr, i) }) { tapMemory(i) })
+            }
+        }
+    }
+
+    private fun drawMemoryCard(c: Canvas, r: RectF, i: Int) {
+        val f = mmFlip[i]
+        val sx = abs(1f - 2f * f)   // shrinks to 0 halfway through the flip
+        c.save(); c.scale(max(0.05f, sx), 1f, r.centerX(), r.centerY())
+        if (f < 0.5f) {
+            fill.shader = LinearGradient(0f, r.top, 0f, r.bottom, Color.rgb(150, 110, 230), Color.rgb(100, 70, 180), Shader.TileMode.CLAMP)
+            c.drawRoundRect(r, 12f * dp, 12f * dp, fill); fill.shader = null
+            text.textSize = 26f * dp; text.color = Color.argb(200, 255, 255, 255)
+            c.drawText("?", r.centerX(), r.centerY() + 9f * dp, text); text.color = Color.WHITE
+        } else {
+            fill.color = if (mmDone[i]) Color.rgb(60, 120, 95) else Color.rgb(245, 238, 255)
+            c.drawRoundRect(r, 12f * dp, 12f * dp, fill)
+            drawShroom(c, mmCards[i], r.centerX(), r.bottom - 10f * dp, r.width() * 0.55f, 0, 0f, false, false)
+        }
+        c.restore()
+    }
+
+    private fun drawMini(c: Canvas, w: Float, h: Float) {
+        fill.shader = LinearGradient(0f, 0f, 0f, h, Color.rgb(50, 32, 92), Color.rgb(24, 16, 44), Shader.TileMode.CLAMP)
+        c.drawRect(0f, 0f, w, h, fill); fill.shader = null
+        text.textAlign = Paint.Align.LEFT; text.textSize = 22f * dp
+        c.drawText(if (mini == 1) "Spore Catch" else "Memory Match", 18f * dp, 42f * dp, text)
+        text.textAlign = Paint.Align.CENTER
+        if (mini == 1) {
+            // timer bar + score
+            fill.color = Color.argb(50, 255, 255, 255); c.drawRoundRect(18f * dp, 58f * dp, w - 18f * dp, 66f * dp, 4f * dp, 4f * dp, fill)
+            fill.color = MINT; c.drawRoundRect(18f * dp, 58f * dp, 18f * dp + (w - 36f * dp) * (miniT / 30f).coerceIn(0f, 1f), 66f * dp, 4f * dp, 4f * dp, fill)
+            text.textSize = 30f * dp; text.color = DUST
+            c.drawText("$miniScore", w / 2, topBar + 50f * dp, text); text.color = Color.WHITE
+            for (d in drops) {
+                when (d.kind) {
+                    0 -> { fill.shader = RadialGradient(d.x - 3f * dp, d.y - 3f * dp, 11f * dp, Color.rgb(255, 245, 190), DUST, Shader.TileMode.CLAMP)
+                        c.drawCircle(d.x, d.y, 9f * dp, fill); fill.shader = null }
+                    1 -> { fill.color = Color.rgb(255, 230, 120); drawSparkle(c, d.x, d.y, 6f * dp) }
+                    else -> { fill.color = Color.rgb(140, 200, 80); c.drawCircle(d.x, d.y, 10f * dp, fill)
+                        fill.color = Color.rgb(90, 140, 50); c.drawCircle(d.x - 3f * dp, d.y - 2f * dp, 2.5f * dp, fill); c.drawCircle(d.x + 3f * dp, d.y + 2f * dp, 2f * dp, fill) }
+                }
+            }
+            val cy = h * 0.8f
+            fill.color = Color.rgb(78, 140, 104); c.drawRect(0f, cy, w, h, fill)
+            val face = if (catchDizzy > 0f) E_DIZZY else E_GIGGLE
+            professor.expr = 0
+            val catcher = Shroom(-5L, catchSpecies).apply { expr = face; exprT = 1f; xp = 200f }
+            drawShroom(c, catchSpecies, catchX, cy, 80f * dp, 0, sin(t * 6f), false, false, who = catcher)
+            if (!miniOver) { text.textSize = 13f * dp; text.color = TEXT_DIM
+                c.drawText("Drag to catch golden spores ✦ · avoid the stinky green ones!", w / 2, h - 30f * dp, text); text.color = Color.WHITE }
+        } else {
+            text.textSize = 14f * dp; text.color = TEXT_DIM
+            c.drawText("Find the matching mushrooms · moves: $mmMoves", w / 2, topBar + 50f * dp, text); text.color = Color.WHITE
+        }
+        if (miniOver) {
+            fill.color = Color.argb(170, 10, 6, 24); c.drawRect(0f, 0f, w, h, fill)
+            panel(c, RectF(28f * dp, h * 0.3f, w - 28f * dp, h * 0.6f + 70f * dp), 24f * dp, PANEL_LIGHT)
+            text.textSize = 28f * dp
+            c.drawText(if (mini == 1) "Score: $miniScore" else "Done in $mmMoves moves!", w / 2, h * 0.38f, text)
+            text.textSize = 15f * dp; text.color = TEXT_DIM
+            val best = if (mini == 1) "Best: ${prefs.getInt("bestCatch", 0)}" else "Best: ${prefs.getInt("bestMemory", 0)} moves"
+            c.drawText(best, w / 2, h * 0.38f + 28f * dp, text)
+            text.textSize = 20f * dp; text.color = DUST
+            c.drawText(if (miniReward > 0) "+$miniReward ✦" else "Daily mini-game dust limit reached", w / 2, h * 0.5f, text)
+            text.color = Color.WHITE
+        }
+        for (b in buttons) drawButton(c, b)
+    }
+
+    private fun drawGamesTab(c: Canvas, w: Float, top: Float) {
+        val pad = 16f * dp
+        for (g in 0..1) {
+            val r = RectF(pad, top + g * 190f * dp, w - pad, top + g * 190f * dp + 176f * dp)
+            panel(c, r, 20f * dp)
+            text.textAlign = Paint.Align.LEFT
+            text.textSize = 19f * dp
+            c.drawText(if (g == 0) "Spore Catch" else "Memory Match", r.left + 120f * dp, r.top + 38f * dp, text)
+            text.textSize = 12f * dp; text.color = TEXT_DIM
+            val lines = wrap(if (g == 0) "Catch falling golden spores in 30 seconds. Dodge the stinky ones!" else "Flip cards to find the matching mushroom pairs in as few moves as you can.", r.width() - 140f * dp)
+            for ((k, l) in lines.withIndex()) c.drawText(l, r.left + 120f * dp, r.top + 60f * dp + k * 16f * dp, text)
+            text.color = DUST
+            c.drawText(if (g == 0) "Best: ${prefs.getInt("bestCatch", 0)}" else "Best: ${prefs.getInt("bestMemory", 999).let { if (it == 999) "-" else "$it moves" }}", r.left + 120f * dp, r.top + 108f * dp, text)
+            text.color = Color.WHITE; text.textAlign = Paint.Align.CENTER
+            if (g == 0) {
+                fill.shader = RadialGradient(r.left + 60f * dp, r.top + 70f * dp, 14f * dp, Color.rgb(255, 245, 190), DUST, Shader.TileMode.CLAMP)
+                c.drawCircle(r.left + 60f * dp, r.top + 50f * dp + abs(sin(t * 3f)) * 20f * dp, 9f * dp, fill); fill.shader = null
+                drawShroom(c, 2, r.left + 60f * dp, r.top + 130f * dp, 60f * dp, 0, sin(t * 3f), false, false)
+            } else {
+                for (k in 0..1) {
+                    val cr = RectF(r.left + 22f * dp + k * 44f * dp, r.top + 50f * dp, r.left + 60f * dp + k * 44f * dp, r.top + 100f * dp)
+                    fill.color = if (k == 0) Color.rgb(150, 110, 230) else Color.rgb(245, 238, 255)
+                    c.drawRoundRect(cr, 8f * dp, 8f * dp, fill)
+                    if (k == 1) drawShroom(c, 6, cr.centerX(), cr.bottom - 6f * dp, 26f * dp, 0, 0f, false, false)
+                    else { text.textSize = 18f * dp; c.drawText("?", cr.centerX(), cr.centerY() + 6f * dp, text) }
+                }
+            }
+        }
+        text.textSize = 11f * dp; text.color = TEXT_DIM
+        c.drawText("Mini-games pay up to 150 ✦ a day", w / 2, top + 392f * dp, text)
+        text.color = Color.WHITE
+    }
+
+    private fun drawDiary(c: Canvas, w: Float, top: Float) {
+        val pad = 18f * dp
+        if (lab.diary.isEmpty()) {
+            text.textSize = 14f * dp; text.color = TEXT_DIM
+            c.drawText("Your garden's story will be written here.", w / 2, top + 60f * dp, text)
+            text.color = Color.WHITE
+            return
+        }
+        var y = top + 10f * dp
+        text.textAlign = Paint.Align.LEFT
+        for (entry in lab.diary) {
+            val (date, body) = entry.split(" · ", limit = 2).let { if (it.size == 2) Pair(it[0], it[1]) else Pair("", entry) }
+            text.textSize = 13.5f * dp
+            val lines = wrap(body, w - pad * 2 - 56f * dp)
+            val bh = lines.size * 18f * dp + 14f * dp
+            if (y + bh > navTop - 8f * dp) break
+            fill.color = Color.argb(40, 255, 255, 255)
+            c.drawRoundRect(pad - 6f * dp, y, w - pad + 6f * dp, y + bh, 12f * dp, 12f * dp, fill)
+            text.textSize = 11f * dp; text.color = ACCENT
+            c.drawText(date, pad, y + 20f * dp, text)
+            text.textSize = 13.5f * dp; text.color = Color.WHITE
+            for ((k, l) in lines.withIndex()) c.drawText(l, pad + 56f * dp, y + 20f * dp + k * 18f * dp, text)
+            y += bh + 6f * dp
+        }
+        text.textAlign = Paint.Align.CENTER
+    }
+
     // ---------- Seasonal events ----------
 
     private fun eventNow() = Data.currentEvent()
@@ -4166,6 +4775,7 @@ class GameView(context: Context) : View(context) {
             toast("💗 You and ${s.name} are closer! (${s.hearts()} hearts)" + when (s.hearts()) {
                 2 -> " Double-tap it to see a spin!"; 3 -> " It'll dance on a double-tap!"; 4 -> " It waves at you now!"; else -> "" }, ACCENT)
             sound.play(Fx.PET, 1f, 1.2f)
+            lab.addDiary("You and ${s.name} became closer friends (${s.hearts()} hearts).")
         }
         markDirty()
     }
