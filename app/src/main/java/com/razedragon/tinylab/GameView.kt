@@ -5315,14 +5315,14 @@ class GameView(context: Context) : View(context) {
         val b = pk.bundle
         val ev = eventNow()
         val tiles = ArrayList<Pair<String, (Float, Float, Float) -> Unit>>()
-        if (b.dust > 0) tiles.add("${b.dust} ✦" to { x, y, s -> fill.shader = RadialGradient(x - s * 0.2f, y - s * 0.2f, s, Color.rgb(255, 245, 190), DUST, Shader.TileMode.CLAMP); c.drawCircle(x, y, s * 0.6f, fill); fill.shader = null })
+        if (b.dust > 0) tiles.add("${b.dust} ✦" to { x, y, s -> fill.color = Color.WHITE; fill.shader = RadialGradient(x - s * 0.2f, y - s * 0.2f, s, Color.rgb(255, 245, 190), DUST, Shader.TileMode.CLAMP); c.drawCircle(x, y, s * 0.6f, fill); fill.shader = null })
         val themes = b.themes.toMutableList(); if (pk.id == "event_boost" && ev > 0) Data.THEMES.indices.filter { Data.THEMES[it].event == ev }.forEach { themes.add(it) }
         for (t0 in themes) tiles.add(Data.THEMES[t0].name to { x, y, s -> val th = Data.THEMES[t0]
             fill.shader = LinearGradient(0f, y - s * 0.7f, 0f, y + s * 0.7f, intArrayOf(th.skyTop, th.skyBottom, th.groundFar, th.groundNear), floatArrayOf(0f, 0.45f, 0.55f, 1f), Shader.TileMode.CLAMP)
             c.drawRoundRect(x - s * 0.75f, y - s * 0.6f, x + s * 0.75f, y + s * 0.6f, s * 0.2f, s * 0.2f, fill); fill.shader = null })
         val decor = b.decor.toMutableList(); if (pk.id == "event_boost" && ev > 0) Data.DECOR.indices.filter { Data.DECOR[it].event == ev }.forEach { decor.add(it) }
         for (d in decor) tiles.add((if (Data.DECOR[d].special > 0) "★ " else "") + Data.DECOR[d].name to { x, y, s -> c.save(); c.clipRect(x - s, y - s, x + s, y + s); drawDecor(c, d, x, y + s * 0.8f, s / (40f * dp) * 1.05f); c.restore() })
-        for (a in b.acc) tiles.add((if (Data.ACCESSORIES[a].special > 0) "★ " else "") + Data.ACCESSORIES[a].name to { x, y, s -> drawAccessoryIcon(c, a, x, y, s * 0.55f) })
+        for (a in b.acc) tiles.add((if (Data.ACCESSORIES[a].special > 0) "★ " else "") + Data.ACCESSORIES[a].name to { x, y, s -> drawAccessoryIcon(c, a, x, y + s * 0.15f, s * 1.1f) })
         for (p in b.pets) tiles.add("★ " + Data.PETS[p].name to { x, y, s -> drawPet(c, p, x, y + s * 0.4f, s * 0.9f, t * 8f, 1f, false) })
         if (pk.id == "event_boost" && ev > 0) tiles.add("10× event ingredients" to { x, y, s -> Data.INGREDIENTS.indices.filter { Data.INGREDIENTS[it].event == ev }.forEachIndexed { k, ing -> drawIngredient(c, ing, x + (k - 0.5f) * s * 0.7f, y, s * 0.3f) } })
         if (b.foods.isNotEmpty()) tiles.add("Treats" to { x, y, s -> drawFood(c, b.foods[0], x, y, s * 0.4f) })
