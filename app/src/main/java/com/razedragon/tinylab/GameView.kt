@@ -719,7 +719,7 @@ class GameView(context: Context) : View(context) {
                 val (px, py) = toScreen(plotGx(i), plotGz(i))
                 if (px < -40f * dp || px > w + 40f * dp) continue
                 val d = depth(plotGz(i))
-                list.add(Button("plot$i", RectF(px - 34f * dp * d, py - 52f * dp * d, px + 34f * dp * d, py + 10f * dp * d), "", STYLE_GHOST, custom = { _, _ -> }) { tapPlot(i) })
+                list.add(Button("plot$i", RectF(px - 44f * dp * d, py - 62f * dp * d, px + 44f * dp * d, py + 16f * dp * d), "", STYLE_GHOST, custom = { _, _ -> }) { tapPlot(i) })
             }
         }
         if (growPick >= 0 && area == 0) { seedButtons(list, w, h); return }
@@ -2567,7 +2567,7 @@ class GameView(context: Context) : View(context) {
         if (area == 0) for (d in lab.placed) items.add(Pair(d.gz, d)) else for (d in caveCrystals) items.add(Pair(d.gz, d))
         for (s in local()) if (s.pet >= 0 && !s.petGx.isNaN() && s.pet != 1 && s.pet != 2 && s.pet != Data.MINI_DRAGON) items.add(Pair(s.petGz, PetRef(s)))
         if (area == 0) for (sm in snowmen) items.add(Pair(sm.gz, sm))
-        if (area == 0) { for (i in 0 until 6) items.add(Pair(plotGz(i) - 0.001f, PlotRef(i))); items.add(Pair(0.0f, PatchSign)) }
+        if (area == 0) { for (i in 0 until 6) items.add(Pair(plotGz(i) - 0.001f, PlotRef(i))); items.add(Pair(0.2f, PatchSign)) }
         for (s in local()) items.add(Pair(s.gz + (if (s.act == ACT_SIT || s.act == ACT_NAP) 0.02f else 0f), s))
         items.sortBy { it.first }
         for ((_, obj) in items) {
@@ -2589,7 +2589,7 @@ class GameView(context: Context) : View(context) {
                 continue
             }
             if (obj === PatchSign) {
-                val (px, py) = toScreen(1.32f, 0.02f)
+                val (px, py) = toScreen(1.52f, 0.2f)
                 if (px > -60f * dp && px < w + 60f * dp) drawPatchSign(c, px, py, depth(0.02f))
                 continue
             }
@@ -4938,8 +4938,8 @@ class GameView(context: Context) : View(context) {
     // ---------- The veggie patch (in the meadow, to the right) ----------
 
     private var growPick = -1      // plot waiting for a seed
-    private fun plotGx(i: Int) = 1.42f + (i % 3) * 0.17f + (i / 3) * 0.04f
-    private fun plotGz(i: Int) = 0.1f + (i / 3) * 0.2f
+    private fun plotGx(i: Int) = 1.3f + (i % 3) * 0.22f + (i / 3) * 0.05f
+    private fun plotGz(i: Int) = 0.36f + (i / 3) * 0.26f
 
     private fun tapPlot(i: Int) {
         val now = System.currentTimeMillis()
@@ -5001,7 +5001,7 @@ class GameView(context: Context) : View(context) {
     /** A little garden bed in the meadow: soil, a sprout that grows, and the ripe ingredient. */
     private fun drawPlotWorld(c: Canvas, i: Int, x: Float, y: Float, d: Float) {
         val now = System.currentTimeMillis()
-        val rw = 30f * dp * d; val rh = 10f * dp * d
+        val rw = 40f * dp * d; val rh = 14f * dp * d
         fill.color = Color.rgb(95, 65, 45); c.drawOval(x - rw, y - rh, x + rw, y + rh, fill)
         fill.color = Color.rgb(125, 85, 58); c.drawOval(x - rw * 0.86f, y - rh * 1.2f, x + rw * 0.86f, y + rh * 0.4f, fill)
         fill.color = Color.rgb(150, 105, 72)
@@ -5010,7 +5010,7 @@ class GameView(context: Context) : View(context) {
         stroke.color = Color.rgb(170, 120, 75); stroke.strokeWidth = 2.5f * dp * d
         c.drawLine(x - rw * 1.02f, y, x - rw * 1.02f, y - 14f * dp * d, stroke); c.drawLine(x + rw * 1.02f, y, x + rw * 1.02f, y - 14f * dp * d, stroke)
         val sd = lab.plotSeed[i]
-        text.textSize = 10f * dp * d
+        text.textSize = 11f * dp * d
         if (sd < 0) {
             text.color = Color.argb(200, 255, 255, 255); c.drawText("+ plant", x, y - rh * 1.6f, text); text.color = Color.WHITE
             return
@@ -5020,7 +5020,7 @@ class GameView(context: Context) : View(context) {
         val base = y - rh * 0.5f
         c.save(); c.rotate(sin(t * 2f + i) * 4f, x, base)
         stroke.color = Color.rgb(90, 170, 80); stroke.strokeWidth = 3f * dp * d
-        val stemH = 40f * dp * d * (0.15f + 0.85f * p)
+        val stemH = 50f * dp * d * (0.15f + 0.85f * p)
         c.drawLine(x, base, x, base - stemH, stroke)
         fill.color = Color.rgb(120, 200, 100)
         if (p > 0.15f) {
@@ -5028,7 +5028,7 @@ class GameView(context: Context) : View(context) {
             c.drawOval(x, base - stemH * 0.4f - 5f * dp * d, x + 14f * dp * d * p + 4f * dp * d, base - stemH * 0.4f + 3f * dp * d, fill)
         }
         if (p >= 1f) {
-            drawIngredient(c, ing, x, base - stemH - 9f * dp * d + sin(t * 4f) * 2f * dp, 8f * dp * d)
+            drawIngredient(c, ing, x, base - stemH - 11f * dp * d + sin(t * 4f) * 2f * dp, 10f * dp * d)
             fill.color = Color.WHITE; drawSparkle(c, x + 12f * dp * d, base - stemH - 18f * dp * d, 2.5f * dp * d)
         } else { fill.color = Data.INGREDIENTS[ing].color; c.drawCircle(x, base - stemH, (2.5f + 4f * p) * dp * d, fill) }
         c.restore()
@@ -5268,6 +5268,7 @@ class GameView(context: Context) : View(context) {
         val card = previewCard(w, h)
         val k = 0.85f + 0.15f * easeOutBack(previewAnim)
         c.save(); c.scale(k, k, card.centerX(), card.centerY())
+        fill.color = Color.rgb(38, 26, 70); c.drawRoundRect(card, 24f * dp, 24f * dp, fill)
         panel(c, card, 24f * dp, PANEL_LIGHT)
         val scene = previewScene(w, h)
         val sp = previewSpecies()
@@ -5320,7 +5321,7 @@ class GameView(context: Context) : View(context) {
             fill.shader = LinearGradient(0f, y - s * 0.7f, 0f, y + s * 0.7f, intArrayOf(th.skyTop, th.skyBottom, th.groundFar, th.groundNear), floatArrayOf(0f, 0.45f, 0.55f, 1f), Shader.TileMode.CLAMP)
             c.drawRoundRect(x - s * 0.75f, y - s * 0.6f, x + s * 0.75f, y + s * 0.6f, s * 0.2f, s * 0.2f, fill); fill.shader = null })
         val decor = b.decor.toMutableList(); if (pk.id == "event_boost" && ev > 0) Data.DECOR.indices.filter { Data.DECOR[it].event == ev }.forEach { decor.add(it) }
-        for (d in decor) tiles.add((if (Data.DECOR[d].special > 0) "★ " else "") + Data.DECOR[d].name to { x, y, s -> c.save(); c.clipRect(x - s, y - s, x + s, y + s); drawDecor(c, d, x, y + s * 0.75f, s / (40f * dp) * 0.55f); c.restore() })
+        for (d in decor) tiles.add((if (Data.DECOR[d].special > 0) "★ " else "") + Data.DECOR[d].name to { x, y, s -> c.save(); c.clipRect(x - s, y - s, x + s, y + s); drawDecor(c, d, x, y + s * 0.8f, s / (40f * dp) * 1.05f); c.restore() })
         for (a in b.acc) tiles.add((if (Data.ACCESSORIES[a].special > 0) "★ " else "") + Data.ACCESSORIES[a].name to { x, y, s -> drawAccessoryIcon(c, a, x, y, s * 0.55f) })
         for (p in b.pets) tiles.add("★ " + Data.PETS[p].name to { x, y, s -> drawPet(c, p, x, y + s * 0.4f, s * 0.9f, t * 8f, 1f, false) })
         if (pk.id == "event_boost" && ev > 0) tiles.add("10× event ingredients" to { x, y, s -> Data.INGREDIENTS.indices.filter { Data.INGREDIENTS[it].event == ev }.forEachIndexed { k, ing -> drawIngredient(c, ing, x + (k - 0.5f) * s * 0.7f, y, s * 0.3f) } })
@@ -5390,7 +5391,7 @@ class GameView(context: Context) : View(context) {
     private fun drawOffer(c: Canvas, w: Float, h: Float) {
         val pk = Data.PACKS[offerPack]
         val card = offerCard(w, h)
-        val k = easeOutBack(min(1f, (System.currentTimeMillis() % 100000L) / 1000f))
+        fill.color = Color.rgb(38, 26, 70); c.drawRoundRect(card, 26f * dp, 26f * dp, fill)
         panel(c, card, 26f * dp, PANEL_LIGHT)
         // rays behind the gift
         c.save(); c.translate(w / 2, card.top + 120f * dp); c.rotate(t * 15f)
@@ -5503,7 +5504,7 @@ class GameView(context: Context) : View(context) {
             val ix = card.left + 40f * dp; val iy = y + rh / 2
             val (name, sub) = when (o.kind) {
                 0 -> { drawIngredient(c, o.item, ix, iy, 12f * dp); Pair("${o.qty}× ${Data.INGREDIENTS[o.item].name}", "A bundle at a bargain") }
-                1 -> { drawSeedPacket(c, o.item, ix, iy, 14f * dp); Pair("${o.qty}× ${Data.SEEDS[o.item].name}", "Plant in Lab → GROW") }
+                1 -> { drawSeedPacket(c, o.item, ix, iy, 14f * dp); Pair("${o.qty}× ${Data.SEEDS[o.item].name}", "Plant in the garden's veggie patch") }
                 2 -> { drawAccessoryIcon(c, o.item, ix, iy + 4f * dp, 22f * dp); Pair(Data.ACCESSORIES[o.item].name, "Only sold by Bartleby!") }
                 else -> { drawMysteryEgg(c, ix, iy + 10f * dp, 22f * dp); Pair("Mystery Egg", "What will hatch? 🥚") }
             }
@@ -7866,9 +7867,10 @@ class GameView(context: Context) : View(context) {
         val u = r * 1.25f   // the size everything below is measured in
         val p = ingPath
         fun grad(x0: Float, y0: Float, rad: Float, light: Int, mid: Int, dark: Int) {
+            fill.color = Color.WHITE
             fill.shader = RadialGradient(x0, y0, max(1f, rad), intArrayOf(light, mid, dark), floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP)
         }
-        fun lin(y0: Float, y1: Float, top: Int, bottom: Int) { fill.shader = LinearGradient(0f, y0, 0f, y1, top, bottom, Shader.TileMode.CLAMP) }
+        fun lin(y0: Float, y1: Float, top: Int, bottom: Int) { fill.color = Color.WHITE; fill.shader = LinearGradient(0f, y0, 0f, y1, top, bottom, Shader.TileMode.CLAMP) }
         fun done() { fill.shader = null }
         fun outline(col: Int, wdt: Float = u * 0.07f) { stroke.color = col; stroke.strokeWidth = wdt; c.drawPath(p, stroke) }
         fun shine(cx: Float, cy: Float, rw: Float, rh: Float, a: Int = 170) { fill.color = Color.argb(a, 255, 255, 255); c.drawOval(cx - rw, cy - rh, cx + rw, cy + rh, fill) }
@@ -8046,6 +8048,7 @@ class GameView(context: Context) : View(context) {
                 fill.color = Color.rgb(240, 120, 140); drawHeart(c, x, y + u * 0.3f, u * 0.11f)
             }
             Data.SPARK -> {
+                fill.color = Color.WHITE
                 fill.shader = RadialGradient(x, y, u, Color.argb(120, 120, 230, 255), Color.argb(0, 120, 230, 255), Shader.TileMode.CLAMP)
                 c.drawCircle(x, y, u, fill); done()
                 p.moveTo(x + u * 0.18f, y - u * 0.95f); p.lineTo(x - u * 0.55f, y + u * 0.12f); p.lineTo(x - u * 0.04f, y + u * 0.12f)
