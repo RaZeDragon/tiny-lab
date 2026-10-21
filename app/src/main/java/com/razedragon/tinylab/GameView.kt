@@ -348,7 +348,7 @@ class GameView(context: Context) : View(context) {
         val target = specialTarget()
         var missed = -1
         var sp = if (n == 3) Data.brew3(slots[0], slots[1], slots[2]) else Data.brew(slots[0], slots[1])
-        if (target >= 0 && Random.nextFloat() > successChance(target)) {
+        if (target >= 0 && (testForceFail || Random.nextFloat() > successChance(target))) {
             missed = target
             sp = Data.brew3Common(slots[0], slots[1], slots[2])
         }
@@ -1362,6 +1362,43 @@ class GameView(context: Context) : View(context) {
     }
 
     private var qaAcc = 0f
+
+    // ---------- Test hooks (used by the screenshot tests, never by the game) ----------
+    internal var testForceFail = false
+    internal fun testLab(): LabState = lab
+    internal fun testFrame(seconds: Float = 0.05f) {
+        var left = seconds
+        while (left > 0f) { val d = min(left, 0.05f); realDt = d; update(d); left -= d }
+        buttons = buildButtons()
+    }
+    internal fun testButtonIds(): List<String> { buttons = buildButtons(); return buttons.map { it.id } }
+    internal fun testTap(id: String): Boolean {
+        buttons = buildButtons()
+        val b = buttons.lastOrNull { it.id == id } ?: return false
+        b.action()
+        buttons = buildButtons()
+        return true
+    }
+    internal fun testSkipIntro() { splashT = 0f; holdSplash = false; tutStep = -1; prefs.edit().putInt("tutStep", -1).apply(); toasts.clear() }
+    internal fun testProfSay(msg: String) = professorSay(msg, 30f)
+    internal fun testRender(): android.graphics.Bitmap {
+        val bmp = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
+        buttons = buildButtons()
+        render(Canvas(bmp))
+        return bmp
+    }
+    internal fun testDrawSpecies(c: Canvas, sp: Int, x: Float, y: Float, size: Float, label: Boolean = true) {
+        drawShroom(c, sp, x, y, size, 0, 0f, false, false)
+        if (label) {
+            text.textSize = 11f * dp; text.color = Color.WHITE
+            c.drawText(Data.SPECIES[sp].name, x, y + 16f * dp, text)
+        }
+    }
+    internal fun testDrawIngredient(c: Canvas, i: Int, x: Float, y: Float, r: Float) {
+        drawIngredient(c, i, x, y, r)
+        text.textSize = 11f * dp; text.color = Color.WHITE
+        c.drawText(Data.INGREDIENTS[i].name, x, y + r * 1.3f + 16f * dp, text)
+    }
 
     private fun update(dt: Float) {
         t += dt

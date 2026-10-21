@@ -1,8 +1,7 @@
 name: QA on emulator
 
+# The slow emulator play-through: run by hand from the Actions tab when needed.
 on:
-  push:
-    branches: [qa]
   workflow_dispatch:
 
 permissions:

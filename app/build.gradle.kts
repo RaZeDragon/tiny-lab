@@ -38,4 +38,20 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+
+    // Screenshot tests run the real drawing code on the build machine (no emulator needed)
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+            all {
+                it.maxHeapSize = "2g"
+                it.systemProperty("robolectric.graphicsMode", "NATIVE")
+            }
+        }
+    }
+}
+
+dependencies {
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.13")
 }
