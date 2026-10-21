@@ -12,6 +12,7 @@ import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.floor
+import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.sin
@@ -27,12 +28,13 @@ class Sound(private val context: Context) {
         CHIRP, GIGGLE, WHEE, CHOMP, PURR, SNEEZE, YAWN, BOING, RIBBIT, CLINK }
 
     var sfxOn = true
+        set(v) { field = v; if (!v) setAmbient(false, false, false, false) }
     var musicOn = true
         set(v) { field = v; updateMusic() }
 
     private val rate = 22050
     private val pool: SoundPool = SoundPool.Builder()
-        .setMaxStreams(12)
+        .setMaxStreams(16)
         .setAudioAttributes(AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_GAME)
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
@@ -40,14 +42,40 @@ class Sound(private val context: Context) {
         .build()
     private val ids = IntArray(Fx.values().size)
     @Volatile private var ready = false
-    @Volatile private var player: MediaPlayer? = null
+    @Volatile private var dayPlayer: MediaPlayer? = null
+    @Volatile private var nightPlayer: MediaPlayer? = null
     @Volatile private var appActive = true
     @Volatile private var released = false
+
+    // Background ambience loops: birds, crickets, rain, campfire
+    private val ambIds = IntArray(4)
+    private val ambStreams = IntArray(4)
+    private val ambOn = BooleanArray(4)
+    private val ambVol = floatArrayOf(0.22f, 0.2f, 0.32f, 0.3f)
+    @Volatile private var ambReady = false
+
+    // 0 = day music, 1 = night music; crossfades smoothly
+    private var nightTarget = 0f
+    private var nightMix = 0f
+    private val musicVol = 0.42f
+
+    private fun newPlayer(path: String): MediaPlayer {
+        val mp = MediaPlayer()
+        mp.setAudioAttributes(AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_GAME)
+            .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+            .build())
+        mp.setDataSource(path)
+        mp.isLooping = true
+        mp.setVolume(0f, 0f)
+        mp.prepare()
+        return mp
+    }
 
     init {
         Thread {
             try {
-                val dir = File(context.cacheDir, "tinylab_sound_v3").apply { mkdirs() }
+                val dir = File(context.cacheDir, "tinylab_sound_v4").apply { mkdirs() }
                 for (fx in Fx.values()) {
                     val f = File(dir, fx.name.lowercase() + ".wav")
                     if (!f.exists()) writeWav(f, synth(fx))
@@ -55,18 +83,26 @@ class Sound(private val context: Context) {
                 }
                 ready = true
                 val m = File(dir, "music.wav")
-                if (!m.exists()) writeWav(m, music())
-                val mp = MediaPlayer()
-                mp.setAudioAttributes(AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_GAME)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                    .build())
-                mp.setDataSource(m.path)
-                mp.isLooping = true
-                mp.setVolume(0.45f, 0.45f)
-                mp.prepare()
-                if (released) { mp.release(); return@Thread }
-                player = mp
+                if (!m.exists()) writeWav(m, music(false))
+                val day = newPlayer(m.path)
+                if (released) { day.release(); return@Thread }
+                dayPlayer = day
+                applyVolumes()
+                updateMusic()
+                val amb = arrayOf("amb_birds" to { birds() }, "amb_crickets" to { crickets() }, "amb_rain" to { rain() }, "amb_fire" to { fire() })
+                for ((k, pair) in amb.withIndex()) {
+                    val f = File(dir, pair.first + ".wav")
+                    if (!f.exists()) writeWav(f, pair.second())
+                    ambIds[k] = pool.load(f.path, 1)
+                }
+                Thread.sleep(300)
+                ambReady = true
+                val n = File(dir, "music_night.wav")
+                if (!n.exists()) writeWav(n, music(true))
+                val night = newPlayer(n.path)
+                if (released) { night.release(); return@Thread }
+                nightPlayer = night
+                applyVolumes()
                 updateMusic()
             } catch (_: Exception) {
                 // Sound is a nice-to-have: the game keeps working silently if anything fails.
@@ -79,25 +115,128 @@ class Sound(private val context: Context) {
         pool.play(ids[fx.ordinal], volume, volume, 1, 0, pitch.coerceIn(0.5f, 2f))
     }
 
-    fun onAppPause() { appActive = false; updateMusic() }
+    fun ambientReady() = ambReady
+
+    /** Turns the looping background sounds on or off. */
+    fun setAmbient(birds: Boolean, crickets: Boolean, rain: Boolean, fire: Boolean) {
+        if (!ambReady) return
+        val want = booleanArrayOf(birds, crickets, rain, fire)
+        for (k in 0..3) {
+            val on = want[k] && sfxOn && appActive
+            if (on == ambOn[k]) continue
+            ambOn[k] = on
+            if (on) ambStreams[k] = pool.play(ambIds[k], ambVol[k], ambVol[k], 0, -1, 1f)
+            else if (ambStreams[k] != 0) { pool.stop(ambStreams[k]); ambStreams[k] = 0 }
+        }
+    }
+
+    /** Call every frame: fades between day and night music. */
+    fun update(dt: Float, night: Boolean) {
+        nightTarget = if (night && nightPlayer != null) 1f else 0f
+        if (nightMix != nightTarget) {
+            nightMix = if (nightMix < nightTarget) min(nightTarget, nightMix + dt * 0.3f) else max(nightTarget, nightMix - dt * 0.3f)
+            applyVolumes()
+        }
+    }
+
+    private fun applyVolumes() {
+        try {
+            dayPlayer?.setVolume(musicVol * (1f - nightMix), musicVol * (1f - nightMix))
+            nightPlayer?.setVolume(musicVol * nightMix, musicVol * nightMix)
+        } catch (_: IllegalStateException) {}
+    }
+
+    fun onAppPause() {
+        appActive = false; updateMusic()
+        for (k in 0..3) if (ambOn[k]) { pool.stop(ambStreams[k]); ambStreams[k] = 0; ambOn[k] = false }
+    }
     fun onAppResume() { appActive = true; updateMusic() }
 
     fun release() {
         released = true
         synchronized(this) {
-            player?.release()
-            player = null
+            dayPlayer?.release(); dayPlayer = null
+            nightPlayer?.release(); nightPlayer = null
         }
         pool.release()
     }
 
     @Synchronized
     private fun updateMusic() {
-        val p = player ?: return
-        try {
-            if (musicOn && appActive) { if (!p.isPlaying) p.start() }
-            else if (p.isPlaying) p.pause()
-        } catch (_: IllegalStateException) {}
+        for (p in listOfNotNull(dayPlayer, nightPlayer)) {
+            try {
+                if (musicOn && appActive) { if (!p.isPlaying) p.start() }
+                else if (p.isPlaying) p.pause()
+            } catch (_: IllegalStateException) {}
+        }
+    }
+
+    // ---------- Ambience ----------
+
+    private fun birds(): FloatArray {
+        val out = FloatArray(rate * 6)
+        val r = Random(9)
+        var at = 0.2f
+        while (at < 5.6f) {
+            val base = 2200f + r.nextFloat() * 1600f
+            val notes = 2 + r.nextInt(4)
+            for (k in 0 until notes) {
+                val st = ((at + k * 0.09f) * rate).toInt()
+                val len = (0.07f * rate).toInt()
+                var ph = 0.0
+                for (i in 0 until len) {
+                    if (st + i >= out.size) break
+                    val p = i / len.toFloat()
+                    ph += (base * (1f + 0.35f * sin(p * PI).toFloat()) * (if (k % 2 == 0) 1f else 1.15f)) / rate
+                    out[st + i] += sin(2 * PI * ph).toFloat() * sin(p * PI).toFloat() * 0.18f
+                }
+            }
+            at += 0.6f + r.nextFloat() * 1.3f
+        }
+        return out
+    }
+
+    private fun crickets(): FloatArray {
+        val out = FloatArray(rate * 4)
+        for ((v, f) in floatArrayOf(4300f, 4700f).withIndex()) {
+            for (i in out.indices) {
+                val tt = i / rate.toFloat()
+                val chirpOn = ((tt * 1.6f + v * 0.37f) % 1f) < 0.32f
+                if (!chirpOn) continue
+                val pulse = 0.5f + 0.5f * sin(2 * PI * 32 * tt).toFloat()
+                out[i] += sin(2 * PI * f * tt).toFloat() * pulse * 0.06f
+            }
+        }
+        return out
+    }
+
+    private fun rain(): FloatArray {
+        val n = rate * 5
+        val out = FloatArray(n)
+        val r = Random(4)
+        var y = 0f
+        for (i in 0 until n) { y += 0.18f * ((r.nextFloat() * 2f - 1f) - y); out[i] = y * 0.9f }
+        // a few drips
+        repeat(40) {
+            val st = r.nextInt(n - 2000)
+            val f = 1200f + r.nextFloat() * 1500f
+            for (i in 0 until 600) out[st + i] += sin(2 * PI * f * i / rate).toFloat() * exp(-i / 120f) * 0.15f
+        }
+        return out
+    }
+
+    private fun fire(): FloatArray {
+        val n = rate * 4
+        val out = FloatArray(n)
+        val r = Random(6)
+        var y = 0f
+        for (i in 0 until n) { y += 0.05f * ((r.nextFloat() * 2f - 1f) - y); out[i] = y * 0.8f }
+        repeat(70) {   // crackles
+            val st = r.nextInt(n - 400)
+            val amp = 0.2f + r.nextFloat() * 0.4f
+            for (i in 0 until 200) out[st + i] += (r.nextFloat() * 2f - 1f) * amp * exp(-i / 30f)
+        }
+        return out
     }
 
     // ---------- Synthesis ----------
@@ -260,8 +399,8 @@ class Sound(private val context: Context) {
     }
 
     /** A calm 16-bar loop: soft pads, bass, a music-box melody and arpeggios, with a little echo. */
-    private fun music(): FloatArray {
-        val bpm = 80
+    private fun music(night: Boolean): FloatArray {
+        val bpm = if (night) 64 else 80
         val beat = rate * 60 / bpm
         val bars = 16
         val out = FloatArray(beat * 4 * bars)
@@ -278,8 +417,9 @@ class Sound(private val context: Context) {
         val penta = floatArrayOf(523.25f, 587.33f, 659.25f, 783.99f, 880f, 1046.5f)
         val rnd = Random(21)
 
+        val order = if (night) intArrayOf(1, 2, 0, 3, 1, 5, 2, 7) else intArrayOf(0, 1, 2, 3, 4, 5, 6, 7)
         for (bar in 0 until bars) {
-            val ci = bar / 2
+            val ci = order[bar / 2]
             val barStart = bar * beat * 4
 
             // pad: three soft detuned sines that swell across two bars
@@ -311,10 +451,10 @@ class Sound(private val context: Context) {
             // arpeggio on eighth notes, quiet
             for (e in 0 until 8) {
                 val f = chords[ci][intArrayOf(0, 1, 2, 1, 0, 2, 1, 2)[e]] * 2f
-                pluck(out, barStart + e * beat / 2, f, 0.045f, 0.6f)
+                pluck(out, barStart + e * beat / 2, if (night) f / 2f else f, if (night) 0.035f else 0.045f, 0.6f)
             }
             // melody: phrases in bars 2-7 and 10-15, resting elsewhere
-            if (bar % 8 in 1..6) {
+            if (bar % 8 in (if (night) 2..5 else 1..6)) {
                 var pos = 0
                 while (pos < 8) {
                     val len = if (rnd.nextFloat() < 0.35f) 1 else 2     // eighths
@@ -326,8 +466,8 @@ class Sound(private val context: Context) {
                     pos += len
                 }
             }
-            // soft shaker on the off-beats
-            for (q in 0 until 4) {
+            // soft shaker on the off-beats (not at night)
+            for (q in 0 until (if (night) 0 else 4)) {
                 val st = barStart + q * beat + beat / 2
                 var prev = 0f
                 for (i in 0 until (0.035f * rate).toInt()) {

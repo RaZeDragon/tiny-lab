@@ -175,6 +175,10 @@ class LabState(context: Context) {
 
         /** About one day in four is rainy. */
         fun rainy(day: Int = dayKey()) = Random(day * 31 + 7).nextFloat() < 0.27f
+
+        /** On rainy days the rain stops in the late afternoon and a rainbow comes out. */
+        fun raining() = rainy() && hour() !in 15f..18f
+        fun rainbow() = rainy() && hour() in 15f..18f
     }
 
     // ---------- New mushrooms & genetics ----------

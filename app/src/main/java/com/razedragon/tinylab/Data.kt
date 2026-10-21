@@ -292,6 +292,12 @@ object Data {
         Decor("Signpost", 20),
         Decor("Fairy Lights", 100, glow = true),
         Decor("Tree Stump", 25),
+        // Toys
+        Decor("Ball", 30),
+        Decor("Swing", 90),
+        Decor("Slide", 120),
+        Decor("Trampoline", 110),
+        Decor("Campfire", 80, glow = true),
     )
 
     val THEMES = arrayOf(
