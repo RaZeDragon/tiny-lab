@@ -5115,19 +5115,24 @@ class GameView(context: Context) : View(context) {
         }
         fill.color = Color.argb(70, 255, 255, 255)
         c.drawCircle(x - s * 0.1f, y - s * 0.72f, s * 0.1f, fill)
+        for ((k, d) in arrayOf(-0.32f to -0.5f, 0.12f to -0.7f, 0.36f to -0.3f, -0.05f to -0.28f).withIndex()) {
+            fill.color = if (k % 2 == 0) Color.rgb(255, 170, 200) else Color.rgb(255, 235, 140)
+            c.drawCircle(x + d.first * s, y + d.second * s, s * 0.05f, fill)
+            fill.color = Color.WHITE; c.drawCircle(x + d.first * s, y + d.second * s, s * 0.018f, fill)
+        }
         c.restore()
     }
 
     private fun drawHideCell(c: Canvas, r: RectF, i: Int) {
         val x = r.centerX(); val y = r.bottom - r.height() * 0.12f
         val s = r.width() * 0.62f
-        val reveal = hsFound[i] || (hsNext > 0f && hsHidden[i] >= 0)
-        if (reveal) {
-            val pop = if (hsFound[i]) 1f else 0.6f
-            drawShroom(c, hsHidden[i], x + s * 0.25f, y - s * 0.35f * pop, s * 0.55f, 0, sin(t * 4f), false, !hsFound[i],
+        val missed = !hsFound[i] && hsNext > 0f && hsHidden[i] >= 0
+        if (missed) drawShroom(c, hsHidden[i], x + s * 0.2f, y - s * 0.55f, s * 0.5f, 0, 0f, false, true)
+        drawBush(c, x, y, s, if (hsRustle[i] > 0f) sin(t * 40f) else 0f)
+        if (hsFound[i]) {   // found! it hops out in front of its bush
+            drawShroom(c, hsHidden[i], x + s * 0.18f, y + s * 0.02f - abs(sin(t * 5f)) * s * 0.06f, s * 0.6f, 0, sin(t * 4f), false, false,
                 who = Shroom(-9L, hsHidden[i]).apply { expr = E_GIGGLE; exprT = 1f; xp = 200f })
         }
-        drawBush(c, x, y, s, if (hsRustle[i] > 0f) sin(t * 40f) else 0f)
         if (hsTapped[i] && hsHidden[i] < 0) { text.textSize = 13f * dp; text.color = TEXT_DIM; c.drawText("nobody", x, r.top + 16f * dp, text); text.color = Color.WHITE }
     }
 
