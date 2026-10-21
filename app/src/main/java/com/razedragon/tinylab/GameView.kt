@@ -688,8 +688,8 @@ class GameView(context: Context) : View(context) {
 
         if (selected < 0 && area == 0 && merchantHere()) {
             val (mx, my) = toScreen(0.9f, 0.08f)
-            list.add(Button("merchant", RectF(mx - 40f * dp, my - 70f * dp, mx + 40f * dp, my + 6f * dp), "", STYLE_GHOST,
-                custom = { c, rr -> drawMerchant(c, rr.centerX(), rr.bottom - 6f * dp, 58f * dp * depth(0.08f)) }) {
+            list.add(Button("merchant", RectF(mx - 50f * dp, my - 90f * dp, mx + 40f * dp, my + 6f * dp), "", STYLE_GHOST,
+                custom = { c, rr -> drawMerchant(c, rr.centerX(), rr.bottom - 6f * dp, 80f * dp * depth(0.08f)) }) {
                 merchantOpen = true; sound.play(Fx.CHIRP, 0.6f, 0.8f)
             })
         }
@@ -4876,7 +4876,7 @@ class GameView(context: Context) : View(context) {
         text.textSize = 13f * dp; text.color = TEXT_DIM
         val have = Data.SEEDS.indices.filter { lab.seeds[it] > 0 }
         c.drawText(if (growPick >= 0) "Pick a seed to plant" else if (have.isEmpty()) "No seeds yet · your mushrooms find them while they play"
-            else "Seeds: " + have.joinToString("  ") { "${Data.SEEDS[it].name} ×${lab.seeds[it]}" }, w / 2, a.top - 12f * dp, text)
+            else "${have.sumOf { lab.seeds[it] }} seed packets · tap an empty plot to plant", w / 2, a.top - 12f * dp, text)
         text.color = Color.WHITE
     }
 
@@ -5079,7 +5079,7 @@ class GameView(context: Context) : View(context) {
             val (name, sub) = when (o.kind) {
                 0 -> { drawIngredient(c, o.item, ix, iy, 12f * dp); Pair("${o.qty}× ${Data.INGREDIENTS[o.item].name}", "A bundle at a bargain") }
                 1 -> { drawSeedPacket(c, o.item, ix, iy, 14f * dp); Pair("${o.qty}× ${Data.SEEDS[o.item].name}", "Plant in Lab → GROW") }
-                2 -> { drawAccessoryIcon(c, o.item, ix, iy, 13f * dp); Pair(Data.ACCESSORIES[o.item].name, "Only sold by Bartleby!") }
+                2 -> { drawAccessoryIcon(c, o.item, ix, iy + 4f * dp, 22f * dp); Pair(Data.ACCESSORIES[o.item].name, "Only sold by Bartleby!") }
                 else -> { drawMysteryEgg(c, ix, iy + 10f * dp, 22f * dp); Pair("Mystery Egg", "What will hatch? 🥚") }
             }
             text.textSize = 14f * dp; c.drawText(name, card.left + 66f * dp, iy - 2f * dp, text)
