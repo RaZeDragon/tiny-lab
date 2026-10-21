@@ -12,6 +12,17 @@ class Decor(val name: String, val cost: Int, val glow: Boolean = false)
 class Theme(val name: String, val cost: Int, val skyTop: Int, val skyBottom: Int, val groundFar: Int,
             val groundNear: Int, val forest1: Int, val forest2: Int)
 
+/** Wearable: slot 0 = on the cap, 1 = on the face, 2 = around the stem. */
+class Accessory(val name: String, val cost: Int, val slot: Int, val color: Int)
+
+/** A lab upgrade with one or more levels. */
+class Upgrade(val name: String, val desc: String, val costs: IntArray)
+
+/** An expedition destination. */
+class Zone(val name: String, val hours: Float, val loot: IntArray, val color: Int, val minStage: Int)
+
+class Achievement(val name: String, val desc: String, val reward: Int)
+
 /** Things you feed your mushrooms. */
 class Food(val name: String, val color: Int, val cost: Int, val hunger: Int, val xp: Int, val happy: Int)
 
@@ -141,10 +152,27 @@ object Data {
             "Something precious + something bright", glow = true),
         /* 33 */ Species("Icicle Horn", Color.rgb(160, 225, 255), Color.rgb(235, 248, 255), Color.WHITE, 4, 1, 0,
             "Something cold, twice"),
+
+        // Rare: three-ingredient brews (needs the Big Flask upgrade)
+        /* 34 */ Species("Storm Cap", Color.rgb(50, 70, 140), Color.rgb(210, 220, 240), Color.rgb(255, 230, 80), 0, 4, 3,
+            "Water, fire and metal in one flask", glow = true),
+        /* 35 */ Species("Rainbow Puff", Color.rgb(255, 190, 230), Color.rgb(255, 245, 250), Color.rgb(150, 230, 255), 1, 4, 4,
+            "Water, crystal and moondew together", glow = true),
+        /* 36 */ Species("Ancient Morel", Color.rgb(170, 130, 70), Color.rgb(230, 210, 170), Color.rgb(255, 210, 90), 2, 4, 3,
+            "Earth, metal and gold together"),
+        /* 37 */ Species("Lava Horn", Color.rgb(255, 90, 30), Color.rgb(120, 60, 50), Color.rgb(255, 220, 90), 4, 4, 2,
+            "Two embers and something smelly", glow = true),
+        /* 38 */ Species("Frostfire Funnel", Color.rgb(140, 110, 255), Color.rgb(230, 225, 255), Color.rgb(255, 140, 120), 3, 4, 2,
+            "Fire, frost and crystal together"),
+        /* 39 */ Species("Midnight Cap", Color.rgb(25, 30, 80), Color.rgb(200, 205, 240), Color.rgb(255, 250, 200), 0, 4, 4,
+            "Two moondews and a crystal", glow = true),
     )
 
-    /** Shroomdex order: commons first, then hybrids, then legendaries. */
-    val DEX_ORDER: List<Int> = SPECIES.indices.sortedWith(compareBy({ SPECIES[it].tier }, { it }))
+    val TIER_NAMES = arrayOf("", "Common", "Hybrid", "Legendary", "Rare")
+    private val TIER_RANK = intArrayOf(0, 0, 2, 3, 1)
+
+    /** Shroomdex order: commons, rares, hybrids, then legendaries. */
+    val DEX_ORDER: List<Int> = SPECIES.indices.sortedWith(compareBy({ TIER_RANK[SPECIES[it].tier] }, { it }))
 
     private fun key(a: Int, b: Int) = if (a <= b) "$a,$b" else "$b,$a"
 
@@ -213,6 +241,24 @@ object Data {
     /** Which species two ingredients make. Every pair has a recipe. */
     fun brew(a: Int, b: Int): Int = BREWS[key(a, b)] ?: 0
 
+    private fun key3(a: Int, b: Int, c: Int) = listOf(a, b, c).sorted().joinToString(",")
+
+    private val BREWS3 = hashMapOf(
+        key3(WATER, EMBER, IRON) to 34,
+        key3(WATER, CRYSTAL, MOONDEW) to 35,
+        key3(SOIL, IRON, GOLD) to 36,
+        key3(EMBER, EMBER, SULFUR) to 37,
+        key3(EMBER, FROST, CRYSTAL) to 38,
+        key3(MOONDEW, MOONDEW, CRYSTAL) to 39,
+    )
+
+    /** Three ingredients: a rare species if it's a recipe, otherwise what two of them make. */
+    fun brew3(a: Int, b: Int, c: Int): Int {
+        BREWS3[key3(a, b, c)]?.let { return it }
+        val pair = listOf(Pair(a, b), Pair(a, c), Pair(b, c)).random()
+        return brew(pair.first, pair.second)
+    }
+
     /** Which species two grown mushrooms make, or -1 if they have no special hybrid. */
     fun cross(a: Int, b: Int): Int = CROSSES[key(a, b)] ?: -1
 
@@ -223,6 +269,9 @@ object Data {
             "${INGREDIENTS[a].name} + ${INGREDIENTS[b].name}"
         }
         if (brews.isNotEmpty()) return brews.joinToString("  or  ")
+        BREWS3.entries.firstOrNull { it.value == species }?.let { e ->
+            return e.key.split(",").joinToString(" + ") { INGREDIENTS[it.toInt()].name }
+        }
         CROSSES.entries.firstOrNull { it.value == species }?.let { e ->
             val (a, b) = e.key.split(",").map { it.toInt() }
             return "${SPECIES[a].name} × ${SPECIES[b].name}"
@@ -260,5 +309,88 @@ object Data {
 
     val STAGE_NAMES = arrayOf("Sprout", "Young", "Grown", "Elder")
     val STAGE_XP = intArrayOf(0, 40, 150, 500)
-    val TIER_MUL = intArrayOf(0, 1, 2, 4)
+    val TIER_MUL = intArrayOf(0, 1, 2, 4, 3)
+
+    // ---------- Personalities ----------
+    val TRAITS = arrayOf("Sleepy", "Bouncy", "Shy", "Greedy", "Curious", "Cheerful")
+    val TRAIT_DESC = arrayOf(
+        "Naps a lot and walks slowly",
+        "Hops everywhere, full of energy",
+        "Keeps its distance from others",
+        "Always hungry, but grows more from food",
+        "Loves decorations and finds more on expeditions",
+        "Stays happy longer",
+    )
+    val NAMES = arrayOf("Pip", "Bloop", "Mori", "Tuff", "Nibs", "Puddle", "Sprig", "Wobble", "Fen", "Gloop",
+        "Truffle", "Button", "Pebble", "Doodle", "Mossy", "Bean", "Pudding", "Sporey", "Tiko", "Mallow",
+        "Squish", "Bramble", "Nugget", "Toffee", "Lumi", "Fizz", "Bubbles", "Dot", "Waffle", "Biscuit",
+        "Juniper", "Clover", "Pickle", "Noodle", "Sunny", "Morel", "Shiitake", "Puff", "Ziggy", "Mochi")
+
+    // ---------- Hats & accessories ----------
+    val ACCESSORIES = arrayOf(
+        Accessory("Party Hat", 30, 0, Color.rgb(255, 120, 170)),
+        Accessory("Bow", 30, 0, Color.rgb(255, 90, 130)),
+        Accessory("Beanie", 45, 0, Color.rgb(90, 160, 255)),
+        Accessory("Flower Crown", 60, 0, Color.rgb(255, 230, 120)),
+        Accessory("Top Hat", 80, 0, Color.rgb(40, 35, 50)),
+        Accessory("Cowboy Hat", 90, 0, Color.rgb(170, 110, 60)),
+        Accessory("Wizard Hat", 140, 0, Color.rgb(110, 70, 200)),
+        Accessory("Tiny Crown", 250, 0, Color.rgb(255, 205, 60)),
+        Accessory("Halo", 300, 0, Color.rgb(255, 245, 170)),
+        Accessory("Glasses", 40, 1, Color.rgb(50, 40, 60)),
+        Accessory("Sunglasses", 60, 1, Color.rgb(20, 20, 30)),
+        Accessory("Scarf", 50, 2, Color.rgb(230, 70, 70)),
+        Accessory("Bow Tie", 45, 2, Color.rgb(90, 200, 255)),
+        Accessory("Headphones", 120, 0, Color.rgb(255, 110, 80)),
+    )
+
+    // ---------- Lab upgrades ----------
+    const val UP_GARDEN = 0
+    const val UP_FLASK = 1
+    const val UP_FEEDER = 2
+    const val UP_COLLECTOR = 3
+    const val UP_REST = 4
+    const val UP_BOOTS = 5
+    val UPGRADES = arrayOf(
+        Upgrade("Bigger Garden", "+2 garden spots per level", intArrayOf(200, 500, 1200)),
+        Upgrade("Big Flask", "Brew with 3 ingredients for Rare species", intArrayOf(300)),
+        Upgrade("Auto-Feeder", "Feeds hungry mushrooms from your food stock", intArrayOf(400)),
+        Upgrade("Dust Collector", "Collects spore dust for you", intArrayOf(350)),
+        Upgrade("Cozy Beds", "Shorter rest after crossbreeding", intArrayOf(150, 400)),
+        Upgrade("Trail Boots", "Expeditions finish 25% faster", intArrayOf(250)),
+    )
+
+    // ---------- Expeditions ----------
+    val ZONES = arrayOf(
+        Zone("Whispering Forest", 1f, intArrayOf(SOIL, WATER, SULFUR), Color.rgb(90, 170, 100), 2),
+        Zone("Crystal Cave", 3f, intArrayOf(CRYSTAL, IRON, CRYSTAL), Color.rgb(170, 120, 255), 2),
+        Zone("Frost Peaks", 6f, intArrayOf(FROST, FROST, CRYSTAL), Color.rgb(170, 220, 255), 2),
+        Zone("Moon Crater", 12f, intArrayOf(MOONDEW, MOONDEW, GOLD), Color.rgb(230, 230, 180), 3),
+    )
+    val STORIES = arrayOf(
+        "made friends with a beetle", "got lost, then found a shortcut", "napped under a giant leaf",
+        "found a shiny pebble", "danced in a rain puddle", "met a very old mushroom who told stories",
+        "chased a firefly", "slid down a mossy hill", "found a hidden spring", "sang to the moon",
+    )
+
+    // ---------- Achievements ----------
+    val ACHIEVEMENTS = arrayOf(
+        Achievement("First Sprout", "Brew your first mushroom", 10),
+        Achievement("Collector", "Discover 10 species", 40),
+        Achievement("Scholar", "Discover 25 species", 100),
+        Achievement("Shroomologist", "Discover every species", 500),
+        Achievement("Matchmaker", "Discover a hybrid", 40),
+        Achievement("Legend", "Discover a legendary", 150),
+        Achievement("Rare Find", "Discover a rare 3-ingredient species", 80),
+        Achievement("Sparkle!", "Get a shiny mushroom", 60),
+        Achievement("Perfectionist", "Make 10 perfect brews", 60),
+        Achievement("Wise Elder", "Raise a mushroom to Elder", 60),
+        Achievement("Interior Designer", "Place 10 decorations", 50),
+        Achievement("Fashionista", "Own 5 accessories", 50),
+        Achievement("Explorer", "Finish 10 expeditions", 80),
+        Achievement("Champion", "Win a beauty contest", 80),
+        Achievement("Full House", "Fill your garden", 40),
+        Achievement("Regular", "Visit 7 days in a row", 100),
+        Achievement("Mutant", "Get an albino or neon mushroom", 100),
+    )
 }
