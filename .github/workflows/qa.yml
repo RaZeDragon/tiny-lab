@@ -49,9 +49,11 @@ jobs:
           path: |
             ~/.android/avd/*
             ~/.android/adb*
-          key: avd-29-pixel6-v2
+          key: avd-29-pixel6-v3
 
       - name: Boot the emulator once and save it
+        id: save1
+        continue-on-error: true
         if: steps.avd-cache.outputs.cache-hit != 'true'
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -59,9 +61,25 @@ jobs:
           target: default
           arch: x86_64
           profile: pixel_6
-          cores: 2
+          cores: 3
           ram-size: 3072M
-          emulator-boot-timeout: 900
+          emulator-boot-timeout: 600
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: false
+          script: echo "Saved the emulator snapshot."
+
+      - name: Boot the emulator once and save it (second try)
+        if: steps.avd-cache.outputs.cache-hit != 'true' && steps.save1.outcome == 'failure'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 29
+          target: default
+          arch: x86_64
+          profile: pixel_6
+          cores: 3
+          ram-size: 3072M
+          emulator-boot-timeout: 600
           force-avd-creation: false
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: false
@@ -76,9 +94,9 @@ jobs:
           target: default
           arch: x86_64
           profile: pixel_6
-          cores: 2
+          cores: 3
           ram-size: 3072M
-          emulator-boot-timeout: 900
+          emulator-boot-timeout: 600
           force-avd-creation: false
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
@@ -96,9 +114,9 @@ jobs:
           target: default
           arch: x86_64
           profile: pixel_6
-          cores: 2
+          cores: 3
           ram-size: 3072M
-          emulator-boot-timeout: 900
+          emulator-boot-timeout: 600
           force-avd-creation: false
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
