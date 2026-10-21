@@ -36,6 +36,11 @@ class MainActivity : Activity() {
         game.onAppPause()
     }
 
+    override fun onStop() {
+        super.onStop()
+        if (!game.qaMode) IconSwitcher.apply(this)
+    }
+
     override fun onDestroy() {
         game.onAppDestroy()
         super.onDestroy()

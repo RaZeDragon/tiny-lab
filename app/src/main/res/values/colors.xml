@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="icon_bg_spooky">#230F0D</color>
+    <color name="icon_bg_classic">#675323</color>
+    <color name="icon_bg_festive">#603C1B</color>
+</resources>
