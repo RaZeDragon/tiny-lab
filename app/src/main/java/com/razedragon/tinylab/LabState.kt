@@ -19,6 +19,7 @@ class Shroom(
     // Where it stands in the garden: gx = left..right (0..1), gz = far..near (0..1)
     var gx: Float = 0.15f + kotlin.random.Random.nextFloat() * 0.7f,
     var gz: Float = 0.2f + kotlin.random.Random.nextFloat() * 0.7f,
+    var shiny: Boolean = false,
 ) {
     // Walking state (not saved)
     var tx = gx
@@ -48,6 +49,9 @@ class Shroom(
     fun dustCap() = 40f * Data.TIER_MUL[tier()] * (1 + stage())
 }
 
+/** A decoration placed in the garden. */
+class Placed(val kind: Int, var gx: Float, var gz: Float)
+
 /** Everything that gets saved: dust, inventory, garden, discoveries, tutorial progress. */
 class LabState(context: Context) {
     private val prefs = context.getSharedPreferences("tinylab", Context.MODE_PRIVATE)
@@ -57,6 +61,11 @@ class LabState(context: Context) {
     val foods = IntArray(Data.FOODS.size)
     val garden = ArrayList<Shroom>()
     val discovered = BooleanArray(Data.SPECIES.size)
+    val shinyFound = BooleanArray(Data.SPECIES.size)
+    val decorOwned = IntArray(Data.DECOR.size)
+    val placed = ArrayList<Placed>()
+    var themesOwned = 1
+    var theme = 0
     var tutorial = 0
     var brewed = 0
     private var nextId = 1L
@@ -82,10 +91,12 @@ class LabState(context: Context) {
             val moodMul = when (s.mood()) { 0 -> 1.4f; 1 -> 1f; 2 -> 0.4f; else -> 0.6f }
             if (growing) s.xp += 20f * moodMul * hours
             s.hunger = max(0f, s.hunger - 9f * hours)
-            s.happy = max(0f, s.happy - 5f * hours)
+            // Decorations make mushrooms happier: each one slows the happiness drop a little.
+            val charm = max(0.4f, 1f - 0.06f * placed.size)
+            s.happy = max(0f, s.happy - 5f * charm * hours)
             // Grown-up mushrooms puff out more spore dust; rarer species puff even more.
             val rate = floatArrayOf(2f, 6f, 12f, 20f)[s.stage()] * Data.TIER_MUL[s.tier()] *
-                    (if (s.hunger <= 0f) 0.5f else 1f)
+                    (if (s.hunger <= 0f) 0.5f else 1f) * (if (s.shiny) 2f else 1f)
             s.dust = min(s.dustCap(), s.dust + rate * hours)
         }
     }
@@ -98,6 +109,13 @@ class LabState(context: Context) {
         o.put("ing", JSONArray(ingredients.toList()))
         o.put("food", JSONArray(foods.toList()))
         o.put("disc", JSONArray(discovered.toList()))
+        o.put("shinyFound", JSONArray(shinyFound.toList()))
+        o.put("decor", JSONArray(decorOwned.toList()))
+        o.put("themes", themesOwned)
+        o.put("theme", theme)
+        val pl = JSONArray()
+        for (d in placed) pl.put(JSONObject().apply { put("k", d.kind); put("x", d.gx.toDouble()); put("z", d.gz.toDouble()) })
+        o.put("placed", pl)
         o.put("tut", tutorial)
         o.put("brewed", brewed)
         o.put("nextId", nextId)
@@ -108,7 +126,7 @@ class LabState(context: Context) {
                 put("id", s.id); put("sp", s.species); put("xp", s.xp.toDouble())
                 put("hu", s.hunger.toDouble()); put("ha", s.happy.toDouble()); put("du", s.dust.toDouble())
                 put("rest", s.restUntil); put("pet", s.petAt)
-                put("gx", s.gx.toDouble()); put("gz", s.gz.toDouble())
+                put("gx", s.gx.toDouble()); put("gz", s.gz.toDouble()); put("sh", s.shiny)
             })
         }
         o.put("garden", g)
@@ -132,6 +150,17 @@ class LabState(context: Context) {
             o.optJSONArray("ing")?.let { a -> for (i in ingredients.indices) ingredients[i] = a.optInt(i, 0) }
             o.optJSONArray("food")?.let { a -> for (i in foods.indices) foods[i] = a.optInt(i, 0) }
             o.optJSONArray("disc")?.let { a -> for (i in discovered.indices) discovered[i] = a.optBoolean(i, false) }
+            o.optJSONArray("shinyFound")?.let { a -> for (i in shinyFound.indices) shinyFound[i] = a.optBoolean(i, false) }
+            o.optJSONArray("decor")?.let { a -> for (i in decorOwned.indices) decorOwned[i] = a.optInt(i, 0) }
+            themesOwned = o.optInt("themes", 1) or 1
+            theme = o.optInt("theme", 0).coerceIn(0, Data.THEMES.size - 1)
+            o.optJSONArray("placed")?.let { a ->
+                for (i in 0 until a.length()) {
+                    val d = a.getJSONObject(i)
+                    val k = d.getInt("k")
+                    if (k in Data.DECOR.indices) placed.add(Placed(k, d.getDouble("x").toFloat(), d.getDouble("z").toFloat()))
+                }
+            }
             tutorial = o.optInt("tut", 0)
             brewed = o.optInt("brewed", 0)
             nextId = o.optLong("nextId", 1L)
@@ -144,7 +173,8 @@ class LabState(context: Context) {
                         s.optDouble("ha", 70.0).toFloat(), s.optDouble("du", 0.0).toFloat(),
                         s.optLong("rest", 0L), s.optLong("pet", 0L),
                         s.optDouble("gx", 0.2 + Math.random() * 0.6).toFloat(),
-                        s.optDouble("gz", 0.2 + Math.random() * 0.6).toFloat()))
+                        s.optDouble("gz", 0.2 + Math.random() * 0.6).toFloat(),
+                        s.optBoolean("sh", false)))
                 }
             }
         } catch (_: Exception) {

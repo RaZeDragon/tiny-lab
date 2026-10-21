@@ -5,6 +5,13 @@ import android.graphics.Color
 /** Things you brew with. `icon` picks how the little picture is drawn. */
 class Ingredient(val name: String, val color: Int, val cost: Int)
 
+/** Garden decorations you can buy and place. */
+class Decor(val name: String, val cost: Int, val glow: Boolean = false)
+
+/** Garden looks. */
+class Theme(val name: String, val cost: Int, val skyTop: Int, val skyBottom: Int, val groundFar: Int,
+            val groundNear: Int, val forest1: Int, val forest2: Int)
+
 /** Things you feed your mushrooms. */
 class Food(val name: String, val color: Int, val cost: Int, val hunger: Int, val xp: Int, val happy: Int)
 
@@ -222,6 +229,34 @@ object Data {
         }
         return "Unknown"
     }
+
+    // ---------- Garden decorations ----------
+    val DECOR = arrayOf(
+        Decor("Lantern", 30, glow = true),
+        Decor("Flower Patch", 15),
+        Decor("Big Rock", 20),
+        Decor("Picket Fence", 25),
+        Decor("Pond", 60),
+        Decor("Crystal Cluster", 80, glow = true),
+        Decor("Toadstool House", 150, glow = true),
+        Decor("Bench", 40),
+        Decor("Signpost", 20),
+        Decor("Fairy Lights", 100, glow = true),
+        Decor("Tree Stump", 25),
+    )
+
+    val THEMES = arrayOf(
+        Theme("Moonlit Meadow", 0, Color.rgb(30, 20, 64), Color.rgb(110, 70, 150), Color.rgb(40, 62, 70),
+            Color.rgb(78, 140, 104), Color.rgb(70, 45, 105), Color.rgb(58, 38, 90)),
+        Theme("Sunny Day", 100, Color.rgb(90, 170, 240), Color.rgb(190, 225, 255), Color.rgb(90, 150, 80),
+            Color.rgb(130, 200, 100), Color.rgb(110, 160, 120), Color.rgb(90, 140, 100)),
+        Theme("Autumn Woods", 150, Color.rgb(230, 130, 80), Color.rgb(255, 200, 140), Color.rgb(120, 80, 50),
+            Color.rgb(170, 120, 60), Color.rgb(170, 70, 40), Color.rgb(130, 55, 35)),
+        Theme("Crystal Cave", 250, Color.rgb(15, 10, 35), Color.rgb(40, 30, 80), Color.rgb(35, 30, 60),
+            Color.rgb(70, 60, 110), Color.rgb(90, 60, 160), Color.rgb(60, 40, 120)),
+        Theme("Snowy Night", 200, Color.rgb(20, 30, 70), Color.rgb(70, 90, 140), Color.rgb(170, 185, 210),
+            Color.rgb(230, 238, 250), Color.rgb(50, 60, 100), Color.rgb(40, 48, 85)),
+    )
 
     val STAGE_NAMES = arrayOf("Sprout", "Young", "Grown", "Elder")
     val STAGE_XP = intArrayOf(0, 40, 150, 500)
