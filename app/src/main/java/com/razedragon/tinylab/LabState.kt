@@ -34,7 +34,34 @@ class Shroom(
     // Expedition
     var awayZone: Int = -1,
     var awayUntil: Long = 0L,
+    // Friendship with you (0..100, 20 per heart)
+    var bond: Float = 0f,
+    var parentId: Long = -1L,
+    // What it's asking for: 0 nothing, 1 a food, 2 a hug, 3 to play (be tossed)
+    var want: Int = 0,
+    var wantFood: Int = 0,
+    var wantUntil: Long = 0L,
+    var nextWantAt: Long = 0L,
 ) {
+    // Touch reactions & expressions (not saved)
+    var jiggle = 0f
+    var expr = 0
+    var exprT = 0f
+    var airH = 0f
+    var airV = 0f
+    var fvx = 0f
+    var fvz = 0f
+    var bounces = 0
+    var idleAnim = 0
+    var idleAnimT = 0f
+    var waveT = 0f
+    var spinT = 0f
+    var hugAt = 0L
+    var lastPoke = 0f
+
+    fun hearts() = (bond / 20f).toInt().coerceIn(0, 5)
+    fun airborne() = airH > 0f || airV != 0f
+
     // Walking & behaviour state (not saved)
     var tx = gx
     var tz = gz
@@ -168,6 +195,7 @@ class LabState(context: Context) {
                 else -> 0
             }
             s.trait = if (Random.nextFloat() < 0.6f) (if (Random.nextBoolean()) a.trait else b.trait) else s.trait
+            s.parentId = if (Random.nextBoolean()) a.id else b.id
         } else {
             s.tint = (Random.nextFloat() - 0.5f) * 24f
             s.size = 0.9f + Random.nextFloat() * 0.2f
@@ -454,6 +482,7 @@ class LabState(context: Context) {
                 put("nm", s.name); put("tr", s.trait); put("ti", s.tint.toDouble()); put("sz", s.size.toDouble())
                 put("sp2", s.spots); put("va", s.variant); put("wear", ints(s.wear))
                 put("az", s.awayZone); put("au", s.awayUntil)
+                put("bond", s.bond.toDouble()); put("par", s.parentId)
             })
         }
         o.put("garden", g)
@@ -521,6 +550,8 @@ class LabState(context: Context) {
                     s.optJSONArray("wear")?.let { w -> for (k in 0..2) sh.wear[k] = w.optInt(k, -1) }
                     sh.awayZone = s.optInt("az", -1).coerceIn(-1, Data.ZONES.size - 1)
                     sh.awayUntil = s.optLong("au", 0L)
+                    sh.bond = s.optDouble("bond", 0.0).toFloat()
+                    sh.parentId = s.optLong("par", -1L)
                     garden.add(sh)
                 }
             }

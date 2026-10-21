@@ -22,6 +22,7 @@ import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
+import kotlin.math.sqrt
 import kotlin.random.Random
 
 /**
@@ -90,6 +91,14 @@ class GameView(context: Context) : View(context) {
         private const val T_REVEAL = 5
         private const val T_FEED = 6
         private const val T_DONE = 7
+
+        // Face expressions
+        private const val E_HEART = 1
+        private const val E_SPARKLE = 2
+        private const val E_BLISS = 3
+        private const val E_DIZZY = 4
+        private const val E_CHOMP = 5
+        private const val E_GIGGLE = 6
         private const val STIR_GOAL = (2 * Math.PI * 6).toFloat()   // six full circles = perfect brew
         private const val MAX_PLACED = 20
         private const val REST_MS = 20 * 60 * 1000L
@@ -147,6 +156,22 @@ class GameView(context: Context) : View(context) {
     private var downY = 0f
     private var dragX = 0f
     private var dragY = 0f
+
+    // Touch gestures on mushrooms
+    private var pointerDown = false
+    private var downT = 0f
+    private var petting = false
+    private var hugDone = false
+    private var revs = 0
+    private var lastDxSign = 0
+    private var lastMoveX = 0f
+    private var petAcc = 0f
+    private var lastPurr = 0f
+    private var prevX = 0f
+    private var prevY = 0f
+    private var prevT = 0L
+    private var velX = 0f
+    private var velY = 0f
     private var shopTab = 0
     private var journalTab = 0
     private var contestPick = -1L
@@ -184,6 +209,7 @@ class GameView(context: Context) : View(context) {
         lab.tick()
         lab.visit()
         tutStep = prefs.getInt("tutStep", if (lab.brewed > 0) -1 else T_WELCOME)
+        waveHello()
     }
 
     private fun applySoundMode() {
@@ -202,6 +228,7 @@ class GameView(context: Context) : View(context) {
     // ---------- Lifecycle ----------
 
     fun onAppPause() {
+        stopShakeSensor()
         lab.tick(); lab.save()
         sound.onAppPause()
         try { scheduleReminders() } catch (_: Exception) {}
@@ -210,6 +237,8 @@ class GameView(context: Context) : View(context) {
     fun onAppResume() {
         lab.tick()
         lab.visit()
+        startShakeSensor()
+        waveHello()
         sound.onAppResume()
         try { Notifier.cancelAll(context) } catch (_: Exception) {}
     }
@@ -349,13 +378,17 @@ class GameView(context: Context) : View(context) {
         s.hunger = min(100f, s.hunger + food.hunger)
         s.xp += food.xp * (if (fav) 2f else 1f) * (if (s.trait == 3) 1.2f else 1f)
         s.happy = min(100f, s.happy + food.happy + if (fav) 15f else 0f)
-        sound.play(Fx.EAT)
-        val (x, y) = shroomPos(lab.garden.indexOf(s))
-        burst(x, y - 30f * dp, food.color, 10, P_SPARK)
+        sound.play(Fx.CHOMP, 0.9f, voicePitch(s))
+        val (x, y) = shroomScreen(s)
+        burst(x, y - shroomSize(s) * 0.3f, food.color, 12, P_SPARK)
+        s.jiggle = 0.8f
+        addBond(s, 1f)
+        express(s, if (fav) E_HEART else E_BLISS, if (fav) 2.5f else 1.2f)
         if (fav) {
             toast("Yum! That's its favorite food!", ACCENT)
-            burst(x, y - 40f * dp, ACCENT, 6, P_HEART)
+            burst(x, y - shroomSize(s), ACCENT, 6, P_HEART)
         }
+        if (s.want == 1 && s.wantFood == f) fulfillWant(s)
         checkGrowth(s, before)
         if (lab.tutorial == 3) { lab.tutorial = 4; toast("You're a mushroom scientist now! 🍄", MINT) }
         markDirty()
@@ -860,6 +893,9 @@ class GameView(context: Context) : View(context) {
             MotionEvent.ACTION_DOWN -> {
                 downX = x; downY = y; dragX = x; dragY = y
                 dragging = false; dragKind = 0
+                pointerDown = true; downT = t; petting = false; hugDone = false
+                revs = 0; lastDxSign = 0; lastMoveX = x; petAcc = 0f
+                prevX = x; prevY = y; prevT = System.nanoTime(); velX = 0f; velY = 0f
                 if (settingsOpen || tutStep == T_WELCOME || tutStep == T_DONE) {
                     pressedId = buttons.lastOrNull { it.rect.contains(x, y) }?.id
                     return true
@@ -914,7 +950,35 @@ class GameView(context: Context) : View(context) {
                     return true
                 }
                 dragX = x; dragY = y
-                if (dragKind != 0 && !dragging && hypot(x - downX, y - downY) > 12f * dp) {
+                // rubbing back and forth on a mushroom pets it
+                if (dragKind == 3 && !dragging && !hugDone) {
+                    val dxm = x - lastMoveX
+                    if (abs(dxm) > 3f * dp) {
+                        val sg = if (dxm > 0) 1 else -1
+                        if (lastDxSign != 0 && sg != lastDxSign) revs++
+                        lastDxSign = sg; lastMoveX = x
+                        if (petting) {
+                            petAcc += abs(dxm)
+                            if (petAcc > 90f * dp) { petAcc = 0f; shroom(dragShroom)?.let { petStroke(it) } }
+                        }
+                    }
+                    if (!petting && revs >= 2 && hypot(x - downX, y - downY) < 70f * dp) {
+                        petting = true; pressedId = null
+                        shroom(dragShroom)?.let { petStroke(it) }
+                    }
+                    if (petting) return true
+                }
+                if (dragging && dragKind == 3) {   // remember how fast the finger moves, for tossing
+                    val nt = System.nanoTime()
+                    val dtm = (nt - prevT) / 1_000_000_000f
+                    if (dtm > 0.008f) {
+                        velX = velX * 0.3f + (x - prevX) / dtm * 0.7f
+                        velY = velY * 0.3f + (y - prevY) / dtm * 0.7f
+                        prevX = x; prevY = y; prevT = nt
+                    }
+                }
+                val threshold = if (dragKind == 3) 30f * dp else 12f * dp
+                if (dragKind != 0 && !dragging && hypot(x - downX, y - downY) > threshold) {
                     dragging = true
                     pressedId = null
                     if (dragKind == 3) shroom(dragShroom)?.let {
@@ -925,7 +989,12 @@ class GameView(context: Context) : View(context) {
                 }
             }
             MotionEvent.ACTION_UP -> {
+                pointerDown = false
                 if (stirring) { stirring = false; return true }
+                if (petting || hugDone) {
+                    petting = false; hugDone = false; dragKind = 0; pressedId = null
+                    return true
+                }
                 if (dragging) {
                     drop(x, y)
                 } else {
@@ -942,6 +1011,7 @@ class GameView(context: Context) : View(context) {
                 dragging = false; dragKind = 0
             }
             MotionEvent.ACTION_CANCEL -> {
+                pointerDown = false; petting = false; hugDone = false
                 stirring = false
                 pressedId = null
                 shroom(dragShroom)?.held = false
@@ -999,6 +1069,8 @@ class GameView(context: Context) : View(context) {
                 val (gx, gz) = toWorld(x, y + shroomSize(s) * 0.3f)
                 s.gx = gx; s.gz = gz; s.tx = gx; s.tz = gz
                 s.idle = 2f + Random.nextFloat() * 2f
+                val fresh = (System.nanoTime() - prevT) < 90_000_000L
+                if (fresh && hypot(velX, velY) > 1000f * dp) { toss(s, velX, velY); markDirty(); return }
                 sound.play(Fx.POP, 0.8f, 0.8f)
                 val (sx, sy) = toScreen(gx, gz)
                 burst(sx, sy, Color.rgb(170, 220, 180), 10, P_SPARK)
@@ -1022,8 +1094,7 @@ class GameView(context: Context) : View(context) {
     private fun shroomAt(x: Float, y: Float): Shroom? {
         for (s in lab.home().sortedByDescending { it.gz }) {
             if (s.act == ACT_INSIDE) continue
-            val (sx, sy0) = toScreen(s.gx, s.gz)
-            val sy = sy0 - actLift(s)
+            val (sx, sy) = shroomScreen(s)
             val size = shroomSize(s)
             if (hypot(x - sx, y - (sy - size * 0.45f)) < max(size * 0.7f, 38f * dp)) return s
         }
@@ -1036,8 +1107,7 @@ class GameView(context: Context) : View(context) {
         if (s != null) {
             collect(s, lab.garden.indexOf(s))
             if (selected != s.id) { selected = s.id; feeding = false; styling = false; exploring = false; confirmRelease = false }
-            sound.play(Fx.POP, 0.7f, 0.9f + Random.nextFloat() * 0.3f)
-            blinkAt[s.id] = t
+            poke(s)
             if (s.act == ACT_SLEEP || s.act == ACT_NAP) {
                 s.act = 0; s.sleeping = false
                 s.awakeUntil = System.currentTimeMillis() + 120_000L
@@ -1067,6 +1137,7 @@ class GameView(context: Context) : View(context) {
         tickAcc += dt
         if (tickAcc >= 1f) {
             tickAcc = 0f; lab.tick(); markDirty()
+            updateWants(System.currentTimeMillis())
             for (a in lab.checkAchievements()) {
                 toast("🏆 ${Data.ACHIEVEMENTS[a].name}!  +${Data.ACHIEVEMENTS[a].reward} ✦", DUST)
                 sound.play(Fx.DISCOVER, 0.8f, 1.2f)
@@ -1120,6 +1191,25 @@ class GameView(context: Context) : View(context) {
             }
         }
 
+        for (s in lab.home()) {
+            if (s.jiggle > 0f) s.jiggle = max(0f, s.jiggle - dt * 2.2f)
+            if (s.exprT > 0f) { s.exprT -= dt; if (s.exprT <= 0f) s.expr = 0 }
+            if (s.waveT > 0f) s.waveT -= dt
+            if (s.spinT > 0f) s.spinT = max(0f, s.spinT - dt)
+            updateAir(s, dt)
+            if (!s.held && !s.airborne() && s.act == 0) updateIdleAnim(s, dt)
+            // open wide when food is dragged close
+            if (dragging && dragKind == 2) {
+                val (sx, sy) = shroomScreen(s)
+                if (hypot(dragX - sx, dragY - (sy - shroomSize(s) * 0.4f)) < 110f * dp) express(s, E_CHOMP, 0.15f)
+            }
+        }
+        // a long press on a mushroom is a hug
+        if (pointerDown && dragKind == 3 && !dragging && !petting && !hugDone && t - downT > 0.5f &&
+            hypot(dragX - downX, dragY - downY) < 16f * dp) {
+            hugDone = true; pressedId = null
+            shroom(dragShroom)?.let { hug(it) }
+        }
         updateWalkers(dt)
         updateTutorial()
 
@@ -1285,6 +1375,7 @@ class GameView(context: Context) : View(context) {
         val home = lab.home()
         for (s in home) {
             if (s.held) continue
+            if (s.airborne()) { s.moving = false; continue }
             if (popup != null) { s.moving = false; continue }
 
             // Busy doing something
@@ -1343,6 +1434,14 @@ class GameView(context: Context) : View(context) {
 
     /** Decide where to wander next: a decoration, a friend, or just somewhere. */
     private fun chooseNext(s: Shroom, home: List<Shroom>, dark: Float) {
+        if (s.stage() <= 1 && s.parentId >= 0) {
+            val p = home.firstOrNull { it.id == s.parentId && it.act != ACT_INSIDE }
+            if (p != null && Random.nextFloat() < 0.75f) {   // waddle after mom or dad like a duckling
+                s.tx = (p.gx - p.facing * 0.07f).coerceIn(0.05f, 0.95f); s.tz = (p.gz + 0.03f).coerceIn(0f, 1f)
+                s.idle = 0f
+                return
+            }
+        }
         val usable = lab.placed.indices.filter {
             when (lab.placed[it].kind) { 7, 4, 10, 1, 6, 9 -> true; 0 -> dark > 0.5f; else -> false }
         }
@@ -1696,10 +1795,7 @@ class GameView(context: Context) : View(context) {
             val i = lab.garden.indexOf(s)
             drawShroom(c, s.species, x, y, size, s.mood(), sin(t * 2.2f + i * 1.3f), isBlinking(s.id), false,
                 facing = s.facing, phase = s.phase, moving = s.moving, shiny = s.shiny, who = s, sleeping = s.sleeping)
-            if (s.mood() == 2 && !s.sleeping) {
-                text.textSize = 14f * dp
-                c.drawText("🍽", x + size * 0.45f, y - size * 1.0f, text)
-            }
+            drawWantBubble(c, s, x, y - s.airH - size * 1.05f)
             if (s.act == ACT_CHAT) {
                 val bx = x + s.facing * size * 0.3f; val by = y - size * 1.15f
                 fill.color = Color.WHITE
@@ -1899,6 +1995,10 @@ class GameView(context: Context) : View(context) {
         text.textSize = 21f * dp
         c.drawText(s.name, pad, top + 30f * dp, text)
         val nameW = text.measureText(s.name)
+        for (k in 0 until 5) {   // friendship hearts
+            fill.color = if (k < s.hearts()) ACCENT else Color.argb(60, 255, 255, 255)
+            drawHeart(c, w - pad - 8f * dp - (4 - k) * 17f * dp, top + 20f * dp, 5.5f * dp)
+        }
         text.textSize = 13f * dp; text.color = if (s.shiny) Color.WHITE else TEXT_DIM
         c.drawText((if (s.shiny) "✨ Shiny " else "") + sp.name, pad + nameW + 10f * dp, top + 30f * dp, text)
         text.color = TEXT_DIM
@@ -1940,7 +2040,7 @@ class GameView(context: Context) : View(context) {
         bar(c, "Happy", barX, y, barW, s.happy / 100f, Color.rgb(255, 140, 200))
         y += 18f * dp
         text.textSize = 12f * dp; text.color = TEXT_DIM
-        val moodText = when (s.mood()) {
+        val moodText = wantText(s) ?: when (s.mood()) {
             0 -> "Feeling great! Growing fast."
             1 -> "Doing fine."
             2 -> "Hungry! It grows slowly until you feed it."
@@ -2698,21 +2798,33 @@ class GameView(context: Context) : View(context) {
         fun col(v: Int) = if (silhouette) dark else v
         val sprout = s < 50f * dp && sp.shape != 1
         val mood = if (held) 2 else mood0
+        val ex0 = who?.expr ?: 0
+        val jig = who?.jiggle ?: 0f
+        val ia = who?.idleAnim ?: 0
+        val iaT = who?.idleAnimT ?: 0f
 
-        // walking bounce / hop
+        // walking bounce / hop, or flying through the air after a toss
         val lift = when {
             held -> 0f
             moving && sprout -> abs(sin(phase * 0.5f)) * s * 0.28f
             moving -> abs(sin(phase)) * s * 0.05f
             else -> 0f
-        }
+        } + (who?.airH ?: 0f)
         val baseY = baseY0 - lift
-        if (!held) groundShadow(c, cx, baseY0, s * 0.55f * (1f - lift / (s * 0.6f)), if (silhouette) 60 else 110)
+        if (!held) groundShadow(c, cx, baseY0, s * 0.55f * (1f - min(0.7f, lift / (s * 1.5f))), if (silhouette) 60 else 110)
 
         c.save()
         if (held) c.rotate(sin(t * 7f) * 9f, cx, baseY - s)
         else if (moving) c.rotate(sin(phase) * 5f, cx, baseY)
+        who?.let { if (it.spinT > 0f) c.rotate((1f - it.spinT / 0.6f) * 360f, cx, baseY - s * 0.5f) }
+        if (who != null && who.airborne()) c.rotate(who.fvx * 300f, cx, baseY - s * 0.5f)
         c.scale(1f - 0.03f * bob, 1f + 0.04f * bob, cx, baseY)
+        if (jig > 0.01f) { val wv = sin(t * 28f) * jig; c.scale(1f + 0.12f * wv, 1f - 0.12f * wv, cx, baseY) }
+        when (ia) {
+            1 -> c.scale(1f, 1.05f, cx, baseY)
+            2 -> c.scale(0.95f, 1f + 0.12f * sin((1.2f - iaT) / 1.2f * 3.1416f), cx, baseY)
+            3 -> if (iaT > 0.35f) c.scale(1.05f, 0.93f, cx, baseY)
+        }
 
         if (glows && !silhouette) {
             fill.shader = RadialGradient(cx, baseY - s * 0.7f, s * 0.95f,
@@ -2901,16 +3013,35 @@ class GameView(context: Context) : View(context) {
 
         // face, looking a little toward where it's walking
         if (!silhouette) {
-            val look = facing * s * 0.035f
+            val lookDir = if (ia == 4) (if ((iaT % 0.8f) < 0.4f) -1f else 1f) else facing
+            val look = lookDir * s * 0.035f
             val faceY = if (sp.shape == 1) baseY - s * 0.36f else baseY - stemH * 0.5f
             val fx = cx + look
             val ex = s * 0.11f
             val er = s * 0.048f
             fill.color = Color.rgb(50, 30, 60)
             stroke.color = Color.rgb(50, 30, 60); stroke.strokeWidth = max(1.5f * dp, s * 0.025f)
+            val happyEyes = ex0 == E_BLISS || ex0 == E_GIGGLE || ia == 1
             if (sleeping) {
                 c.drawArc(fx - ex - er, faceY - er, fx - ex + er, faceY + er, 20f, 140f, false, stroke)
                 c.drawArc(fx + ex - er, faceY - er, fx + ex + er, faceY + er, 20f, 140f, false, stroke)
+            } else if (ex0 == E_DIZZY) {
+                for (side in intArrayOf(-1, 1)) {
+                    val ox = fx + side * ex
+                    c.drawArc(ox - er * 1.3f, faceY - er * 1.3f, ox + er * 1.3f, faceY + er * 1.3f, t * 600f, 270f, false, stroke)
+                    c.drawArc(ox - er * 0.6f, faceY - er * 0.6f, ox + er * 0.6f, faceY + er * 0.6f, t * 600f + 180f, 270f, false, stroke)
+                }
+            } else if (ex0 == E_HEART) {
+                fill.color = Color.rgb(255, 80, 120)
+                val pulse = 1f + 0.15f * sin(t * 10f)
+                drawHeart(c, fx - ex, faceY - er * 0.4f, er * 1.15f * pulse)
+                drawHeart(c, fx + ex, faceY - er * 0.4f, er * 1.15f * pulse)
+            } else if (ex0 == E_SPARKLE) {
+                fill.color = Color.rgb(255, 230, 120)
+                drawSparkle(c, fx - ex, faceY, er * 0.9f); drawSparkle(c, fx + ex, faceY, er * 0.9f)
+            } else if (happyEyes) {
+                c.drawArc(fx - ex - er, faceY - er * 0.4f, fx - ex + er, faceY + er * 1.4f, 200f, 140f, false, stroke)
+                c.drawArc(fx + ex - er, faceY - er * 0.4f, fx + ex + er, faceY + er * 1.4f, 200f, 140f, false, stroke)
             } else if (blink) {
                 c.drawLine(fx - ex - er, faceY, fx - ex + er, faceY, stroke)
                 c.drawLine(fx + ex - er, faceY, fx + ex + er, faceY, stroke)
@@ -2921,17 +3052,61 @@ class GameView(context: Context) : View(context) {
                 c.drawCircle(fx - ex + er * 0.35f, faceY - er * 0.45f, er * 0.38f, fill)
                 c.drawCircle(fx + ex + er * 0.35f, faceY - er * 0.45f, er * 0.38f, fill)
             }
-            fill.color = Color.argb(140, 255, 130, 160)
-            c.drawOval(fx - ex * 1.75f - s * 0.05f, faceY + s * 0.035f, fx - ex * 1.75f + s * 0.05f, faceY + s * 0.08f, fill)
-            c.drawOval(fx + ex * 1.75f - s * 0.05f, faceY + s * 0.035f, fx + ex * 1.75f + s * 0.05f, faceY + s * 0.08f, fill)
+            val blushy = ex0 == E_BLISS || ex0 == E_HEART || ex0 == E_GIGGLE
+            fill.color = Color.argb(if (blushy) 210 else 140, 255, 130, 160)
+            val bl = if (blushy) 1.35f else 1f
+            c.drawOval(fx - ex * 1.75f - s * 0.05f * bl, faceY + s * 0.035f, fx - ex * 1.75f + s * 0.05f * bl, faceY + s * 0.08f * bl, fill)
+            c.drawOval(fx + ex * 1.75f - s * 0.05f * bl, faceY + s * 0.035f, fx + ex * 1.75f + s * 0.05f * bl, faceY + s * 0.08f * bl, fill)
             val my = faceY + s * 0.065f
             val mw = s * 0.06f
-            if (sleeping) { fill.color = Color.rgb(50, 30, 60); c.drawCircle(fx, my + mw * 0.4f, mw * 0.3f, fill) }
+            val dark2 = Color.rgb(50, 30, 60)
+            if (sleeping) {
+                fill.color = dark2; c.drawCircle(fx, my + mw * 0.4f, mw * 0.3f, fill)
+                // a little drool bubble
+                fill.color = Color.argb(170, 160, 210, 255)
+                c.drawCircle(fx + mw * 0.9f, my + mw * 0.9f, mw * (0.25f + 0.2f * (0.5f + 0.5f * sin(t * 2f))), fill)
+            } else if (ex0 == E_CHOMP || ia == 1) {
+                fill.color = dark2
+                val open = if (ex0 == E_CHOMP) 1f + 0.3f * sin(t * 18f) else 0.8f + 0.4f * sin((1.4f - iaT) / 1.4f * 3.14f)
+                c.drawOval(fx - mw * 0.9f, my - mw * 0.2f, fx + mw * 0.9f, my + mw * 1.6f * open, fill)
+                fill.color = Color.rgb(255, 120, 150)
+                c.drawOval(fx - mw * 0.5f, my + mw * 0.7f * open, fx + mw * 0.5f, my + mw * 1.5f * open, fill)
+            } else if (ex0 == E_GIGGLE) {
+                fill.color = dark2
+                c.drawArc(fx - mw, my - mw * 0.7f, fx + mw, my + mw * 1.2f, 0f, 180f, true, fill)
+                fill.color = Color.rgb(255, 120, 150)
+                c.drawCircle(fx, my + mw * 0.75f, mw * 0.35f, fill)
+            } else if (ex0 == E_BLISS || ex0 == E_HEART) {
+                c.drawArc(fx - mw, my - mw * 0.8f, fx + mw, my + mw * 0.8f, 20f, 140f, false, stroke)
+            } else if (ex0 == E_DIZZY) {
+                path.reset(); path.moveTo(fx - mw, my + mw * 0.3f)
+                for (k in 1..4) path.lineTo(fx - mw + k * mw * 0.5f, my + mw * (if (k % 2 == 0) 0.3f else -0.1f))
+                c.drawPath(path, stroke)
+            }
             else when (mood) {
                 0 -> c.drawArc(fx - mw, my - mw * 0.8f, fx + mw, my + mw * 0.8f, 20f, 140f, false, stroke)
                 2 -> { fill.color = Color.rgb(50, 30, 60); c.drawOval(fx - mw * 0.4f, my, fx + mw * 0.4f, my + mw * 0.9f, fill) }
                 3 -> c.drawArc(fx - mw, my + mw * 0.2f, fx + mw, my + mw * 1.6f, 200f, 140f, false, stroke)
                 else -> c.drawLine(fx - mw * 0.6f, my + mw * 0.3f, fx + mw * 0.6f, my + mw * 0.3f, stroke)
+            }
+
+            // sweat drop when hungry
+            if (mood == 2 && !sleeping && !held) {
+                val dy = (t * 0.8f) % 1f
+                fill.color = Color.argb((220 * (1f - dy)).toInt(), 150, 210, 255)
+                val sx = cx + s * 0.36f; val sy = capTop + s * 0.3f + dy * s * 0.2f
+                path.reset(); path.moveTo(sx, sy - s * 0.07f)
+                path.quadTo(sx + s * 0.05f, sy + s * 0.01f, sx, sy + s * 0.04f)
+                path.quadTo(sx - s * 0.05f, sy + s * 0.01f, sx, sy - s * 0.07f); path.close()
+                c.drawPath(path, fill)
+            }
+            // a little arm waving hello
+            if (who != null && who.waveT > 0f && !sleeping) {
+                c.save()
+                c.rotate(-50f + 35f * sin(t * 16f), cx + stemW * 0.45f, faceY + s * 0.08f)
+                fill.color = shade(stemC, -0.08f)
+                c.drawRoundRect(cx + stemW * 0.42f, faceY + s * 0.04f, cx + stemW * 0.42f + s * 0.2f, faceY + s * 0.12f, s * 0.04f, s * 0.04f, fill)
+                c.restore()
             }
 
             if (who != null && who.stage() >= 3) {
@@ -3236,6 +3411,236 @@ class GameView(context: Context) : View(context) {
         val date = java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.getDefault()).format(java.util.Date())
         c.drawText("${lab.discoveredCount()} species discovered · $date", 34f * dp, hgt - 28f * dp, text)
         text.color = Color.WHITE; text.textAlign = Paint.Align.CENTER
+    }
+
+    // ---------- Touching mushrooms: poke, hug, pet, toss ----------
+
+    private fun voicePitch(s: Shroom) = (1.55f - s.stage() * 0.15f - (s.size - 1f) * 0.9f).coerceIn(0.6f, 1.9f)
+
+    private fun express(s: Shroom, e: Int, secs: Float) { s.expr = e; s.exprT = secs }
+
+    private fun addBond(s: Shroom, amount: Float) {
+        val before = s.hearts()
+        s.bond = min(100f, s.bond + amount)
+        if (s.hearts() > before) {
+            toast("💗 You and ${s.name} are closer! (${s.hearts()} hearts)" + when (s.hearts()) {
+                2 -> " Double-tap it to see a spin!"; 3 -> " It'll dance on a double-tap!"; 4 -> " It waves at you now!"; else -> "" }, ACCENT)
+            sound.play(Fx.PET, 1f, 1.2f)
+        }
+        markDirty()
+    }
+
+    private fun shroomScreen(s: Shroom): Pair<Float, Float> {
+        val (x, y) = toScreen(s.gx, s.gz)
+        return Pair(x, y - actLift(s) - s.airH)
+    }
+
+    /** A quick tap: wobble, giggle, and maybe a trick if you double-tap a close friend. */
+    private fun poke(s: Shroom) {
+        val double = t - s.lastPoke < 0.35f
+        s.lastPoke = t
+        s.jiggle = 1f
+        express(s, E_GIGGLE, 0.8f)
+        sound.play(Fx.GIGGLE, 0.7f, voicePitch(s))
+        addBond(s, 0.2f)
+        if (double) {
+            when {
+                s.hearts() >= 4 -> { s.waveT = 1.6f; val (x, y) = shroomScreen(s); burst(x, y - shroomSize(s), ACCENT, 6, P_HEART) }
+                s.hearts() >= 3 -> startAct(s, ACT_DANCE, -1).also { s.actTimer = 3f }
+                s.hearts() >= 2 -> { s.spinT = 0.6f; sound.play(Fx.WHEE, 0.5f, 1.4f) }
+            }
+        }
+    }
+
+    private fun hug(s: Shroom) {
+        val now = System.currentTimeMillis()
+        express(s, E_BLISS, 2.5f)
+        s.jiggle = 0.6f
+        val (x, y) = shroomScreen(s)
+        burst(x, y - shroomSize(s) * 0.9f, ACCENT, 8, P_HEART)
+        sound.play(Fx.PURR, 0.8f, voicePitch(s) * 0.8f)
+        buzz(30)
+        if (now - s.hugAt > 15_000L) {
+            s.hugAt = now
+            s.happy = min(100f, s.happy + 8f)
+            addBond(s, 2f)
+        }
+        if (s.want == 2) fulfillWant(s)
+        if (s.act == ACT_SLEEP || s.act == ACT_NAP) { s.act = 0; s.sleeping = false; s.awakeUntil = now + 120_000L }
+    }
+
+    private fun petStroke(s: Shroom) {
+        s.jiggle = max(s.jiggle, 0.35f)
+        express(s, E_BLISS, 1.2f)
+        s.happy = min(100f, s.happy + 2f)
+        addBond(s, 0.5f)
+        val (x, y) = shroomScreen(s)
+        burst(x + (Random.nextFloat() - 0.5f) * 30f * dp, y - shroomSize(s), ACCENT, 1, P_HEART)
+        if (t - lastPurr > 1.2f) { lastPurr = t; sound.play(Fx.PURR, 0.6f, voicePitch(s) * 0.8f) }
+        if (s.want == 2) fulfillWant(s)
+    }
+
+    /** Throw a mushroom: it flies, bounces softly and squeals with joy. */
+    private fun toss(s: Shroom, vx: Float, vy: Float) {
+        val w = width.toFloat()
+        s.fvx = vx / (w * 0.86f) * 0.55f
+        s.fvz = (vy / (groundBottom() - groundTop())) * 0.35f
+        s.airV = (380f * dp + min(abs(vy), 2500f * dp) * 0.25f)
+        s.airH = 1f
+        s.bounces = 0
+        s.act = 0; s.pendingAct = 0; s.moving = false
+        express(s, E_GIGGLE, 2f)
+        sound.play(Fx.WHEE, 0.8f, voicePitch(s))
+        if (s.want == 3) fulfillWant(s)
+    }
+
+    private fun updateAir(s: Shroom, dt: Float) {
+        if (!s.airborne()) return
+        s.airV -= 1700f * dp * dt
+        s.airH += s.airV * dt
+        s.gx += s.fvx * dt; s.gz += s.fvz * dt
+        if (s.gx < 0.05f || s.gx > 0.95f) { s.fvx = -s.fvx * 0.7f; s.gx = s.gx.coerceIn(0.05f, 0.95f) }
+        if (s.gz < 0f || s.gz > 1f) { s.fvz = -s.fvz * 0.7f; s.gz = s.gz.coerceIn(0f, 1f) }
+        if (s.airH <= 0f) {
+            s.airH = 0f
+            if (s.airV < -160f * dp && s.bounces < 4) {
+                s.airV = -s.airV * 0.45f
+                s.fvx *= 0.6f; s.fvz *= 0.6f
+                s.bounces++
+                s.jiggle = 1f
+                sound.play(Fx.BOING, 0.5f, voicePitch(s))
+                val (x, y) = toScreen(s.gx, s.gz)
+                burst(x, y, Color.rgb(200, 240, 200), 5, P_SPARK)
+            } else {
+                s.airV = 0f; s.fvx = 0f; s.fvz = 0f
+                s.tx = s.gx; s.tz = s.gz
+                s.idle = 1.5f
+                if (s.bounces >= 3) express(s, E_DIZZY, 1.6f)
+            }
+        }
+    }
+
+    // ---------- Wants ----------
+
+    private fun updateWants(now: Long) {
+        for (s in lab.home()) {
+            if (s.sleeping) continue
+            if (s.want == 0) {
+                if (s.nextWantAt == 0L) s.nextWantAt = now + (60_000L + Random.nextLong(180_000L))
+                if (now >= s.nextWantAt) {
+                    s.want = 1 + Random.nextInt(3)
+                    s.wantFood = if (Random.nextFloat() < 0.6f) Data.SPECIES[s.species].favFood else Random.nextInt(5)
+                    s.wantUntil = now + 240_000L
+                }
+            } else if (now > s.wantUntil) {
+                s.want = 0
+                s.nextWantAt = now + 180_000L + Random.nextLong(300_000L)
+                s.happy = max(0f, s.happy - 3f)
+            }
+        }
+    }
+
+    private fun fulfillWant(s: Shroom) {
+        val reward = 5 + s.hearts() * 3
+        s.want = 0
+        s.nextWantAt = System.currentTimeMillis() + 240_000L + Random.nextLong(360_000L)
+        lab.dust += reward
+        s.happy = min(100f, s.happy + 10f)
+        addBond(s, 5f)
+        express(s, E_HEART, 2.5f)
+        val (x, y) = shroomScreen(s)
+        burst(x, y - shroomSize(s), ACCENT, 10, P_HEART)
+        flyDust(x, y - shroomSize(s), 6)
+        sound.play(Fx.GIGGLE, 0.8f, voicePitch(s))
+        toast("${s.name} got just what it wanted! +$reward ✦", ACCENT)
+        markDirty()
+    }
+
+    private fun wantText(s: Shroom) = when (s.want) {
+        1 -> "Wants: ${Data.FOODS[s.wantFood].name}"
+        2 -> "Wants: a hug (press and hold it)"
+        3 -> "Wants: to play (toss it!)"
+        else -> null
+    }
+
+    private fun drawWantBubble(c: Canvas, s: Shroom, x: Float, top: Float) {
+        if (s.want == 0 || s.sleeping) return
+        val bob = sin(t * 3f + s.id) * 3f * dp
+        val bx = x + 18f * dp; val by = top - 26f * dp + bob
+        fill.color = Color.WHITE
+        c.drawCircle(x + 4f * dp, top - 4f * dp + bob, 3f * dp, fill)
+        c.drawCircle(x + 9f * dp, top - 11f * dp + bob, 4.5f * dp, fill)
+        c.drawRoundRect(bx - 16f * dp, by - 15f * dp, bx + 16f * dp, by + 15f * dp, 14f * dp, 14f * dp, fill)
+        when (s.want) {
+            1 -> drawFood(c, s.wantFood, bx, by, 8f * dp)
+            2 -> { fill.color = ACCENT; drawHeart(c, bx, by - 3f * dp, 6f * dp) }
+            else -> {
+                fill.color = Color.rgb(255, 120, 90); c.drawCircle(bx, by, 9f * dp, fill)
+                stroke.color = Color.WHITE; stroke.strokeWidth = 2f * dp
+                c.drawArc(bx - 9f * dp, by - 4f * dp, bx + 9f * dp, by + 12f * dp, 200f, 140f, false, stroke)
+            }
+        }
+    }
+
+    // ---------- Shake the phone ----------
+
+    private var lastShake = 0f
+    private val shakeListener = object : android.hardware.SensorEventListener {
+        override fun onSensorChanged(e: android.hardware.SensorEvent) {
+            val m = sqrt(e.values[0] * e.values[0] + e.values[1] * e.values[1] + e.values[2] * e.values[2])
+            if (abs(m - 9.81f) > 13f && t - lastShake > 2.5f && tab == Tab.GARDEN && popup == null) {
+                lastShake = t
+                for (s in lab.home()) {
+                    express(s, E_DIZZY, 2.5f); s.jiggle = 1f
+                    if (s.sleeping) { s.act = 0; s.sleeping = false }
+                }
+                sound.play(Fx.GIGGLE, 0.6f, 0.8f)
+                toast("Whoa! Everyone's dizzy! 😵")
+            }
+        }
+        override fun onAccuracyChanged(sensor: android.hardware.Sensor?, accuracy: Int) {}
+    }
+
+    private fun startShakeSensor() {
+        val sm = context.getSystemService(Context.SENSOR_SERVICE) as? android.hardware.SensorManager ?: return
+        val acc = sm.getDefaultSensor(android.hardware.Sensor.TYPE_ACCELEROMETER) ?: return
+        sm.registerListener(shakeListener, acc, android.hardware.SensorManager.SENSOR_DELAY_UI)
+    }
+
+    private fun stopShakeSensor() {
+        (context.getSystemService(Context.SENSOR_SERVICE) as? android.hardware.SensorManager)?.unregisterListener(shakeListener)
+    }
+
+    /** Everyone waves hello when you come back to the garden. */
+    private fun waveHello() {
+        for (s in lab.home()) if (!s.sleeping) s.waveT = 1.5f + Random.nextFloat() * 0.8f
+    }
+
+    // ---------- Little idle animations ----------
+
+    private fun updateIdleAnim(s: Shroom, dt: Float) {
+        if (s.idleAnim > 0) {
+            val before = s.idleAnimT
+            s.idleAnimT -= dt
+            if (s.idleAnim == 3 && before > 0.35f && s.idleAnimT <= 0.35f) {   // achoo!
+                val (x, y) = shroomScreen(s)
+                repeat(14) {
+                    val a = Random.nextFloat() * 6.28f
+                    particles.add(Particle(x + s.facing * shroomSize(s) * 0.2f, y - shroomSize(s) * 0.3f,
+                        cos(a) * 70f * dp + s.facing * 60f * dp, sin(a) * 60f * dp, 0.8f, 0.8f,
+                        Color.HSVToColor(floatArrayOf(Random.nextFloat() * 360f, 0.4f, 1f)), P_SPARK))
+                }
+                sound.play(Fx.SNEEZE, 0.6f, voicePitch(s))
+                s.jiggle = 1f
+            }
+            if (s.idleAnimT <= 0f) s.idleAnim = 0
+            return
+        }
+        if (s.idle > 0f && Random.nextFloat() < dt * 0.07f) {
+            s.idleAnim = 1 + Random.nextInt(4)
+            s.idleAnimT = when (s.idleAnim) { 1 -> 1.4f; 2 -> 1.2f; 3 -> 1.0f; else -> 1.6f }
+            if (s.idleAnim == 1 && Random.nextFloat() < 0.5f) sound.play(Fx.YAWN, 0.35f, voicePitch(s))
+        }
     }
 
     // ---------- Settings ----------

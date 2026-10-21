@@ -23,7 +23,8 @@ import kotlin.random.Random
  */
 class Sound(private val context: Context) {
 
-    enum class Fx { CLICK, POP, BUBBLE, COIN, DISCOVER, EAT, GROW, PET, DENIED, BREW_DONE, STIR }
+    enum class Fx { CLICK, POP, BUBBLE, COIN, DISCOVER, EAT, GROW, PET, DENIED, BREW_DONE, STIR,
+        CHIRP, GIGGLE, WHEE, CHOMP, PURR, SNEEZE, YAWN, BOING, RIBBIT, CLINK }
 
     var sfxOn = true
     var musicOn = true
@@ -46,7 +47,7 @@ class Sound(private val context: Context) {
     init {
         Thread {
             try {
-                val dir = File(context.cacheDir, "tinylab_sound_v2").apply { mkdirs() }
+                val dir = File(context.cacheDir, "tinylab_sound_v3").apply { mkdirs() }
                 for (fx in Fx.values()) {
                     val f = File(dir, fx.name.lowercase() + ".wav")
                     if (!f.exists()) writeWav(f, synth(fx))
@@ -175,6 +176,23 @@ class Sound(private val context: Context) {
         return out
     }
 
+    /** A cute little voice: quick pitch-bent sine syllables. */
+    private fun chirp(freqs: FloatArray, each: Float): FloatArray {
+        val per = (each * rate).toInt()
+        val out = FloatArray(per * freqs.size + per)
+        var ph = 0.0
+        for ((k, f) in freqs.withIndex()) {
+            for (i in 0 until per) {
+                val p = i / per.toFloat()
+                val freq = f * (1f + 0.25f * sin(p * PI).toFloat())
+                ph += freq / rate
+                val env = sin(p * PI).toFloat()
+                out[k * per + i] += sin(2 * PI * ph).toFloat() * env * 0.35f
+            }
+        }
+        return out
+    }
+
     /** A kalimba / music-box pluck: a sine with a quickly fading bell overtone. */
     private fun pluck(out: FloatArray, start: Int, freq: Float, vol: Float, len: Float = 0.9f) {
         val n = (len * rate).toInt()
@@ -216,6 +234,29 @@ class Sound(private val context: Context) {
         Fx.DENIED -> notes(floatArrayOf(330f, 247f), 0.09f, Wave.TRI, 0.28f)
         Fx.BREW_DONE -> echo(mix(noise(0.35f, 0.25f, 0.25f), plucks(floatArrayOf(659.3f, 987.8f, 1318.5f), 0.07f, 0.35f, 0.8f)), 0.13f, 0.3f, 0.35f)
         Fx.STIR -> noise(0.16f, 0.22f, 0.12f)
+        Fx.CHIRP -> chirp(floatArrayOf(900f, 1300f), 0.07f)
+        Fx.GIGGLE -> chirp(floatArrayOf(1100f, 1400f, 1050f, 1450f, 1150f), 0.055f)
+        Fx.WHEE -> echo(mix(sweep(0.55f, 500f, 1500f, Wave.SINE, 0.32f), sweep(0.55f, 750f, 2200f, Wave.TRI, 0.08f)), 0.1f, 0.25f, 0.25f)
+        Fx.CHOMP -> mix(mix(noise(0.05f, 0.4f, 0.4f), sweep(0.07f, 300f, 160f, Wave.SINE, 0.4f)),
+            FloatArray((0.12f * rate).toInt()) + mix(noise(0.05f, 0.35f, 0.4f), sweep(0.07f, 280f, 150f, Wave.SINE, 0.35f)))
+        Fx.PURR -> {
+            val n = (0.6f * rate).toInt()
+            FloatArray(n) { i ->
+                val tt = i / rate.toFloat()
+                (sin(2 * PI * 110 * tt).toFloat() * (0.5f + 0.5f * sin(2 * PI * 22 * tt).toFloat())) * 0.35f * min(1f, tt * 8f) * min(1f, (0.6f - tt) * 6f)
+            }
+        }
+        Fx.SNEEZE -> mix(sweep(0.18f, 600f, 1100f, Wave.SINE, 0.2f), FloatArray((0.2f * rate).toInt()) + noise(0.22f, 0.5f, 0.6f))
+        Fx.YAWN -> sweep(0.7f, 520f, 260f, Wave.SINE, 0.25f)
+        Fx.BOING -> {
+            val n = (0.35f * rate).toInt()
+            FloatArray(n) { i ->
+                val tt = i / rate.toFloat()
+                sin(2 * PI * (180 + 120 * sin(2 * PI * 14 * tt)) * tt).toFloat() * exp(-7f * tt) * 0.4f
+            }
+        }
+        Fx.RIBBIT -> mix(sweep(0.09f, 260f, 200f, Wave.SQUARE, 0.12f), FloatArray((0.13f * rate).toInt()) + sweep(0.1f, 300f, 220f, Wave.SQUARE, 0.12f))
+        Fx.CLINK -> echo(plucks(floatArrayOf(2093f), 0.05f, 0.3f, 0.4f), 0.08f, 0.3f, 0.3f)
     }
 
     /** A calm 16-bar loop: soft pads, bass, a music-box melody and arpeggios, with a little echo. */
