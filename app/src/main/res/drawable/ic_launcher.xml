@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- background -->
+    <path android:fillColor="#2A1B4A" android:pathData="M54,0a54,54 0 1,0 0.01,0z" />
+    <!-- stem -->
+    <path android:fillColor="#FFF1DC" android:pathData="M40,56 L68,56 L70,84 Q54,90 38,84 Z" />
+    <!-- cap -->
+    <path android:fillColor="#FF5C8A" android:pathData="M18,58 C18,22 90,22 90,58 Q54,66 18,58 Z" />
+    <!-- spots -->
+    <path android:fillColor="#FFFFFF" android:pathData="M38,40a6,6 0 1,0 0.01,0z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M64,36a5,5 0 1,0 0.01,0z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M76,50a4,4 0 1,0 0.01,0z" />
+    <!-- eyes -->
+    <path android:fillColor="#2A1B4A" android:pathData="M47,68a3,3 0 1,0 0.01,0z" />
+    <path android:fillColor="#2A1B4A" android:pathData="M61,68a3,3 0 1,0 0.01,0z" />
+    <!-- blush -->
+    <path android:fillColor="#FFA3B8" android:pathData="M42,74a3,3 0 1,0 0.01,0z" />
+    <path android:fillColor="#FFA3B8" android:pathData="M66,74a3,3 0 1,0 0.01,0z" />
+</vector>

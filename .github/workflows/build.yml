@@ -1,0 +1,56 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Show Android SDK
+        run: echo "ANDROID_HOME=$ANDROID_HOME" && ls "$ANDROID_HOME"
+
+      - name: Build the APK
+        run: set -o pipefail; gradle assembleDebug --no-daemon 2>&1 | tee build.log
+
+      - name: Report build errors
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo '```'; grep -E "^e: |error:|FAILURE|What went wrong" -A3 build.log | head -60; echo '```'; } > err.md
+          gh api repos/${{ github.repository }}/commits/${{ github.sha }}/comments -F body=@err.md
+
+      - name: Rename APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk TinyLab.apk
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TinyLab-apk
+          path: TinyLab.apk
+
+      - name: Publish as a release (easy phone download)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Tiny Lab build ${{ github.run_number }}
+          body: Tap TinyLab.apk below to download and install.
+          make_latest: true
+          files: TinyLab.apk
