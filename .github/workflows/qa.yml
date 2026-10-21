@@ -49,7 +49,7 @@ jobs:
           path: |
             ~/.android/avd/*
             ~/.android/adb*
-          key: avd-29-pixel6-v1
+          key: avd-29-pixel6-v2
 
       - name: Boot the emulator once and save it
         if: steps.avd-cache.outputs.cache-hit != 'true'
@@ -59,7 +59,7 @@ jobs:
           target: default
           arch: x86_64
           profile: pixel_6
-          cores: 3
+          cores: 2
           ram-size: 3072M
           emulator-boot-timeout: 900
           force-avd-creation: false
@@ -76,14 +76,16 @@ jobs:
           target: default
           arch: x86_64
           profile: pixel_6
-          cores: 3
+          cores: 2
           ram-size: 3072M
           emulator-boot-timeout: 900
           force-avd-creation: false
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           script: |
-            adb install -r app/build/outputs/apk/debug/app-debug.apk
+            mkdir -p qa-out
+            adb wait-for-device; adb devices > qa-out/adb.txt 2>&1; adb shell getprop sys.boot_completed >> qa-out/adb.txt 2>&1 || true
+            for i in 1 2 3 4; do adb install -r app/build/outputs/apk/debug/app-debug.apk >> qa-out/install.txt 2>&1 && break; sleep 15; done
             python3 qa/run_qa.py 2>&1 | tee qa-out/console.txt
 
       - name: Play the game on an emulator (second try if it didn't boot)
@@ -94,14 +96,16 @@ jobs:
           target: default
           arch: x86_64
           profile: pixel_6
-          cores: 3
+          cores: 2
           ram-size: 3072M
           emulator-boot-timeout: 900
           force-avd-creation: false
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           script: |
-            adb install -r app/build/outputs/apk/debug/app-debug.apk
+            mkdir -p qa-out
+            adb wait-for-device; adb devices > qa-out/adb.txt 2>&1; adb shell getprop sys.boot_completed >> qa-out/adb.txt 2>&1 || true
+            for i in 1 2 3 4; do adb install -r app/build/outputs/apk/debug/app-debug.apk >> qa-out/install.txt 2>&1 && break; sleep 15; done
             python3 qa/run_qa.py 2>&1 | tee qa-out/console.txt
 
       - name: Publish results to the qa-results branch
