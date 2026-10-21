@@ -41,15 +41,19 @@ jobs:
       - name: Play the game on an emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 33
+          api-level: 30
           target: google_apis
           arch: x86_64
           profile: pixel_6
+          cores: 4
+          ram-size: 4096M
+          emulator-boot-timeout: 900
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
           script: |
+            mkdir -p qa-out
             adb install -r app/build/outputs/apk/debug/app-debug.apk
-            python3 qa/run_qa.py
+            python3 qa/run_qa.py 2>&1 | tee qa-out/console.txt
 
       - name: Publish results to the qa-results branch
         if: always()

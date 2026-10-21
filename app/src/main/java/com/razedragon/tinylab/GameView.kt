@@ -1192,10 +1192,12 @@ class GameView(context: Context) : View(context) {
             5 -> { // move a placed decoration, or put it back in the tray
                 val d = lab.placed.getOrNull(dragPlaced) ?: return
                 if (y >= panelTop()) {
+                    releaseFromDecor(dragPlaced, removed = true)
                     lab.placed.removeAt(dragPlaced)
                     lab.decorOwned[d.kind]++
                     sound.play(Fx.POP, 0.7f, 1.3f)
                 } else {
+                    releaseFromDecor(dragPlaced, removed = false)
                     val (gx, gz) = toWorld(x, y)
                     d.gx = gx; d.gz = gz
                     sound.play(Fx.POP, 0.8f, 0.7f)
@@ -1215,6 +1217,16 @@ class GameView(context: Context) : View(context) {
                 burst(sx, sy, Color.rgb(170, 220, 180), 10, P_SPARK)
                 markDirty()
             }
+        }
+    }
+
+    /** A decoration moved or was put away: anyone using it hops off, and indexes stay correct. */
+    private fun releaseFromDecor(idx: Int, removed: Boolean) {
+        for (s in lab.garden) {
+            if (s.actTarget == idx && (s.act > 0 || s.pendingAct > 0)) {
+                s.act = 0; s.pendingAct = 0; s.sleeping = false; s.actTarget = -1
+                s.tx = s.gx; s.tz = s.gz; s.idle = 1f
+            } else if (removed && s.actTarget > idx) s.actTarget--
         }
     }
 
@@ -4855,7 +4867,7 @@ class GameView(context: Context) : View(context) {
         val w = width.toFloat()
         s.fvx = vx / (w * 0.86f) * 0.55f
         s.fvz = (vy / (groundBottom() - groundTop())) * 0.35f
-        s.airV = (380f * dp + min(abs(vy), 2500f * dp) * 0.25f)
+        s.airV = (300f * dp + min(abs(vy), 1800f * dp) * 0.2f)   // a fun hop, not a rocket launch
         s.airH = 1f
         s.bounces = 0
         s.act = 0; s.pendingAct = 0; s.moving = false
