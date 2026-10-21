@@ -21,7 +21,7 @@ import kotlin.math.sin
 import kotlin.random.Random
 
 /**
- * Tiny Lab: brew ingredients into cute mushroom monsters, raise them in your garden,
+ * Shroomology: brew ingredients into cute mushroom monsters, raise them in your garden,
  * and crossbreed grown-ups to discover rare species. Everything is drawn with Canvas.
  */
 class GameView(context: Context) : View(context) {
@@ -1063,7 +1063,7 @@ class GameView(context: Context) : View(context) {
     private fun drawTutorial(c: Canvas, w: Float, h: Float) {
         if (popup != null) return
         val msg = when {
-            lab.tutorial == 0 && tab != Tab.LAB -> "Welcome to your Tiny Lab! Tap LAB to brew your first mushroom"
+            lab.tutorial == 0 && tab != Tab.LAB -> "Welcome to Shroomology! Tap LAB to brew your first mushroom"
             lab.tutorial <= 1 && tab == Tab.LAB && labMode == 0 -> { if (lab.tutorial == 0) lab.tutorial = 1; "Pick two ingredients, then tap BREW. Try Water + Soil!" }
             lab.tutorial == 2 && tab == Tab.GARDEN -> "Tap your new mushroom to check on it"
             lab.tutorial == 3 && tab == Tab.GARDEN && selected >= 0 -> "Feed it to help it grow. Grown mushrooms make spore dust ✦ and can crossbreed!"

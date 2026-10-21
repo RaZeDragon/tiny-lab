@@ -12,5 +12,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "TinyLab"
+rootProject.name = "Shroomology"
 include(":app")
