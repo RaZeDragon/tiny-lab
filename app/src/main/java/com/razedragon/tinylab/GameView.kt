@@ -78,7 +78,18 @@ class GameView(context: Context) : View(context) {
         private val TEXT_DIM = Color.argb(170, 255, 255, 255)
 
         private const val CROSS_COST = 15
-        private const val BREW_TIME = 4f
+        private const val BREW_TIME = 5f
+        private const val STYLE_GHOST = 6
+
+        // Tutorial steps
+        private const val T_WELCOME = 0
+        private const val T_GO_LAB = 1
+        private const val T_DRAG = 2
+        private const val T_BREW = 3
+        private const val T_STIR = 4
+        private const val T_REVEAL = 5
+        private const val T_FEED = 6
+        private const val T_DONE = 7
         private const val STIR_GOAL = (2 * Math.PI * 6).toFloat()   // six full circles = perfect brew
         private const val MAX_PLACED = 20
         private const val REST_MS = 20 * 60 * 1000L
@@ -143,7 +154,11 @@ class GameView(context: Context) : View(context) {
     private var capturing = false
 
     // Settings: 0 = all sound, 1 = no music, 2 = muted
-    private var soundMode = prefs.getInt("soundMode", 0)
+    private var soundMode = prefs.getInt("soundMode", 0)   // older builds' single sound switch
+    private var settingsOpen = false
+    private var vibrateOn = prefs.getBoolean("vibrate", true)
+    private var tutStep = -1
+    private var tutFeedBase = 0
 
     // UI
     private var buttons: List<Button> = emptyList()
@@ -159,7 +174,7 @@ class GameView(context: Context) : View(context) {
     private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
         textAlign = Paint.Align.CENTER
-        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        typeface = loadFont()
     }
     private val path = Path()
 
@@ -168,11 +183,12 @@ class GameView(context: Context) : View(context) {
         applySoundMode()
         lab.tick()
         lab.visit()
+        tutStep = prefs.getInt("tutStep", if (lab.brewed > 0) -1 else T_WELCOME)
     }
 
     private fun applySoundMode() {
-        sound.sfxOn = soundMode < 2
-        sound.musicOn = soundMode == 0
+        sound.sfxOn = prefs.getBoolean("sfx", soundMode < 2)
+        sound.musicOn = prefs.getBoolean("music", soundMode == 0)
     }
 
     private fun shroom(id: Long) = lab.garden.firstOrNull { it.id == id }
@@ -205,6 +221,7 @@ class GameView(context: Context) : View(context) {
 
     fun onBack(): Boolean {
         when {
+            settingsOpen -> settingsOpen = false
             popup != null -> popup = null
             photoMode -> photoMode = false
             feeding -> feeding = false
@@ -227,6 +244,7 @@ class GameView(context: Context) : View(context) {
 
     @Suppress("DEPRECATION")
     private fun buzz(ms: Long) {
+        if (!vibrateOn) return
         val v = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator ?: return
         if (!v.hasVibrator()) return
         if (Build.VERSION.SDK_INT >= 26) v.vibrate(VibrationEffect.createOneShot(ms, 60))
@@ -257,6 +275,11 @@ class GameView(context: Context) : View(context) {
     }
 
     private fun quality() = (stirTotal / STIR_GOAL).coerceIn(0f, 1f)
+
+    private fun stars(q: Float): String {
+        val n = when { q >= 1f -> 3; q >= 0.6f -> 2; q >= 0.25f -> 1; else -> 0 }
+        return "★".repeat(n) + "☆".repeat(3 - n)
+    }
 
     private fun finishBrew() {
         val n = slotCount()
@@ -417,6 +440,14 @@ class GameView(context: Context) : View(context) {
     private fun buildButtons(): List<Button> {
         val w = width.toFloat()
         val h = height.toFloat()
+        if (settingsOpen) return ArrayList<Button>().also { settingsButtons(it, w, h) }
+        if (tutStep == T_WELCOME || tutStep == T_DONE) return ArrayList<Button>().also { tutorialButtons(it, w, h) }
+        val list = buildButtonsInner(w, h)
+        if (tutStep >= 0 && !photoMode) tutorialButtons(list, w, h)
+        return list
+    }
+
+    private fun buildButtonsInner(w: Float, h: Float): ArrayList<Button> {
         val list = ArrayList<Button>()
 
         // Popup takes over the screen
@@ -450,14 +481,9 @@ class GameView(context: Context) : View(context) {
             })
         }
 
-        // Sound toggle in the top bar
-        list.add(Button("sound", RectF(w - 52f * dp, 14f * dp, w - 12f * dp, 54f * dp), "", STYLE_CARD,
-            custom = { c, r -> drawSpeaker(c, r) }) {
-            soundMode = (soundMode + 1) % 3
-            prefs.edit().putInt("soundMode", soundMode).apply()
-            applySoundMode()
-            toast(arrayOf("Sound + music on", "Music off", "All sound off")[soundMode])
-        })
+        // Settings gear in the top bar
+        list.add(Button("gear", RectF(w - 54f * dp, 12f * dp, w - 10f * dp, 56f * dp), "", STYLE_CARD,
+            custom = { c, r -> drawGear(c, r) }) { settingsOpen = true })
 
         when (tab) {
             Tab.GARDEN -> gardenButtons(list, w, h)
@@ -674,7 +700,7 @@ class GameView(context: Context) : View(context) {
         if (labMode == 0) {
             val ready = slotsFull() && brewing <= 0f
             list.add(Button("brew", RectF(w / 2 - bw / 2, by, w / 2 + bw / 2, by + 54f * dp),
-                if (brewing > 0f) "STIR! ↻  ${(quality() * 100).toInt()}%" else "BREW", STYLE_PRIMARY, ready || brewing > 0f) { startBrew() })
+                if (brewing > 0f) "STIR!  ${stars(quality())}" else "BREW", STYLE_PRIMARY, ready || brewing > 0f) { startBrew() })
 
             val gy = by + 70f * dp
             val cols = 3
@@ -696,7 +722,7 @@ class GameView(context: Context) : View(context) {
         } else {
             val ready = picks.size == 2 && brewing <= 0f
             list.add(Button("cross", RectF(w / 2 - bw / 2, by, w / 2 + bw / 2, by + 54f * dp),
-                if (brewing > 0f) "STIR! ↻  ${(quality() * 100).toInt()}%" else "CROSSBREED  $CROSS_COST ✦", STYLE_PRIMARY, ready || brewing > 0f) { startCross() })
+                if (brewing > 0f) "STIR!  ${stars(quality())}" else "CROSSBREED  $CROSS_COST ✦", STYLE_PRIMARY, ready || brewing > 0f) { startCross() })
 
             val gy = by + 92f * dp
             val cols = 4
@@ -834,6 +860,10 @@ class GameView(context: Context) : View(context) {
             MotionEvent.ACTION_DOWN -> {
                 downX = x; downY = y; dragX = x; dragY = y
                 dragging = false; dragKind = 0
+                if (settingsOpen || tutStep == T_WELCOME || tutStep == T_DONE) {
+                    pressedId = buttons.lastOrNull { it.rect.contains(x, y) }?.id
+                    return true
+                }
                 if (tab == Tab.LAB && brewing > 0f && popup == null &&
                     hypot(x - width / 2f, y - flaskY()) < 190f * dp) {
                     stirring = true
@@ -877,7 +907,7 @@ class GameView(context: Context) : View(context) {
                         stirSound += abs(d)
                         if (stirSound > Math.PI.toFloat()) {
                             stirSound = 0f
-                            sound.play(Fx.BUBBLE, 0.35f, 0.8f + quality() * 0.8f)
+                            sound.play(Fx.STIR, 0.5f, 0.8f + quality() * 0.7f)
                             if (quality() >= 1f) buzz(8)
                         }
                     }
@@ -904,7 +934,7 @@ class GameView(context: Context) : View(context) {
                     if (b != null) {
                         sound.play(Fx.CLICK, 0.6f)
                         b.action()
-                    } else if (id == null && popup == null && tab == Tab.GARDEN && !photoMode) {
+                    } else if (id == null && popup == null && tab == Tab.GARDEN && !photoMode && !settingsOpen) {
                         tapGarden(x, y)
                     }
                 }
@@ -1091,6 +1121,7 @@ class GameView(context: Context) : View(context) {
         }
 
         updateWalkers(dt)
+        updateTutorial()
 
         // Random blinking
         if (Random.nextFloat() < dt * 1.2f && lab.garden.isNotEmpty()) blinkAt[lab.garden.random().id] = t
@@ -1139,11 +1170,12 @@ class GameView(context: Context) : View(context) {
         fill.color = Color.argb(40, 255, 255, 255)
         c.drawRect(0f, navTop, w, navTop + 1f * dp, fill)
 
-        for (b in buttons) drawButton(c, b)
+        if (!settingsOpen) for (b in buttons) if (!b.id.startsWith("tut_")) drawButton(c, b)
         drawParticles(c)
         if (dragging) drawDragged(c)
+        popup?.let { drawPopup(c, w, h, it) ; for (b in buttons) if (!b.id.startsWith("tut_")) drawButton(c, b) }
         drawTutorial(c, w, h)
-        popup?.let { drawPopup(c, w, h, it) ; for (b in buttons) drawButton(c, b) }
+        if (settingsOpen) drawSettings(c, w, h)
         if (flashT > 0f) {
             fill.color = Color.WHITE; fill.alpha = (255 * (flashT / 0.35f)).toInt().coerceIn(0, 255)
             c.drawRect(0f, 0f, w, h, fill); fill.alpha = 255
@@ -1188,16 +1220,26 @@ class GameView(context: Context) : View(context) {
     }
 
     private fun drawTopBar(c: Canvas, w: Float) {
+        fill.shader = LinearGradient(0f, 0f, 0f, topBar, Color.argb(235, 34, 22, 66), Color.argb(200, 26, 17, 50), Shader.TileMode.CLAMP)
+        c.drawRect(0f, 0f, w, topBar, fill)
+        fill.shader = null
+        fill.color = Color.argb(70, 0, 0, 0); c.drawRect(0f, topBar, w, topBar + 3f * dp, fill)
         text.textAlign = Paint.Align.LEFT
-        text.textSize = 24f * dp
+        text.textSize = 25f * dp
         text.color = Color.WHITE
-        val title = when (tab) { Tab.GARDEN -> "GARDEN"; Tab.LAB -> "LAB"; Tab.DEX -> "SHROOMDEX"; Tab.SHOP -> "SHOP"; Tab.JOURNAL -> "JOURNAL" }
-        c.drawText(title, 18f * dp, 44f * dp, text)
-        text.textAlign = Paint.Align.RIGHT
-        text.textSize = 20f * dp
-        text.color = DUST
-        c.drawText("${lab.dust} ✦", w - 62f * dp, 42f * dp, text)
+        val title = when (tab) { Tab.GARDEN -> "Garden"; Tab.LAB -> "Lab"; Tab.DEX -> "Shroomdex"; Tab.SHOP -> "Shop"; Tab.JOURNAL -> "Journal" }
+        c.drawText(title, 18f * dp, 43f * dp, text)
+        // spore dust pill
+        text.textSize = 18f * dp
+        val label = "${lab.dust}"
+        val pw = text.measureText(label) + 46f * dp
+        val pr = RectF(w - 62f * dp - pw, 16f * dp, w - 62f * dp, 50f * dp)
+        fill.color = Color.argb(110, 0, 0, 0); c.drawRoundRect(pr, 17f * dp, 17f * dp, fill)
+        stroke.color = Color.argb(90, 255, 214, 110); stroke.strokeWidth = 1.5f * dp; c.drawRoundRect(pr, 17f * dp, 17f * dp, stroke)
+        fill.color = DUST
+        drawSparkle(c, pr.left + 18f * dp, pr.centerY(), 4f * dp)
         text.color = Color.WHITE
+        c.drawText(label, pr.left + 32f * dp, pr.centerY() + 6.5f * dp, text)
         text.textAlign = Paint.Align.CENTER
     }
 
@@ -1691,8 +1733,7 @@ class GameView(context: Context) : View(context) {
 
     private fun drawDecorTray(c: Canvas, w: Float) {
         val top = panelTop()
-        fill.color = PANEL
-        c.drawRoundRect(8f * dp, top, w - 8f * dp, navTop - 6f * dp, 22f * dp, 22f * dp, fill)
+        panel(c, RectF(8f * dp, top, w - 8f * dp, navTop - 6f * dp), 22f * dp)
         text.textSize = 12f * dp; text.color = TEXT_DIM
         val msg = if (gardenItemCount() == 0) "Buy decorations in the Shop → DECOR"
         else "Drag items onto the ground · drag them back here to put away"
@@ -1850,8 +1891,7 @@ class GameView(context: Context) : View(context) {
     private fun drawInfoPanel(c: Canvas, w: Float, s: Shroom) {
         val top = panelTop()
         val r = RectF(8f * dp, top, w - 8f * dp, navTop - 6f * dp)
-        fill.color = PANEL
-        c.drawRoundRect(r, 22f * dp, 22f * dp, fill)
+        panel(c, r, 22f * dp)
         val sp = Data.SPECIES[s.species]
         val pad = 24f * dp
 
@@ -2100,20 +2140,42 @@ class GameView(context: Context) : View(context) {
         if (brewing > 0f) {
             val q = quality()
             val rr = r + 16f * dp
-            stroke.strokeWidth = 7f * dp
+            stroke.strokeWidth = 8f * dp
             stroke.color = Color.argb(50, 255, 255, 255)
             c.drawCircle(fx, fy, rr, stroke)
             stroke.color = if (q >= 1f) DUST else MINT
             c.drawArc(fx - rr, fy - rr, fx + rr, fy + rr, -90f, 360f * q, false, stroke)
-            // arrow hint circling the flask
-            val a = t * 4f
-            fill.color = Color.argb((120 + 100 * sin(t * 6f)).toInt().coerceIn(0, 255), 255, 255, 255)
-            c.drawCircle(fx + cos(a) * (rr + 18f * dp), fy + sin(a) * (rr + 18f * dp), 5f * dp, fill)
-            if (q >= 1f) {
-                text.textSize = 14f * dp; text.color = DUST
-                c.drawText("PERFECT BREW!", fx, fy - r * 1.95f, text)
-                text.color = Color.WHITE
+
+            // a big arrow sweeping around the flask shows which way to stir
+            val ar = rr + 26f * dp
+            val ang = (t * 220f) % 360f
+            stroke.color = Color.argb(235, 255, 255, 255); stroke.strokeWidth = 6f * dp
+            c.drawArc(fx - ar, fy - ar, fx + ar, fy + ar, ang - 80f, 80f, false, stroke)
+            val a = Math.toRadians(ang.toDouble())
+            val hx = fx + (cos(a) * ar).toFloat(); val hy = fy + (sin(a) * ar).toFloat()
+            val tx = (-sin(a)).toFloat(); val ty = cos(a).toFloat()     // direction of travel
+            val nx = cos(a).toFloat(); val ny = sin(a).toFloat()        // pointing outward
+            fill.color = Color.WHITE
+            path.reset()
+            path.moveTo(hx + tx * 18f * dp, hy + ty * 18f * dp)
+            path.lineTo(hx + nx * 12f * dp - tx * 4f * dp, hy + ny * 12f * dp - ty * 4f * dp)
+            path.lineTo(hx - nx * 12f * dp - tx * 4f * dp, hy - ny * 12f * dp - ty * 4f * dp)
+            path.close()
+            c.drawPath(path, fill)
+            // a ghost fingertip rides the arrow until the player starts stirring
+            if (stirTotal < 1.5f) {
+                val p = 0.5f + 0.5f * sin(t * 6f)
+                fill.color = Color.argb((90 + 60 * p).toInt(), 255, 255, 255)
+                c.drawCircle(hx - tx * 30f * dp, hy - ty * 30f * dp, 16f * dp, fill)
+                fill.color = Color.argb(230, 255, 255, 255)
+                c.drawCircle(hx - tx * 30f * dp, hy - ty * 30f * dp, 9f * dp, fill)
             }
+            text.textSize = 26f * dp
+            text.color = if (q >= 1f) DUST else MINT
+            c.drawText(if (q >= 1f) "PERFECT!" else "STIR!", fx, fy - r * 1.8f, text)
+            text.textSize = 13f * dp; text.color = Color.WHITE
+            if (q < 1f) c.drawText("Trace circles around the flask", fx, fy - r * 1.8f + 20f * dp, text)
+            text.color = Color.WHITE
         }
 
         text.textSize = 13f * dp; text.color = TEXT_DIM
@@ -2369,42 +2431,10 @@ class GameView(context: Context) : View(context) {
         }
         text.textSize = 13f * dp; text.color = TEXT_DIM
         c.drawText("${Data.TIER_NAMES[sp.tier]} · Loves ${Data.FOODS[sp.favFood].name}", w / 2, h * 0.59f + 24f * dp, text)
-        val grade = when { p.quality >= 1f -> "Perfect brew!"; p.quality >= 0.6f -> "Great stir"; p.quality >= 0.25f -> "Good stir"; else -> "Tip: stir while it brews for a head start" }
+        val grade = stars(p.quality) + "  " + when { p.quality >= 1f -> "Perfect brew!"; p.quality >= 0.6f -> "Great stir"; p.quality >= 0.25f -> "Good stir"; else -> "Tip: stir in circles while it brews" }
         text.color = if (p.quality >= 1f) DUST else TEXT_DIM
         c.drawText(grade, w / 2, h * 0.59f + 44f * dp, text)
         text.color = Color.WHITE
-    }
-
-    private fun drawTutorial(c: Canvas, w: Float, h: Float) {
-        if (popup != null) return
-        val msg = when {
-            lab.tutorial == 0 && tab != Tab.LAB -> "Welcome to Shroomology! Tap LAB to brew your first mushroom"
-            lab.tutorial <= 1 && tab == Tab.LAB && labMode == 0 -> { if (lab.tutorial == 0) lab.tutorial = 1; "Drag two ingredients into the flask, then tap BREW. Try Water + Soil!" }
-            lab.tutorial == 2 && tab == Tab.GARDEN -> "Tap your new mushroom to check on it"
-            lab.tutorial == 3 && tab == Tab.GARDEN && selected >= 0 -> "Feed it to help it grow. Grown mushrooms make spore dust ✦ and can crossbreed!"
-            else -> return
-        }
-        // speech bubble near the top of the content area
-        text.textSize = 14f * dp
-        val maxW = w - 40f * dp
-        val lines = wrap(msg, maxW - 28f * dp)
-        val bh = 18f * dp + lines.size * 19f * dp
-        val y = if (tab == Tab.LAB) h * 0.12f + 56f * dp else topBar + 52f * dp
-        val r = RectF(20f * dp, y, w - 20f * dp, y + bh)
-        val bob = sin(t * 3f) * 2f * dp
-        r.offset(0f, bob)
-        fill.color = ACCENT
-        c.drawRoundRect(r, 16f * dp, 16f * dp, fill)
-        text.color = Color.WHITE
-        for ((k, line) in lines.withIndex()) c.drawText(line, w / 2, r.top + 24f * dp + k * 19f * dp, text)
-        // arrow down to the LAB tab
-        if (lab.tutorial == 0 && tab != Tab.LAB) {
-            val ax = w * 0.3f
-            val ay = navTop - 16f * dp + sin(t * 5f) * 6f * dp
-            fill.color = ACCENT
-            path.reset(); path.moveTo(ax - 14f * dp, ay - 16f * dp); path.lineTo(ax + 14f * dp, ay - 16f * dp); path.lineTo(ax, ay); path.close()
-            c.drawPath(path, fill)
-        }
     }
 
     private fun wrap(s: String, maxW: Float): List<String> {
@@ -2476,46 +2506,85 @@ class GameView(context: Context) : View(context) {
     private fun drawButton(c: Canvas, b: Button) {
         val pressed = pressedId == b.id && b.enabled
         val r = RectF(b.rect)
-        if (pressed) r.inset(3f * dp, 3f * dp)
-        val radius = 16f * dp
-        when (b.style) {
-            STYLE_PRIMARY -> { fill.color = if (b.enabled) ACCENT else Color.rgb(90, 60, 100); text.color = Color.WHITE }
-            STYLE_DANGER -> { fill.color = Color.rgb(90, 30, 50); text.color = Color.rgb(255, 160, 170) }
-            STYLE_TAB_ON -> { fill.color = Color.WHITE; text.color = BG }
-            STYLE_PICKED -> { fill.color = PANEL_LIGHT; text.color = Color.WHITE }
-            STYLE_CARD -> { fill.color = Color.TRANSPARENT; text.color = Color.WHITE }
-            else -> { fill.color = PANEL; text.color = Color.WHITE }
+        val isNav = b.id.startsWith("nav") || b.id == "gear"
+        val radius = min(16f * dp, r.height() / 2)
+        val custom = b.custom
+
+        if (b.style == STYLE_GHOST) {
+            text.textSize = 12f * dp; text.color = Color.argb(if (pressed) 255 else 190, 255, 255, 255)
+            c.drawText(b.label, r.centerX(), r.centerY() + 4f * dp, text)
+            stroke.color = text.color; stroke.strokeWidth = 1f * dp
+            val tw = text.measureText(b.label)
+            c.drawLine(r.centerX() - tw / 2, r.centerY() + 7f * dp, r.centerX() + tw / 2, r.centerY() + 7f * dp, stroke)
+            text.color = Color.WHITE
+            return
         }
-        val isNav = b.id.startsWith("nav") || b.id == "sound"
-        if (b.style == STYLE_CARD && !isNav) fill.color = if (b.enabled) PANEL else Color.rgb(36, 26, 64)
-        if (fill.color != Color.TRANSPARENT) c.drawRoundRect(r, radius, radius, fill)
+        if (isNav) {
+            if (pressed) { fill.color = Color.argb(30, 255, 255, 255); c.drawRoundRect(r, radius, radius, fill) }
+            custom?.invoke(c, r)
+            text.color = Color.WHITE
+            return
+        }
+
+        // colors: top of the gradient, bottom of the gradient, text
+        val (top, bottom, tc) = when (b.style) {
+            STYLE_PRIMARY -> if (b.enabled) Triple(shade(ACCENT, 0.18f), shade(ACCENT, -0.18f), Color.WHITE)
+                             else Triple(Color.rgb(100, 72, 112), Color.rgb(80, 56, 94), Color.argb(170, 255, 255, 255))
+            STYLE_DANGER -> Triple(Color.rgb(150, 52, 78), Color.rgb(108, 32, 56), Color.rgb(255, 205, 212))
+            STYLE_TAB_ON -> Triple(Color.WHITE, Color.rgb(222, 212, 250), BG)
+            STYLE_PICKED -> Triple(shade(PANEL_LIGHT, 0.12f), PANEL_LIGHT, Color.WHITE)
+            STYLE_CARD -> if (b.enabled) Triple(shade(PANEL, 0.08f), shade(PANEL, -0.06f), Color.WHITE)
+                          else Triple(Color.rgb(40, 30, 70), Color.rgb(34, 25, 60), Color.WHITE)
+            else -> Triple(shade(PANEL_LIGHT, 0.06f), shade(PANEL, -0.02f), Color.WHITE)
+        }
+        val raised = b.style != STYLE_CARD && b.style != STYLE_PICKED
+        val lift = if (raised && !pressed) 4f * dp else 0f
+        if (pressed && raised) r.offset(0f, 3f * dp)
+        if (raised) {   // the button's "side", for a chunky 3D look
+            fill.color = shade(bottom, -0.45f)
+            c.drawRoundRect(r.left, r.top + lift, r.right, r.bottom + lift, radius, radius, fill)
+        } else if (pressed) r.inset(2f * dp, 2f * dp)
+        fill.shader = LinearGradient(0f, r.top, 0f, r.bottom, top, bottom, Shader.TileMode.CLAMP)
+        c.drawRoundRect(r, radius, radius, fill)
+        fill.shader = null
+        // glossy highlight along the top
+        fill.color = Color.argb(if (raised) 40 else 18, 255, 255, 255)
+        c.drawRoundRect(r.left + 3f * dp, r.top + 2f * dp, r.right - 3f * dp, r.top + r.height() * 0.45f, radius * 0.8f, radius * 0.8f, fill)
         if (b.style == STYLE_PICKED) {
             stroke.color = MINT; stroke.strokeWidth = 2.5f * dp
             c.drawRoundRect(r, radius, radius, stroke)
+        } else if (b.style == STYLE_CARD) {
+            stroke.color = Color.argb(30, 255, 255, 255); stroke.strokeWidth = 1f * dp
+            c.drawRoundRect(r, radius, radius, stroke)
         }
-        if (pressed && isNav) {
-            fill.color = Color.argb(30, 255, 255, 255); c.drawRoundRect(r, radius, radius, fill)
-        }
-        val custom = b.custom
+
         if (custom != null) {
-            val tc = text.color
             text.color = Color.WHITE
             custom(c, r)
-            text.color = tc
         } else {
-            text.textSize = if (b.label.length > 12) 14f * dp else 17f * dp
-            while (text.textSize > 9f * dp && text.measureText(b.label) > r.width() - 12f * dp) text.textSize -= 1f * dp
-            if (!b.enabled) text.alpha = 140
+            text.color = tc
+            text.textSize = if (b.label.length > 12) 15f * dp else 18f * dp
+            while (text.textSize > 9f * dp && text.measureText(b.label) > r.width() - 14f * dp) text.textSize -= 1f * dp
             val ty = r.centerY() - (text.descent() + text.ascent()) / 2
+            if (b.style == STYLE_PRIMARY || b.style == STYLE_DANGER) {   // soft text shadow
+                val keep = text.color
+                text.color = Color.argb(70, 0, 0, 0)
+                c.drawText(b.label, r.centerX(), ty + 1.5f * dp, text)
+                text.color = keep
+            }
             c.drawText(b.label, r.centerX(), ty, text)
-            text.alpha = 255
         }
         text.color = Color.WHITE
+        text.alpha = 255
     }
 
     private fun drawNavItem(c: Canvas, r: RectF, tb: Tab) {
         val on = tab == tb
         val cx = r.centerX(); val cy = r.top + 30f * dp
+        if (on) {
+            fill.color = Color.argb(45, 255, 120, 170)
+            c.drawRoundRect(cx - 30f * dp, r.top + 8f * dp, cx + 30f * dp, r.top + 50f * dp, 18f * dp, 18f * dp, fill)
+        }
         val col = if (on) ACCENT else Color.argb(150, 255, 255, 255)
         fill.color = col; stroke.color = col; stroke.strokeWidth = 2.5f * dp
         when (tb) {
@@ -3167,6 +3236,230 @@ class GameView(context: Context) : View(context) {
         val date = java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.getDefault()).format(java.util.Date())
         c.drawText("${lab.discoveredCount()} species discovered · $date", 34f * dp, hgt - 28f * dp, text)
         text.color = Color.WHITE; text.textAlign = Paint.Align.CENTER
+    }
+
+    // ---------- Settings ----------
+
+    private fun settingsButtons(list: ArrayList<Button>, w: Float, h: Float) {
+        val card = settingsCard(w, h)
+        val pad = 18f * dp
+        val rowH = 52f * dp
+        val toggles = listOf(
+            Triple("music", "Music", sound.musicOn),
+            Triple("sfx", "Sound effects", sound.sfxOn),
+            Triple("vibrate", "Vibration", vibrateOn),
+            Triple("notify", "Reminders", prefs.getBoolean("notify", true)),
+        )
+        for ((i, tg) in toggles.withIndex()) {
+            val (key, label, on) = tg
+            val y = card.top + 64f * dp + i * rowH
+            list.add(Button("set_$key", RectF(card.left + pad, y, card.right - pad, y + rowH - 8f * dp), "", STYLE_CARD,
+                custom = { c, rr -> drawToggleRow(c, rr, label, on) }) {
+                when (key) {
+                    "music" -> { sound.musicOn = !on; prefs.edit().putBoolean("music", !on).apply() }
+                    "sfx" -> { sound.sfxOn = !on; prefs.edit().putBoolean("sfx", !on).apply() }
+                    "vibrate" -> { vibrateOn = !on; prefs.edit().putBoolean("vibrate", !on).apply(); if (!on) buzz(40) }
+                    else -> prefs.edit().putBoolean("notify", !on).apply()
+                }
+            })
+        }
+        val by = card.top + 64f * dp + toggles.size * rowH + 6f * dp
+        list.add(Button("set_tut", RectF(card.left + pad, by, card.right - pad, by + 46f * dp), "▶  Replay tutorial") {
+            settingsOpen = false
+            tab = Tab.GARDEN; selected = -1; feeding = false; styling = false; exploring = false; decorating = false
+            setTut(T_WELCOME)
+        })
+        list.add(Button("set_close", RectF(card.left + pad, card.bottom - 62f * dp, card.right - pad, card.bottom - 16f * dp), "DONE", STYLE_PRIMARY) {
+            settingsOpen = false
+        })
+    }
+
+    private fun settingsCard(w: Float, h: Float) = RectF(20f * dp, h * 0.12f, w - 20f * dp, h * 0.12f + 470f * dp)
+
+    private fun drawSettings(c: Canvas, w: Float, h: Float) {
+        fill.color = Color.argb(200, 10, 6, 24)
+        c.drawRect(0f, 0f, w, h, fill)
+        val card = settingsCard(w, h)
+        panel(c, card, 26f * dp)
+        text.textSize = 24f * dp
+        c.drawText("Settings", w / 2, card.top + 42f * dp, text)
+        // credits
+        val by = card.top + 64f * dp + 4 * 52f * dp + 62f * dp
+        text.textSize = 13f * dp; text.color = TEXT_DIM
+        c.drawText("Shroomology ${versionName()}", w / 2, by + 26f * dp, text)
+        text.textSize = 15f * dp; text.color = ACCENT
+        c.drawText("Made by Omnymara", w / 2, by + 50f * dp, text)
+        // a tiny mushroom next to the credit
+        drawShroom(c, 1, w / 2 - text.measureText("Made by Omnymara") / 2 - 18f * dp, by + 54f * dp, 22f * dp, 0, sin(t * 2f), (t % 4f) < 0.12f, false)
+        text.color = Color.WHITE
+        for (b in buttons) drawButton(c, b)
+    }
+
+    private fun versionName(): String = try {
+        "v" + context.packageManager.getPackageInfo(context.packageName, 0).versionName
+    } catch (_: Exception) { "" }
+
+    private fun drawToggleRow(c: Canvas, r: RectF, label: String, on: Boolean) {
+        fill.color = Color.argb(40, 255, 255, 255)
+        c.drawRoundRect(r, 14f * dp, 14f * dp, fill)
+        text.textAlign = Paint.Align.LEFT; text.textSize = 16f * dp
+        c.drawText(label, r.left + 16f * dp, r.centerY() + 6f * dp, text)
+        text.textAlign = Paint.Align.CENTER
+        // pill switch
+        val sw = 52f * dp; val sh = 28f * dp
+        val sx = r.right - sw - 12f * dp; val sy = r.centerY() - sh / 2
+        fill.color = if (on) MINT else Color.rgb(80, 66, 120)
+        c.drawRoundRect(sx, sy, sx + sw, sy + sh, sh / 2, sh / 2, fill)
+        val kx = if (on) sx + sw - sh / 2 else sx + sh / 2
+        fill.color = Color.argb(60, 0, 0, 0); c.drawCircle(kx, r.centerY() + 2f * dp, sh / 2 - 3f * dp, fill)
+        fill.color = Color.WHITE; c.drawCircle(kx, r.centerY(), sh / 2 - 3f * dp, fill)
+    }
+
+    private fun drawGear(c: Canvas, r: RectF) {
+        val cx = r.centerX(); val cy = r.centerY()
+        fill.color = Color.argb(220, 255, 255, 255)
+        for (k in 0 until 8) {
+            c.save(); c.rotate(k * 45f, cx, cy)
+            c.drawRoundRect(cx - 3f * dp, cy - 12f * dp, cx + 3f * dp, cy - 7f * dp, 1.5f * dp, 1.5f * dp, fill)
+            c.restore()
+        }
+        c.drawCircle(cx, cy, 8.5f * dp, fill)
+        fill.color = Color.rgb(40, 28, 72); c.drawCircle(cx, cy, 3.5f * dp, fill)
+    }
+
+    // ---------- First-play tutorial ----------
+
+    private fun setTut(step: Int) {
+        tutStep = step
+        prefs.edit().putInt("tutStep", step).apply()
+        tutFeedBase = lab.feeds
+        if (step == T_DRAG) {
+            // make sure there's something to brew with
+            if (lab.ingredients[Data.WATER] < 1) lab.ingredients[Data.WATER] = 1
+            if (lab.ingredients[Data.SOIL] < 1) lab.ingredients[Data.SOIL] = 1
+            labMode = 0
+        }
+    }
+
+    /** Moves the tutorial forward when the player has done what the current step asks. */
+    private fun updateTutorial() {
+        if (tutStep < 0) return
+        when (tutStep) {
+            T_GO_LAB -> if (tab == Tab.LAB) setTut(T_DRAG)
+            T_DRAG -> if (slotsFull()) setTut(T_BREW)
+            T_BREW -> if (brewing > 0f) setTut(T_STIR)
+            T_STIR -> if (popup != null) setTut(T_REVEAL)
+            T_REVEAL -> if (popup == null && tab == Tab.GARDEN && selected >= 0) setTut(T_FEED)
+            T_FEED -> if (lab.feeds > tutFeedBase) setTut(T_DONE)
+        }
+    }
+
+    private fun tutText(): String = when (tutStep) {
+        T_WELCOME -> "Welcome to Shroomology! 🍄 You're the new mushroom scientist. Let's grow your very first mushroom together."
+        T_GO_LAB -> "Tap the LAB down below."
+        T_DRAG -> "Drag Water into the flask, then drag Soil in too."
+        T_BREW -> "Now tap BREW!"
+        T_STIR -> "STIR! Trace circles around the flask, following the arrow. A better stir gives a stronger mushroom and a chance at a rare shiny!"
+        T_REVEAL -> "Your first mushroom! Tap SEE IT to visit it in the garden."
+        T_FEED -> if (selected >= 0) "Tap FEED, then pick a food. Mushrooms grow when they're fed and happy." else "Tap one of your mushrooms."
+        else -> "You're a real Shroomologist now! Grown mushrooms make spore dust ✦, can crossbreed in the Lab and go exploring. Check the Journal ⭐ for daily gifts and requests."
+    }
+
+    /** Where the spotlight goes for the current step (null = no spotlight). */
+    private fun tutSpot(w: Float, h: Float): RectF? = when (tutStep) {
+        T_GO_LAB -> { val tw = w / Tab.values().size; RectF(tw, navTop, tw * 2, h) }
+        T_DRAG -> RectF(8f * dp, h * 0.45f + 66f * dp, w - 8f * dp, navTop - 2f * dp)
+        T_BREW -> { val bw = min(w * 0.6f, 240f * dp); RectF(w / 2 - bw / 2 - 6f * dp, h * 0.45f - 6f * dp, w / 2 + bw / 2 + 6f * dp, h * 0.45f + 60f * dp) }
+        T_STIR -> RectF(w / 2 - 130f * dp, flaskY() - 130f * dp, w / 2 + 130f * dp, flaskY() + 130f * dp)
+        T_REVEAL -> if (popup != null) { val bw = min(w * 0.36f, 160f * dp); RectF(w / 2, h * 0.66f - 6f * dp, w / 2 + bw + 12f * dp, h * 0.66f + 58f * dp) } else null
+        T_FEED -> if (selected >= 0) { val pad = 16f * dp; val bw = (w - pad * 2 - 16f * dp) / 3; val by = navTop - 62f * dp
+            RectF(pad - 6f * dp, by - 60f * dp, pad + bw + 6f * dp, by - 2f * dp) } else null
+        else -> null
+    }
+
+    private fun tutCardRect(w: Float, h: Float): RectF {
+        text.textSize = 15f * dp
+        val lines = wrap(tutText(), w - 120f * dp)
+        val hasNext = tutStep == T_WELCOME || tutStep == T_DONE
+        val ch = 34f * dp + lines.size * 21f * dp + (if (hasNext) 58f else 40f) * dp
+        val spot = tutSpot(w, h)
+        val atTop = spot != null && spot.centerY() > h * 0.45f || tutStep == T_REVEAL
+        val y = when {
+            tutStep == T_WELCOME || tutStep == T_DONE -> h * 0.3f
+            atTop -> topBar + 10f * dp
+            else -> navTop - ch - 90f * dp
+        }
+        return RectF(16f * dp, y, w - 16f * dp, y + ch)
+    }
+
+    private fun tutorialButtons(list: ArrayList<Button>, w: Float, h: Float) {
+        val r = tutCardRect(w, h)
+        if (tutStep == T_WELCOME || tutStep == T_DONE) {
+            list.add(Button("tut_next", RectF(r.centerX() - 80f * dp, r.bottom - 52f * dp, r.centerX() + 80f * dp, r.bottom - 12f * dp),
+                if (tutStep == T_DONE) "LET'S GO!" else "NEXT", STYLE_PRIMARY) {
+                if (tutStep == T_DONE) setTut(-1)
+                else setTut(if (gardenFull()) T_FEED else T_GO_LAB)
+            })
+        }
+        if (tutStep != T_DONE) {
+            list.add(Button("tut_skip", RectF(r.right - 118f * dp, r.top + 8f * dp, r.right - 10f * dp, r.top + 36f * dp), "Skip tutorial", STYLE_GHOST) {
+                setTut(-1)
+                toast("Tutorial skipped. You can replay it in Settings ⚙")
+            })
+        }
+    }
+
+    private fun drawTutorial(c: Canvas, w: Float, h: Float) {
+        if (tutStep < 0 || settingsOpen || photoMode) return
+        val spot = tutSpot(w, h)
+        val blocking = tutStep == T_WELCOME || tutStep == T_DONE
+        // dim everything except the spotlight
+        path.reset()
+        path.fillType = Path.FillType.EVEN_ODD
+        path.addRect(0f, 0f, w, h, Path.Direction.CW)
+        if (spot != null) path.addRoundRect(spot, 20f * dp, 20f * dp, Path.Direction.CW)
+        fill.color = Color.argb(if (blocking) 170 else if (spot != null) 120 else 0, 8, 4, 20)
+        c.drawPath(path, fill)
+        path.fillType = Path.FillType.WINDING
+        if (spot != null) {
+            val pulse = 3f * dp + 3f * dp * (0.5f + 0.5f * sin(t * 5f))
+            stroke.color = ACCENT; stroke.strokeWidth = 3f * dp
+            c.drawRoundRect(spot.left - pulse, spot.top - pulse, spot.right + pulse, spot.bottom + pulse, 22f * dp, 22f * dp, stroke)
+        }
+        // the card, with Professor Spore
+        val r = tutCardRect(w, h)
+        panel(c, r, 20f * dp, PANEL_LIGHT)
+        drawShroom(c, professor.species, r.left + 30f * dp, r.top + 64f * dp, 38f * dp, 0, sin(t * 2f), (t % 4f) < 0.12f, false, who = professor)
+        text.textAlign = Paint.Align.LEFT
+        text.textSize = 12f * dp; text.color = ACCENT
+        c.drawText("PROFESSOR SPORE", r.left + 60f * dp, r.top + 26f * dp, text)
+        text.textSize = 15f * dp; text.color = Color.WHITE
+        val lines = wrap(tutText(), w - 120f * dp)
+        for ((k, line) in lines.withIndex()) c.drawText(line, r.left + 60f * dp, r.top + 50f * dp + k * 21f * dp, text)
+        text.textAlign = Paint.Align.CENTER
+        for (b in buttons) if (b.id.startsWith("tut_")) drawButton(c, b)
+    }
+
+    // ---------- Shared styling ----------
+
+    /** A rounded panel with a soft drop shadow and a light top edge. */
+    private fun panel(c: Canvas, r: RectF, radius: Float, color: Int = PANEL) {
+        fill.color = Color.argb(90, 0, 0, 0)
+        c.drawRoundRect(r.left, r.top + 4f * dp, r.right, r.bottom + 6f * dp, radius, radius, fill)
+        fill.shader = LinearGradient(0f, r.top, 0f, r.bottom, shade(color, 0.08f), shade(color, -0.08f), Shader.TileMode.CLAMP)
+        c.drawRoundRect(r, radius, radius, fill)
+        fill.shader = null
+        stroke.color = Color.argb(45, 255, 255, 255); stroke.strokeWidth = 1.5f * dp
+        c.drawRoundRect(r.left + 1f * dp, r.top + 1f * dp, r.right - 1f * dp, r.bottom - 1f * dp, radius, radius, stroke)
+    }
+
+    private fun loadFont(): Typeface = try {
+        if (Build.VERSION.SDK_INT >= 26) {
+            Typeface.Builder(context.assets, "fonts/fredoka.ttf").setFontVariationSettings("'wght' 600").build()
+                ?: Typeface.createFromAsset(context.assets, "fonts/fredoka.ttf")
+        } else Typeface.createFromAsset(context.assets, "fonts/fredoka.ttf")
+    } catch (_: Exception) {
+        Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
     }
 
     // ---------- Art: accessories ----------

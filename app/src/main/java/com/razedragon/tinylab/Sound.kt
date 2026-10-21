@@ -23,7 +23,7 @@ import kotlin.random.Random
  */
 class Sound(private val context: Context) {
 
-    enum class Fx { CLICK, POP, BUBBLE, COIN, DISCOVER, EAT, GROW, PET, DENIED, BREW_DONE }
+    enum class Fx { CLICK, POP, BUBBLE, COIN, DISCOVER, EAT, GROW, PET, DENIED, BREW_DONE, STIR }
 
     var sfxOn = true
     var musicOn = true
@@ -46,7 +46,7 @@ class Sound(private val context: Context) {
     init {
         Thread {
             try {
-                val dir = File(context.cacheDir, "tinylab_sound_v1").apply { mkdirs() }
+                val dir = File(context.cacheDir, "tinylab_sound_v2").apply { mkdirs() }
                 for (fx in Fx.values()) {
                     val f = File(dir, fx.name.lowercase() + ".wav")
                     if (!f.exists()) writeWav(f, synth(fx))
@@ -62,7 +62,7 @@ class Sound(private val context: Context) {
                     .build())
                 mp.setDataSource(m.path)
                 mp.isLooping = true
-                mp.setVolume(0.5f, 0.5f)
+                mp.setVolume(0.45f, 0.45f)
                 mp.prepare()
                 if (released) { mp.release(); return@Thread }
                 player = mp
@@ -164,68 +164,143 @@ class Sound(private val context: Context) {
         return out
     }
 
-    private fun synth(fx: Fx): FloatArray = when (fx) {
-        Fx.CLICK -> sweep(0.03f, 1100f, 900f, Wave.SINE, 0.3f)
-        Fx.POP -> sweep(0.08f, 400f, 1200f, Wave.SINE, 0.5f)
-        Fx.BUBBLE -> mix(sweep(0.12f, 300f, 900f, Wave.SINE, 0.35f), sweep(0.1f, 500f, 1400f, Wave.SINE, 0.2f))
-        Fx.COIN -> notes(floatArrayOf(1319f, 1760f), 0.05f, Wave.TRI, 0.4f)
-        Fx.DISCOVER -> notes(floatArrayOf(523f, 659f, 784f, 1047f, 1319f), 0.09f, Wave.TRI, 0.5f)
-        Fx.EAT -> mix(noise(0.12f, 0.35f, 0.5f), sweep(0.1f, 500f, 300f, Wave.SINE, 0.3f))
-        Fx.GROW -> notes(floatArrayOf(392f, 523f, 659f, 784f), 0.07f, Wave.SINE, 0.5f)
-        Fx.PET -> notes(floatArrayOf(880f, 1175f), 0.07f, Wave.SINE, 0.4f)
-        Fx.DENIED -> notes(floatArrayOf(330f, 247f), 0.08f, Wave.TRI, 0.35f)
-        Fx.BREW_DONE -> mix(noise(0.3f, 0.3f, 0.4f), notes(floatArrayOf(659f, 988f), 0.08f, Wave.SINE, 0.4f))
+    /** Feedback echo, for a soft roomy sound. */
+    private fun echo(buf: FloatArray, delaySec: Float, feedback: Float, mix: Float): FloatArray {
+        val d = (delaySec * rate).toInt()
+        val wet = FloatArray(buf.size + d * 4)
+        for (i in buf.indices) wet[i] += buf[i]
+        for (i in d until wet.size) wet[i] += wet[i - d] * feedback
+        val out = FloatArray(wet.size)
+        for (i in out.indices) out[i] = (if (i < buf.size) buf[i] else 0f) * (1f - mix * 0.5f) + (wet[i] - (if (i < buf.size) buf[i] else 0f)) * mix
+        return out
     }
 
-    /** A calm 8-bar loop: soft bass, music-box arpeggio and a light shaker. */
-    private fun music(): FloatArray {
-        val bpm = 84
-        val step = rate * 60 / bpm / 4          // samples per 16th note
-        val steps = 8 * 16
-        val out = FloatArray(step * steps)
-
-        val bass = floatArrayOf(130.81f, 110f, 87.31f, 98f)          // C  Am  F  G
-        val chords = arrayOf(
-            floatArrayOf(523.25f, 659.25f, 783.99f),
-            floatArrayOf(440f, 523.25f, 659.25f),
-            floatArrayOf(349.23f, 440f, 523.25f),
-            floatArrayOf(392f, 493.88f, 587.33f),
-        )
-        val rnd = Random(5)
-
-        fun add(start: Int, len: Int, freq: Float, w: Wave, vol: Float, decay: Float) {
-            for (i in 0 until len) {
-                val idx = start + i
-                if (idx >= out.size) break
-                val t = i / rate.toFloat()
-                val env = min(1f, i / (0.004f * rate)) * exp(-decay * t)
-                out[idx] += osc(freq.toDouble() * i / rate, w) * env * vol
-            }
+    /** A kalimba / music-box pluck: a sine with a quickly fading bell overtone. */
+    private fun pluck(out: FloatArray, start: Int, freq: Float, vol: Float, len: Float = 0.9f) {
+        val n = (len * rate).toInt()
+        for (i in 0 until n) {
+            val idx = start + i
+            if (idx >= out.size) break
+            val tt = i / rate.toFloat()
+            val env = min(1f, i / (0.002f * rate)) * exp(-5f * tt)
+            val bell = exp(-18f * tt)
+            out[idx] += (sin(2 * PI * freq * tt).toFloat() + 0.35f * bell * sin(2 * PI * freq * 2.76 * tt).toFloat()) * env * vol
         }
+    }
 
-        for (s in 0 until steps) {
-            val bar = s / 16
-            val chord = (bar / 2) % 4
-            val pos = s * step
-            val inBar = s % 16
+    private fun plucks(freqs: FloatArray, gap: Float, vol: Float, tail: Float = 0.8f): FloatArray {
+        val out = FloatArray(((freqs.size * gap + tail) * rate).toInt())
+        for ((k, f) in freqs.withIndex()) pluck(out, (k * gap * rate).toInt(), f, vol, tail)
+        return out
+    }
 
-            if (inBar == 0 || inBar == 8) add(pos, step * 8, bass[chord], Wave.TRI, 0.3f, 2.5f)
-            if (inBar % 4 == 2) {
-                var prev = 0f
-                for (i in 0 until (0.03f * rate).toInt()) {
-                    val n = rnd.nextFloat() * 2f - 1f
-                    val hp = n - prev; prev = n
-                    if (pos + i < out.size) out[pos + i] += hp * 0.025f * (1f - i / (0.03f * rate))
+    private fun synth(fx: Fx): FloatArray = when (fx) {
+        Fx.CLICK -> mix(sweep(0.035f, 950f, 620f, Wave.SINE, 0.32f), noise(0.02f, 0.08f, 0.6f))
+        Fx.POP -> echo(sweep(0.075f, 320f, 1150f, Wave.SINE, 0.5f), 0.07f, 0.25f, 0.3f)
+        Fx.BUBBLE -> {
+            val out = FloatArray((0.32f * rate).toInt())
+            for ((k, f) in floatArrayOf(380f, 520f, 450f).withIndex()) {
+                val b = sweep(0.07f, f, f * 2.2f, Wave.SINE, 0.32f)
+                val st = (k * 0.09f * rate).toInt()
+                for (i in b.indices) if (st + i < out.size) out[st + i] += b[i]
+            }
+            out
+        }
+        Fx.COIN -> echo(plucks(floatArrayOf(1318.5f, 1760f), 0.06f, 0.35f, 0.5f), 0.11f, 0.3f, 0.35f)
+        Fx.DISCOVER -> echo(mix(plucks(floatArrayOf(523.3f, 659.3f, 784f, 1046.5f, 1318.5f), 0.085f, 0.4f, 1.2f),
+            sweep(0.6f, 2000f, 4000f, Wave.SINE, 0.05f)), 0.16f, 0.35f, 0.4f)
+        Fx.EAT -> mix(mix(noise(0.07f, 0.3f, 0.35f), sweep(0.12f, 420f, 260f, Wave.SINE, 0.3f)),
+            FloatArray((0.1f * rate).toInt()) + noise(0.07f, 0.25f, 0.35f))
+        Fx.GROW -> echo(plucks(floatArrayOf(392f, 523.3f, 659.3f, 784f, 1046.5f), 0.07f, 0.38f, 1f), 0.14f, 0.3f, 0.35f)
+        Fx.PET -> echo(plucks(floatArrayOf(880f, 1174.7f), 0.09f, 0.32f, 0.7f), 0.12f, 0.25f, 0.3f)
+        Fx.DENIED -> notes(floatArrayOf(330f, 247f), 0.09f, Wave.TRI, 0.28f)
+        Fx.BREW_DONE -> echo(mix(noise(0.35f, 0.25f, 0.25f), plucks(floatArrayOf(659.3f, 987.8f, 1318.5f), 0.07f, 0.35f, 0.8f)), 0.13f, 0.3f, 0.35f)
+        Fx.STIR -> noise(0.16f, 0.22f, 0.12f)
+    }
+
+    /** A calm 16-bar loop: soft pads, bass, a music-box melody and arpeggios, with a little echo. */
+    private fun music(): FloatArray {
+        val bpm = 80
+        val beat = rate * 60 / bpm
+        val bars = 16
+        val out = FloatArray(beat * 4 * bars)
+
+        // C  Am  F  G  C  Em  F  G   (two bars each)
+        val roots = floatArrayOf(130.81f, 110f, 87.31f, 98f, 130.81f, 82.41f, 87.31f, 98f)
+        val chords = arrayOf(
+            floatArrayOf(261.63f, 329.63f, 392f), floatArrayOf(220f, 261.63f, 329.63f),
+            floatArrayOf(174.61f, 220f, 261.63f), floatArrayOf(196f, 246.94f, 293.66f),
+            floatArrayOf(261.63f, 329.63f, 392f), floatArrayOf(164.81f, 196f, 246.94f),
+            floatArrayOf(174.61f, 220f, 261.63f), floatArrayOf(196f, 246.94f, 293.66f),
+        )
+        // pentatonic melody notes (C major pentatonic, upper octave)
+        val penta = floatArrayOf(523.25f, 587.33f, 659.25f, 783.99f, 880f, 1046.5f)
+        val rnd = Random(21)
+
+        for (bar in 0 until bars) {
+            val ci = bar / 2
+            val barStart = bar * beat * 4
+
+            // pad: three soft detuned sines that swell across two bars
+            if (bar % 2 == 0) {
+                val len = beat * 8
+                for (f in chords[ci]) {
+                    for (det in floatArrayOf(0.997f, 1.003f)) {
+                        for (i in 0 until len) {
+                            val idx = barStart + i
+                            if (idx >= out.size) break
+                            val p = i / len.toFloat()
+                            val env = min(1f, p * 5f) * min(1f, (1f - p) * 4f)
+                            out[idx] += sin(2 * PI * f * det * i / rate).toFloat() * env * 0.025f
+                        }
+                    }
                 }
             }
-            if (s % 2 == 0) {
-                val pattern = if (bar % 2 == 0) intArrayOf(0, 1, 2, 1) else intArrayOf(2, 1, 0, 1)
-                val note = chords[chord][pattern[(s / 2) % 4]]
-                add(pos, step * 4, note, Wave.SINE, 0.12f, 5f)
-                add(pos, step * 2, note * 2f, Wave.SINE, 0.03f, 9f)   // sparkle overtone
+            // bass: half notes
+            for (h in 0..1) {
+                val st = barStart + h * beat * 2
+                val n = beat * 2
+                for (i in 0 until n) {
+                    val idx = st + i
+                    if (idx >= out.size) break
+                    val tt = i / rate.toFloat()
+                    out[idx] += osc(roots[ci].toDouble() * i / rate, Wave.TRI) * exp(-1.6f * tt) * min(1f, i / (0.01f * rate)) * 0.2f
+                }
+            }
+            // arpeggio on eighth notes, quiet
+            for (e in 0 until 8) {
+                val f = chords[ci][intArrayOf(0, 1, 2, 1, 0, 2, 1, 2)[e]] * 2f
+                pluck(out, barStart + e * beat / 2, f, 0.045f, 0.6f)
+            }
+            // melody: phrases in bars 2-7 and 10-15, resting elsewhere
+            if (bar % 8 in 1..6) {
+                var pos = 0
+                while (pos < 8) {
+                    val len = if (rnd.nextFloat() < 0.35f) 1 else 2     // eighths
+                    if (rnd.nextFloat() < 0.8f) {
+                        val strong = pos % 4 == 0
+                        val f = if (strong) chords[ci][rnd.nextInt(3)] * 2f else penta[rnd.nextInt(penta.size)]
+                        pluck(out, barStart + pos * beat / 2, f, 0.11f, 1.1f)
+                    }
+                    pos += len
+                }
+            }
+            // soft shaker on the off-beats
+            for (q in 0 until 4) {
+                val st = barStart + q * beat + beat / 2
+                var prev = 0f
+                for (i in 0 until (0.035f * rate).toInt()) {
+                    val n = rnd.nextFloat() * 2f - 1f
+                    val hp = n - prev; prev = n
+                    if (st + i < out.size) out[st + i] += hp * 0.018f * (1f - i / (0.035f * rate))
+                }
             }
         }
-        for (i in out.indices) out[i] = (out[i] * 0.9f).coerceIn(-1f, 1f)
+        // echo that wraps around so the loop stays seamless
+        val d = beat * 3 / 4
+        val wet = out.copyOf()
+        for (pass in 0 until 2) for (i in wet.indices) wet[i] += wet[(i - d + wet.size) % wet.size] * 0.28f
+        for (i in out.indices) out[i] = ((out[i] * 0.75f + (wet[i] - out[i]) * 0.3f) * 1.4f).coerceIn(-1f, 1f)
         return out
     }
 

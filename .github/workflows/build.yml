@@ -26,6 +26,14 @@ jobs:
       - name: Show Android SDK
         run: echo "ANDROID_HOME=$ANDROID_HOME" && ls "$ANDROID_HOME"
 
+      - name: Fetch the Fredoka font (free, SIL Open Font License)
+        run: |
+          mkdir -p app/src/main/assets/fonts
+          curl -fsSL -o app/src/main/assets/fonts/fredoka.ttf "https://raw.githubusercontent.com/google/fonts/main/ofl/fredoka/Fredoka%5Bwdth,wght%5D.ttf" \
+            || curl -fsSL -o app/src/main/assets/fonts/fredoka.ttf "https://raw.githubusercontent.com/google/fonts/main/ofl/fredoka/Fredoka%5Bwght%5D.ttf" \
+            || echo "Font download failed; the game will use the default font"
+          ls -la app/src/main/assets/fonts || true
+
       - name: Build the APK
         run: set -o pipefail; gradle assembleDebug --no-daemon 2>&1 | tee build.log
 
