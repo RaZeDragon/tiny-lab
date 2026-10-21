@@ -1277,6 +1277,7 @@ class GameView(context: Context) : View(context) {
         tickAcc += dt
         if (tickAcc >= 1f) {
             tickAcc = 0f; lab.tick(); markDirty()
+            if (qaMode) qaReport()
             updateWants(System.currentTimeMillis())
             updateAmbience()
             for (a in lab.checkAchievements()) {
@@ -4004,6 +4005,23 @@ class GameView(context: Context) : View(context) {
         if (key == lastAmbient) return
         lastAmbient = key
         sound.setAmbient(inGarden && dark < 0.5f && !rain, inGarden && dark >= 0.5f && !rain, inGarden && rain, inGarden && fire)
+    }
+
+    // ---------- Automated testing support ----------
+
+    /** Set by the test runner: logs where things are on screen so scripted taps can find them. */
+    var qaMode = false
+
+    private fun qaReport() {
+        val sb = StringBuilder("{\"tab\":\"$tab\",\"tut\":$tutStep,\"popup\":${popup != null},\"sel\":$selected,\"dust\":${lab.dust},\"w\":$width,\"h\":$height,\"shrooms\":[")
+        for ((i, s) in lab.home().withIndex()) {
+            val (x, y) = shroomScreen(s)
+            val size = shroomSize(s)
+            if (i > 0) sb.append(",")
+            sb.append("{\"id\":${s.id},\"x\":${x.toInt()},\"y\":${(y - size * 0.45f).toInt()},\"act\":${s.act},\"stage\":${s.stage()}}")
+        }
+        sb.append("]}")
+        android.util.Log.d("SHROOMQA", sb.toString())
     }
 
     // ---------- Bouncy UI helpers ----------

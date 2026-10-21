@@ -12,6 +12,7 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         volumeControlStream = AudioManager.STREAM_MUSIC
         game = GameView(this)
+        game.qaMode = intent.getBooleanExtra("qa", false)
         setContentView(game)
         // Android 13+ asks before an app can show notifications
         if (android.os.Build.VERSION.SDK_INT >= 33 &&
