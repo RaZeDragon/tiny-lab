@@ -1265,20 +1265,22 @@ class GameView(context: Context) : View(context) {
     private fun shopRows(): List<ShopRow> {
         val w = width.toFloat()
         val textX = 58f * dp
-        var y = shopListRect().top - shopScroll
-        val out = ArrayList<ShopRow>()
+        val list = shopListRect()
+        // measure every row first, so the scroll can be kept in range
+        val measured = ArrayList<ShopRow>()
+        var total = 0f
         for ((kind, i) in shopEntries()) {
             val (name, sub) = shopText(kind, i)
             val btnW = if (kind == 0 || kind == 1) 140f * dp else 104f * dp
             text.textSize = 11f * dp
             val lines = wrap(sub, w - 16f * dp - btnW - 10f * dp - textX)
             val h = max(if (kind == 7) 78f * dp else 60f * dp, 32f * dp + lines.size * 14f * dp + 10f * dp)
-            out.add(ShopRow(kind, i, y, h, name, lines))
-            y += h
+            measured.add(ShopRow(kind, i, total, h, name, lines))
+            total += h
         }
-        val list = shopListRect()
-        shopMax = max(0f, (y + shopScroll) - list.bottom)
-        return out
+        shopMax = max(0f, total - list.height())
+        shopScroll = shopScroll.coerceIn(0f, shopMax)
+        return measured.map { ShopRow(it.kind, it.i, list.top + it.top - shopScroll, it.h, it.name, it.lines) }
     }
 
     private fun drawShop(c: Canvas, w: Float, h: Float) {
@@ -1299,7 +1301,7 @@ class GameView(context: Context) : View(context) {
                 1 -> drawFood(c, i, pad + 20f * dp, cy, 14f * dp)
                 2 -> { c.save(); c.clipRect(pad, y + 3f * dp, pad + 44f * dp, y + rowH - 3f * dp)
                     drawDecor(c, i, pad + 22f * dp, cy + 20f * dp, 0.5f); c.restore() }
-                4 -> drawAccessoryIcon(c, i, pad + 20f * dp, cy, 12f * dp)
+                4 -> drawAccessoryIcon(c, i, pad + 20f * dp, cy + 4f * dp, 19f * dp)
                 7 -> drawGiftBox(c, pad + 20f * dp, cy + 14f * dp, 30f * dp, Data.PACKS[i].color)
                 6 -> { c.save(); c.clipRect(pad - 4f * dp, y + 3f * dp, pad + 44f * dp, y + rowH - 3f * dp)
                     drawPet(c, i, pad + 20f * dp, cy + 12f * dp, 28f * dp, t * 6f, 1f, false); c.restore() }
@@ -6111,7 +6113,7 @@ class GameView(context: Context) : View(context) {
         fill.color = PANEL; c.drawRoundRect(r, 16f * dp, 16f * dp, fill)
         drawShroom(c, m, r.left + 30f * dp, r.top + 50f * dp, 30f * dp, 0, sin(t * 2f), false, !solved)
         text.textAlign = Paint.Align.LEFT; text.textSize = 14f * dp
-        c.drawText("🔮 Mystery recipe of the week" + if (solved) "  ✓" else "  · 120 ✦", r.left + 58f * dp, r.top + 24f * dp, text)
+        c.drawText("🔮 Mystery recipe of the week" + if (solved) "  ✓" else "  · 160 ✦", r.left + 58f * dp, r.top + 24f * dp, text)
         text.textSize = 11.5f * dp; text.color = if (solved) MINT else TEXT_DIM
         c.drawText(if (solved) "Solved: ${Data.SPECIES[m].name}! A new one comes next week." else "Hint: ${Data.SPECIES[m].hint}", r.left + 58f * dp, r.top + 44f * dp, text)
         text.color = Color.WHITE; text.textAlign = Paint.Align.CENTER
