@@ -31,6 +31,7 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         game.onAppResume()
+        Feedback.flush(this)
     }
 
     override fun onPause() {

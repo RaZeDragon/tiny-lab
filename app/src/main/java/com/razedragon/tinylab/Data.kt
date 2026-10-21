@@ -6,14 +6,15 @@ import android.graphics.Color
 class Ingredient(val name: String, val color: Int, val cost: Int, val event: Int = 0)
 
 /** Garden decorations you can buy and place. */
-class Decor(val name: String, val cost: Int, val glow: Boolean = false, val event: Int = 0)
+class Decor(val name: String, val cost: Int, val glow: Boolean = false, val event: Int = 0, val special: Int = 0)
 
 /** Garden looks. */
 class Theme(val name: String, val cost: Int, val skyTop: Int, val skyBottom: Int, val groundFar: Int,
             val groundNear: Int, val forest1: Int, val forest2: Int, val event: Int = 0)
 
 /** Wearable: slot 0 = on the cap, 1 = on the face, 2 = around the stem. */
-class Accessory(val name: String, val cost: Int, val slot: Int, val color: Int, val event: Int = 0)
+/** special: 1 = only from the traveling merchant, 2 = only from a pack */
+class Accessory(val name: String, val cost: Int, val slot: Int, val color: Int, val event: Int = 0, val special: Int = 0)
 
 /** A lab upgrade with one or more levels. */
 class Upgrade(val name: String, val desc: String, val costs: IntArray)
@@ -24,7 +25,23 @@ class Zone(val name: String, val hours: Float, val loot: IntArray, val color: In
 class Achievement(val name: String, val desc: String, val reward: Int)
 
 /** A little critter that follows one mushroom around. event > 0 = quest reward from that event. */
-class Pet(val name: String, val cost: Int, val desc: String, val event: Int = 0)
+class Pet(val name: String, val cost: Int, val desc: String, val event: Int = 0, val special: Int = 0)
+
+/** A seed packet: plant it in a Lab plot and harvest an ingredient. */
+class Seed(val name: String, val ingredient: Int, val hours: Float)
+
+/** A Kitchen recipe: ingredients in, a homemade food out. */
+class Recipe(val food: Int, val ingredients: IntArray)
+
+/** A sticker for the sticker book. */
+class Sticker(val icon: String, val name: String, val desc: String, val color: Int)
+
+/** What a pack or redeem code gives. Lists hold indices into Data arrays. */
+class Reward(val dust: Int = 0, val decor: IntArray = intArrayOf(), val acc: IntArray = intArrayOf(), val pets: IntArray = intArrayOf(),
+             val themes: IntArray = intArrayOf(), val foods: IntArray = intArrayOf(), val ingredients: IntArray = intArrayOf(), val seeds: IntArray = intArrayOf())
+
+/** A real-money pack (sold through Google Play once the game is released there). */
+class Pack(val id: String, val name: String, val price: String, val desc: String, val bundle: Reward, val oneTime: Boolean, val color: Int, val eventOnly: Boolean = false)
 
 /** A job a Grown mushroom can do. */
 class Job(val name: String, val icon: String, val desc: String)
@@ -34,7 +51,7 @@ class QuestStep(val text: String, val type: Int, val target: Int, val count: Int
 class Quest(val title: String, val intro: String, val steps: Array<QuestStep>, val pet: Int, val outro: String)
 
 /** Things you feed your mushrooms. */
-class Food(val name: String, val color: Int, val cost: Int, val hunger: Int, val xp: Int, val happy: Int, val event: Int = 0)
+class Food(val name: String, val color: Int, val cost: Int, val hunger: Int, val xp: Int, val happy: Int, val event: Int = 0, val cooked: Boolean = false)
 
 /**
  * A mushroom species.
@@ -121,6 +138,33 @@ object Data {
         Food("Candy Corn", Color.rgb(255, 170, 60), 12, 15, 15, 30, event = 1),
         Food("Hot Cocoa", Color.rgb(140, 90, 60), 15, 30, 20, 25, event = 2),
         Food("Strawberry", Color.rgb(240, 70, 90), 12, 25, 18, 22, event = 3),
+        // Homemade in the Kitchen (never sold)
+        Food("Honey Cake", Color.rgb(255, 200, 90), 0, 45, 40, 30, cooked = true),
+        Food("Ember Stew", Color.rgb(230, 100, 60), 0, 60, 70, 10, cooked = true),
+        Food("Petal Tea", Color.rgb(255, 170, 210), 0, 20, 20, 35, cooked = true),
+        Food("Frost Pop", Color.rgb(160, 220, 255), 0, 25, 25, 40, cooked = true),
+        Food("Moon Pie", Color.rgb(190, 140, 255), 0, 70, 160, 30, cooked = true),
+    )
+
+    const val PETAL_TEA = 10
+
+    val RECIPES = arrayOf(
+        Recipe(8, intArrayOf(HONEY, HONEY, SOIL)),
+        Recipe(9, intArrayOf(EMBER, WATER, SOIL)),
+        Recipe(10, intArrayOf(PETAL, PETAL, WATER)),
+        Recipe(11, intArrayOf(FROST, HONEY)),
+        Recipe(12, intArrayOf(MOONDEW, HONEY, GOLD)),
+    )
+    val FOOD_EFFECTS = mapOf(8 to "Very happy", 9 to "Big growth", 10 to "+friendship", 11 to "Super happy", 12 to "Huge growth")
+
+    // ---------- Seeds ----------
+    val SEEDS = arrayOf(
+        Seed("Petal Seed", PETAL, 2f),
+        Seed("Pepper Seed", EMBER, 2f),
+        Seed("Mint Seed", FROST, 2.5f),
+        Seed("Honeysuckle", HONEY, 3f),
+        Seed("Crystal Bud", CRYSTAL, 5f),
+        Seed("Moonflower", MOONDEW, 6f),
     )
 
     // ---------- Species ----------
@@ -482,19 +526,19 @@ object Data {
         Decor("Flower Patch", 15),
         Decor("Big Rock", 20),
         Decor("Picket Fence", 25),
-        Decor("Pond", 60),
-        Decor("Crystal Cluster", 80, glow = true),
-        Decor("Toadstool House", 150, glow = true),
+        Decor("Pond", 100),
+        Decor("Crystal Cluster", 120, glow = true),
+        Decor("Toadstool House", 250, glow = true),
         Decor("Bench", 40),
         Decor("Signpost", 20),
-        Decor("Fairy Lights", 100, glow = true),
+        Decor("Fairy Lights", 150, glow = true),
         Decor("Tree Stump", 25),
         // Toys
         Decor("Ball", 30),
-        Decor("Swing", 90),
-        Decor("Slide", 120),
-        Decor("Trampoline", 110),
-        Decor("Campfire", 80, glow = true),
+        Decor("Swing", 150),
+        Decor("Slide", 200),
+        Decor("Trampoline", 180),
+        Decor("Campfire", 120, glow = true),
         // Shroomoween
         Decor("Jack-o'-lantern", 50, glow = true, event = 1),
         Decor("Spooky Tree", 70, event = 1),
@@ -506,22 +550,27 @@ object Data {
         // Spring Bloom
         Decor("Flower Arch", 80, event = 3),
         Decor("Egg Basket", 40, event = 3),
+        // More
+        Decor("Cozy Bed", 150),
+        Decor("Star Fountain", 0, glow = true, special = 2),
     )
+    const val COZY_BED = 24
+    const val STAR_FOUNTAIN = 25
 
     val THEMES = arrayOf(
         Theme("Moonlit Meadow", 0, Color.rgb(30, 20, 64), Color.rgb(110, 70, 150), Color.rgb(40, 62, 70),
             Color.rgb(78, 140, 104), Color.rgb(70, 45, 105), Color.rgb(58, 38, 90)),
-        Theme("Sunny Day", 100, Color.rgb(90, 170, 240), Color.rgb(190, 225, 255), Color.rgb(90, 150, 80),
+        Theme("Sunny Day", 1000, Color.rgb(90, 170, 240), Color.rgb(190, 225, 255), Color.rgb(90, 150, 80),
             Color.rgb(130, 200, 100), Color.rgb(110, 160, 120), Color.rgb(90, 140, 100)),
-        Theme("Autumn Woods", 150, Color.rgb(230, 130, 80), Color.rgb(255, 200, 140), Color.rgb(120, 80, 50),
+        Theme("Autumn Woods", 1500, Color.rgb(230, 130, 80), Color.rgb(255, 200, 140), Color.rgb(120, 80, 50),
             Color.rgb(170, 120, 60), Color.rgb(170, 70, 40), Color.rgb(130, 55, 35)),
-        Theme("Crystal Cave", 250, Color.rgb(15, 10, 35), Color.rgb(40, 30, 80), Color.rgb(35, 30, 60),
+        Theme("Crystal Cave", 2000, Color.rgb(15, 10, 35), Color.rgb(40, 30, 80), Color.rgb(35, 30, 60),
             Color.rgb(70, 60, 110), Color.rgb(90, 60, 160), Color.rgb(60, 40, 120)),
-        Theme("Snowy Night", 200, Color.rgb(20, 30, 70), Color.rgb(70, 90, 140), Color.rgb(170, 185, 210),
+        Theme("Snowy Night", 2500, Color.rgb(20, 30, 70), Color.rgb(70, 90, 140), Color.rgb(170, 185, 210),
             Color.rgb(230, 238, 250), Color.rgb(50, 60, 100), Color.rgb(40, 48, 85)),
-        Theme("Spooky Night", 120, Color.rgb(40, 15, 60), Color.rgb(200, 90, 50), Color.rgb(45, 35, 55),
+        Theme("Spooky Night", 3000, Color.rgb(40, 15, 60), Color.rgb(200, 90, 50), Color.rgb(45, 35, 55),
             Color.rgb(80, 70, 70), Color.rgb(35, 20, 45), Color.rgb(25, 15, 35), event = 1),
-        Theme("Cherry Blossom", 150, Color.rgb(255, 180, 210), Color.rgb(255, 230, 235), Color.rgb(110, 160, 110),
+        Theme("Cherry Blossom", 3500, Color.rgb(255, 180, 210), Color.rgb(255, 230, 235), Color.rgb(110, 160, 110),
             Color.rgb(150, 210, 140), Color.rgb(240, 150, 190), Color.rgb(220, 120, 170), event = 3),
     )
 
@@ -552,14 +601,14 @@ object Data {
         Accessory("Flower Crown", 60, 0, Color.rgb(255, 230, 120)),
         Accessory("Top Hat", 80, 0, Color.rgb(40, 35, 50)),
         Accessory("Cowboy Hat", 90, 0, Color.rgb(170, 110, 60)),
-        Accessory("Wizard Hat", 140, 0, Color.rgb(110, 70, 200)),
-        Accessory("Tiny Crown", 250, 0, Color.rgb(255, 205, 60)),
-        Accessory("Halo", 300, 0, Color.rgb(255, 245, 170)),
+        Accessory("Wizard Hat", 200, 0, Color.rgb(110, 70, 200)),
+        Accessory("Tiny Crown", 400, 0, Color.rgb(255, 205, 60)),
+        Accessory("Halo", 500, 0, Color.rgb(255, 245, 170)),
         Accessory("Glasses", 40, 1, Color.rgb(50, 40, 60)),
         Accessory("Sunglasses", 60, 1, Color.rgb(20, 20, 30)),
         Accessory("Scarf", 50, 2, Color.rgb(230, 70, 70)),
         Accessory("Bow Tie", 45, 2, Color.rgb(90, 200, 255)),
-        Accessory("Headphones", 120, 0, Color.rgb(255, 110, 80)),
+        Accessory("Headphones", 180, 0, Color.rgb(255, 110, 80)),
         // Event outfits
         Accessory("Pumpkin Hat", 40, 0, Color.rgb(255, 140, 40), event = 1),
         Accessory("Witch Hat", 70, 0, Color.rgb(45, 30, 60), event = 1),
@@ -569,7 +618,15 @@ object Data {
         Accessory("Antlers", 70, 0, Color.rgb(150, 100, 60), event = 2),
         Accessory("Bunny Ears", 60, 0, Color.rgb(250, 245, 250), event = 3),
         Accessory("Daisy Clip", 40, 0, Color.WHITE, event = 3),
+        // Only from the traveling merchant
+        Accessory("Acorn Cap", 220, 0, Color.rgb(150, 100, 55), special = 1),
+        Accessory("Monocle", 260, 1, Color.rgb(230, 200, 90), special = 1),
+        // Only from packs
+        Accessory("Sprout Crown", 0, 0, Color.rgb(120, 220, 120), special = 2),
     )
+    const val ACORN_CAP = 22
+    const val MONOCLE = 23
+    const val SPROUT_CROWN = 24
 
     // ---------- Seasonal events ----------
     val EVENTS = arrayOf("", "Shroomoween", "Frosty Festival", "Spring Bloom")
@@ -601,25 +658,27 @@ object Data {
     const val UP_BOOTS = 5
     const val UP_CAVE = 6
     val UPGRADES = arrayOf(
-        Upgrade("Bigger Garden", "+2 garden spots per level", intArrayOf(200, 500, 1200)),
-        Upgrade("Big Flask", "Brew with 3 ingredients for Rare species", intArrayOf(300)),
-        Upgrade("Auto-Feeder", "Feeds hungry mushrooms from your food stock", intArrayOf(400)),
-        Upgrade("Dust Collector", "Collects spore dust for you", intArrayOf(350)),
-        Upgrade("Cozy Beds", "Shorter rest after crossbreeding", intArrayOf(150, 400)),
-        Upgrade("Trail Boots", "Expeditions finish 25% faster", intArrayOf(250)),
-        Upgrade("Glow Cave", "A second garden: glowing shrooms grow 50% faster", intArrayOf(800)),
+        Upgrade("Bigger Garden", "+2 garden spots per level", intArrayOf(300, 800, 1600)),
+        Upgrade("Big Flask", "Brew with 3 ingredients for Rare species", intArrayOf(500)),
+        Upgrade("Auto-Feeder", "Feeds hungry mushrooms from your food stock", intArrayOf(600)),
+        Upgrade("Dust Collector", "Collects spore dust for you", intArrayOf(500)),
+        Upgrade("Rest Nook", "Shorter rest after crossbreeding", intArrayOf(200, 500)),
+        Upgrade("Trail Boots", "Expeditions finish 25% faster", intArrayOf(400)),
+        Upgrade("Glow Cave", "A second garden: glowing shrooms grow 50% faster", intArrayOf(2000)),
     )
 
     // ---------- Pets ----------
     val PETS = arrayOf(
-        Pet("Snail", 60, "Slow and loyal, leaves a sparkly trail"),
-        Pet("Ladybug", 80, "Buzzes around its friend's cap"),
-        Pet("Firefly", 120, "Glows softly at night"),
-        Pet("Froggy", 100, "Hops along and says ribbit"),
+        Pet("Snail", 250, "Slow and loyal, leaves a sparkly trail"),
+        Pet("Ladybug", 300, "Buzzes around its friend's cap"),
+        Pet("Firefly", 450, "Glows softly at night"),
+        Pet("Froggy", 350, "Hops along and says ribbit"),
         Pet("Ghostie", 0, "Shroomoween quest reward", event = 1),
         Pet("Penguin", 0, "Frosty Festival quest reward", event = 2),
         Pet("Bunny", 0, "Spring Bloom quest reward", event = 3),
+        Pet("Mini Dragon", 0, "Pack exclusive: puffs tiny sparkles", special = 2),
     )
+    const val MINI_DRAGON = 7
 
     // ---------- Jobs ----------
     const val JOB_STIR = 1
@@ -651,6 +710,79 @@ object Data {
                 QuestStep("Party snacks: feed Strawberries 3 times", 2, 7, 3)),
             6, "What a party! The bunny hopped right into your heart."),
     )
+
+    // ---------- Sticker book ----------
+    val STICKERS = arrayOf(
+        Sticker("🍄", "First Brew", "Brew a mushroom", Color.rgb(255, 150, 190)),
+        Sticker("✨", "Sparkly!", "Get a shiny mushroom", Color.rgb(255, 230, 120)),
+        Sticker("💕", "Besties", "Two mushrooms become best friends", Color.rgb(255, 120, 160)),
+        Sticker("🌙", "Sweet Dreams", "Tuck everyone in at bedtime", Color.rgb(150, 160, 255)),
+        Sticker("🎵", "Garden Band", "Play a jam together", Color.rgb(130, 220, 200)),
+        Sticker("⛰", "Cave Explorer", "Open the Glow Cave", Color.rgb(170, 130, 255)),
+        Sticker("🐌", "Pet Pal", "Bring a pet along", Color.rgb(170, 220, 130)),
+        Sticker("🌱", "Green Thumb", "Harvest a plot", Color.rgb(120, 210, 120)),
+        Sticker("🍰", "Little Chef", "Cook something in the Kitchen", Color.rgb(255, 200, 120)),
+        Sticker("🪲", "Good Customer", "Buy from the traveling merchant", Color.rgb(200, 160, 110)),
+        Sticker("🎃", "Ghost Friend", "Finish the Shroomoween quest", Color.rgb(255, 150, 60)),
+        Sticker("❄", "Snow Helper", "Finish the Frosty Festival quest", Color.rgb(170, 220, 255)),
+        Sticker("🌸", "Party Host", "Finish the Spring Bloom quest", Color.rgb(255, 180, 210)),
+        Sticker("🔮", "Mystery Solver", "Solve a weekly mystery recipe", Color.rgb(190, 140, 255)),
+        Sticker("🧬", "Family Tree", "Crossbreed a baby", Color.rgb(140, 200, 255)),
+        Sticker("🏆", "Champion", "Win a beauty contest", Color.rgb(255, 215, 80)),
+        Sticker("🧭", "Explorer", "Finish an expedition", Color.rgb(120, 200, 160)),
+        Sticker("🌈", "Rare Find", "Discover a rare species", Color.rgb(255, 160, 220)),
+        Sticker("👑", "Legend", "Discover a legendary", Color.rgb(255, 205, 60)),
+        Sticker("📚", "Collector", "Discover 25 species", Color.rgb(150, 210, 255)),
+    )
+
+    // ---------- Redeem codes (edit these to make your own) ----------
+    val CODES = mapOf(
+        "WELCOME" to Reward(dust = 500, acc = intArrayOf(2), decor = intArrayOf(COZY_BED)),
+    )
+
+    // ---------- Real-money packs ----------
+    val PACKS = arrayOf(
+        Pack("spores_small", "Spore Pouch", "$0.99", "1,500 spore dust", Reward(dust = 1500), false, Color.rgb(255, 214, 110)),
+        Pack("spores_medium", "Spore Sack", "$2.99", "5,000 spore dust", Reward(dust = 5000), false, Color.rgb(255, 190, 90)),
+        Pack("spores_large", "Spore Chest", "$4.99", "9,000 spore dust · best value", Reward(dust = 9000), false, Color.rgb(255, 160, 70)),
+        Pack("starter", "Starter Pack", "$1.99", "2,000 ✦, Sunny Day theme, Lantern, Flower Patch, Bench, Bow, Scarf + exclusive Star Fountain & Sprout Crown",
+            Reward(dust = 2000, themes = intArrayOf(1), decor = intArrayOf(0, 1, 7, STAR_FOUNTAIN), acc = intArrayOf(1, 11, SPROUT_CROWN), foods = intArrayOf(2, 2, 2)),
+            true, Color.rgb(140, 220, 160)),
+        Pack("event_boost", "Event Boost", "$2.99", "2,500 ✦, 10 of each event ingredient, the event theme, all event decor + exclusive Mini Dragon pet",
+            Reward(dust = 2500, pets = intArrayOf(MINI_DRAGON)), true, Color.rgb(255, 150, 210), eventOnly = true),
+    )
+
+    // ---------- The traveling merchant ----------
+    /** An offer: kind 0 ingredient bundle, 1 seeds, 2 accessory, 3 mystery egg. */
+    class Offer(val kind: Int, val item: Int, val qty: Int, val price: Int)
+
+    /** Does the beetle merchant visit today? About one day in three, 9am to 9pm. */
+    var forceMerchant: Boolean? = null
+    fun merchantVisits(day: Int, hour: Float): Boolean = forceMerchant ?: (kotlin.random.Random(day * 131 + 17).nextFloat() < 0.35f && hour in 9f..21f)
+
+    fun merchantOffers(day: Int): List<Offer> {
+        val r = kotlin.random.Random(day * 977 + 3)
+        val pool = mutableListOf(
+            Offer(0, GOLD, 3, 140), Offer(0, MOONDEW, 5, 80), Offer(0, CRYSTAL, 5, 60), Offer(0, SPARK, 6, 70),
+            Offer(1, r.nextInt(SEEDS.size), 3, 60), Offer(1, r.nextInt(SEEDS.size), 2, 45),
+            Offer(2, ACORN_CAP, 1, 220), Offer(2, MONOCLE, 1, 260), Offer(3, 0, 1, 400),
+        )
+        pool.shuffle(r)
+        val picks = pool.take(4).toMutableList()
+        if (picks.none { it.kind == 2 || it.kind == 3 }) picks[3] = pool.first { it.kind == 2 || it.kind == 3 }
+        return picks
+    }
+
+    // ---------- Seasons (real calendar) ----------
+    /** Test runs can pretend it's a season (-1 = use the real date). */
+    var forceSeason = -1
+
+    /** 0 spring, 1 summer, 2 autumn, 3 winter */
+    fun season(cal: java.util.Calendar = java.util.Calendar.getInstance()): Int {
+        if (forceSeason >= 0) return forceSeason
+        return when (cal.get(java.util.Calendar.MONTH) + 1) { in 3..5 -> 0; in 6..8 -> 1; in 9..11 -> 2; else -> 3 }
+    }
+    val SEASON_NAMES = arrayOf("Spring", "Summer", "Autumn", "Winter")
 
     // ---------- Weekly mystery recipe ----------
     fun weekKey(cal: java.util.Calendar = java.util.Calendar.getInstance()): Int =

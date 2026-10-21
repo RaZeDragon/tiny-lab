@@ -100,7 +100,8 @@ class ScreensTest {
         g.testTap("dt1"); g.testFrame(0.2f); save(g.testRender(), "dex_rare_bred")
         g.testTap("dt2"); g.testFrame(0.2f); g.testTap("dex58"); g.testFrame(0.2f); save(g.testRender(), "dex_event")
         g.testTap("nav4"); g.testFrame(0.2f); save(g.testRender(), "shop_ingredients")
-        g.testTap("s7"); g.testFrame(0.2f); save(g.testRender(), "shop_event")
+        g.testTap("s8"); g.testFrame(0.2f); save(g.testRender(), "shop_event")
+        g.testTap("s7"); g.testFrame(0.2f); save(g.testRender(), "shop_packs")
         g.testTap("s6"); g.testFrame(0.2f); save(g.testRender(), "shop_pets")
     }
 
@@ -205,6 +206,91 @@ class ScreensTest {
         val back = LabState(RuntimeEnvironment.getApplication())
         assertTrue(back.garden.any { it.name == "Backup" })
         assertTrue(!other.importCode("nope"))
+    }
+
+    private fun reset() { Data.forceSeason = -1; LabState.forceRain = false; Data.forceMerchant = false }
+
+    @Test fun seasonsWeatherDreams() {
+        val names = arrayOf("spring", "summer", "autumn", "winter")
+        for (season in 0..3) {
+            reset(); Data.forceSeason = season
+            val g = ready(0)
+            val lab = g.testLab(); lab.garden.clear()
+            val a = lab.newShroom(1, 200f, false).apply { gx = 0.3f; gz = 0.5f }
+            val b = lab.newShroom(30, 200f, false).apply { gx = 0.6f; gz = 0.6f }
+            lab.garden.add(a); lab.garden.add(b)
+            if (season == 3) g.testSnowman(0.7f, 0.4f)
+            g.testThink(a)
+            g.testFrame(1.5f)
+            save(g.testRender(), "season_${names[season]}")
+        }
+        reset(); LabState.forceRain = true
+        val g = ready(0)
+        val lab = g.testLab(); lab.garden.clear()
+        for (k in 0..2) lab.garden.add(lab.newShroom(listOf(1, 3, 42)[k], 200f, false).apply { gx = 0.2f + k * 0.3f; gz = 0.5f })
+        g.testFrame(1f); save(g.testRender(), "rain_puddles")
+        LabState.forceRain = false
+        g.testBedtime(); g.testFrame(5f); save(g.testRender(), "dreams")
+        reset()
+    }
+
+    @Test fun growCookAndItems() {
+        reset()
+        val g = ready(0)
+        val lab = g.testLab()
+        for (i in lab.seeds.indices) lab.seeds[i] = 2
+        lab.plant(0, 0); lab.plant(1, 3); lab.plant(2, 5); lab.water(1)
+        lab.plotAt[0] -= 3 * 3_600_000L
+        for (i in lab.ingredients.indices) lab.ingredients[i] = 3
+        g.testTap("nav1"); assertTrue(g.testTap("m2")); g.testFrame(0.4f); save(g.testRender(), "lab_grow")
+        assertTrue(g.testTap("plot0"))
+        assertTrue(lab.harvested == 1)
+        assertTrue(g.testTap("plot3")); g.testFrame(0.2f); save(g.testRender(), "lab_grow_seeds")
+        g.testTap("seed_cancel")
+        assertTrue(g.testTap("m3")); g.testFrame(0.2f); save(g.testRender(), "lab_cook")
+        assertTrue(g.testTap("cook0"))
+        assertEquals(1, lab.foods[8])
+        // new items in the garden
+        lab.garden.clear()
+        lab.placed.clear()
+        lab.placed.add(Placed(Data.COZY_BED, 0.25f, 0.4f)); lab.placed.add(Placed(Data.STAR_FOUNTAIN, 0.72f, 0.35f))
+        val s = lab.newShroom(2, 200f, false).apply { gx = 0.5f; gz = 0.7f; wear[0] = Data.ACORN_CAP; wear[1] = Data.MONOCLE; pet = Data.MINI_DRAGON }
+        val s2 = lab.newShroom(6, 200f, false).apply { gx = 0.3f; gz = 0.75f; wear[0] = Data.SPROUT_CROWN }
+        lab.garden.add(s); lab.garden.add(s2)
+        for (f in 8..12) lab.foods[f] = 1
+        g.testTap("nav0"); g.testFrame(1f); save(g.testRender(), "garden_new_items")
+        g.testSelect(s.id); g.testFrame(0.3f); assertTrue(g.testTap("feed")); g.testFrame(0.2f); save(g.testRender(), "panel_feed")
+    }
+
+    @Test fun merchantStickersCodes() {
+        reset(); Data.forceMerchant = true
+        val g = ready(0)
+        val lab = g.testLab()
+        lab.dust = 2000
+        g.testFrame(0.5f); save(g.testRender(), "garden_merchant")
+        assertTrue(g.testTap("merchant")); g.testFrame(0.3f); save(g.testRender(), "merchant")
+        assertTrue(g.testTap("offer0"))
+        assertEquals(1, lab.merchantBuys)
+        g.testTap("m_close")
+        // stickers
+        lab.brewed = 1; lab.usedBedtime = true; lab.jammed = true; lab.crosses = 1
+        assertTrue(lab.checkStickers().size >= 4)
+        g.testTap("nav3"); g.testTap("j2"); g.testFrame(0.3f); save(g.testRender(), "journal_awards")
+        assertTrue(g.testTap("st_open")); g.testFrame(0.3f); save(g.testRender(), "sticker_book")
+        // codes
+        val before = lab.dust
+        assertTrue(lab.redeem(" welcome ").first)
+        assertEquals(before + 500, lab.dust)
+        assertEquals(1, lab.decorOwned[Data.COZY_BED])
+        assertTrue(lab.accOwned[2] >= 1)
+        assertTrue(!lab.redeem("WELCOME").first)
+        assertTrue(!lab.redeem("NOTACODE").first)
+        // packs grant their goodies
+        val starter = Data.PACKS.first { it.id == "starter" }
+        lab.grantPack(starter)
+        assertTrue(lab.packOwned(starter))
+        assertEquals(1, lab.decorOwned[Data.STAR_FOUNTAIN])
+        reset()
     }
 
     // ---------------------------------------------------------------- rules

@@ -69,6 +69,8 @@ class Shroom(
     var spinT = 0f
     var hugAt = 0L
     var lastPoke = 0f
+    var thought = ""
+    var thoughtT = 0f
 
     fun hearts() = (bond / 20f).toInt().coerceIn(0, 5)
     fun airborne() = airH > 0f || airV != 0f
@@ -151,6 +153,20 @@ class LabState(context: Context) {
     var mysteryClaimed = 0      // week whose mystery recipe was claimed
     var forageAcc = 0f
     var noSave = false          // set after restoring a backup so the old lab doesn't overwrite it
+    val seeds = IntArray(Data.SEEDS.size)
+    val plotSeed = IntArray(6) { -1 }
+    val plotAt = LongArray(6)
+    val plotWater = BooleanArray(6)
+    val stickers = BooleanArray(Data.STICKERS.size)
+    val stickerPos = FloatArray(Data.STICKERS.size * 2) { Float.NaN }
+    var usedBedtime = false
+    var jammed = false
+    var harvested = 0
+    var cookedCount = 0
+    var merchantBuys = 0
+    val redeemed = HashSet<String>()
+    val packsBought = HashSet<String>()
+    val merchantBought = HashSet<String>()
 
     // Stats
     var crosses = 0
@@ -195,6 +211,136 @@ class LabState(context: Context) {
     fun capacity() = gardenSize() + (if (caveOpen()) 6 else 0)
     fun petAvailable(p: Int) = petOwned[p] - garden.count { it.pet == p }
     fun jobHolder(job: Int) = garden.firstOrNull { it.job == job && !it.away() }
+
+    // ---------- Seeds & plots ----------
+
+    fun plotDuration(i: Int): Long {
+        val sd = plotSeed[i]; if (sd < 0) return 0L
+        return (Data.SEEDS[sd].hours * 3_600_000f * (if (plotWater[i]) 0.7f else 1f)).toLong()
+    }
+    fun plotProgress(i: Int, now: Long = System.currentTimeMillis()): Float =
+        if (plotSeed[i] < 0) 0f else ((now - plotAt[i]).toFloat() / plotDuration(i)).coerceIn(0f, 1f)
+    fun plant(i: Int, seed: Int): Boolean {
+        if (plotSeed[i] >= 0 || seeds[seed] <= 0) return false
+        seeds[seed]--; plotSeed[i] = seed; plotAt[i] = System.currentTimeMillis(); plotWater[i] = false
+        return true
+    }
+    fun water(i: Int): Boolean { if (plotSeed[i] < 0 || plotWater[i] || plotProgress(i) >= 1f) return false; plotWater[i] = true; return true }
+    /** Harvests a ripe plot. Returns how many of the ingredient it gave (0 if not ripe). */
+    fun harvest(i: Int): Int {
+        if (plotSeed[i] < 0 || plotProgress(i) < 1f) return 0
+        val n = 2 + (if (plotWater[i]) 1 else 0) + Random.nextInt(2)
+        ingredients[Data.SEEDS[plotSeed[i]].ingredient] += n
+        plotSeed[i] = -1; plotWater[i] = false
+        harvested++
+        return n
+    }
+
+    // ---------- Kitchen ----------
+
+    fun canCook(r: Recipe): Boolean = r.ingredients.toList().groupingBy { it }.eachCount().all { (k, n) -> ingredients[k] >= n }
+    fun cook(r: Recipe): Boolean {
+        if (!canCook(r)) return false
+        for (k in r.ingredients) ingredients[k]--
+        foods[r.food]++
+        cookedCount++
+        return true
+    }
+
+    // ---------- Gifts: packs, codes, the merchant ----------
+
+    /** Gives everything in a bundle. Returns a short list of what you got. */
+    fun grant(b: Reward): String {
+        val got = ArrayList<String>()
+        if (b.dust > 0) { dust += b.dust; got.add("${b.dust} ✦") }
+        for (d in b.decor) { decorOwned[d]++; got.add(Data.DECOR[d].name) }
+        for (a in b.acc) { accOwned[a]++; got.add(Data.ACCESSORIES[a].name) }
+        for (p in b.pets) { petOwned[p]++; got.add("${Data.PETS[p].name} pet") }
+        for (t in b.themes) { themesOwned = themesOwned or (1 shl t); got.add("${Data.THEMES[t].name} theme") }
+        for (f in b.foods) foods[f]++
+        if (b.foods.isNotEmpty()) got.add("treats")
+        for (i in b.ingredients) ingredients[i]++
+        for (sd in b.seeds) seeds[sd]++
+        return got.joinToString(", ")
+    }
+
+    /** Applies a real-money pack after Google Play confirms the purchase. */
+    fun grantPack(p: Pack): String {
+        var msg = grant(p.bundle)
+        if (p.id == "event_boost") {
+            val ev = Data.currentEvent()
+            if (ev > 0) {
+                for (i in Data.INGREDIENTS.indices) if (Data.INGREDIENTS[i].event == ev) ingredients[i] += 10
+                for (d in Data.DECOR.indices) if (Data.DECOR[d].event == ev) decorOwned[d]++
+                for (t in Data.THEMES.indices) if (Data.THEMES[t].event == ev) themesOwned = themesOwned or (1 shl t)
+                msg += ", event ingredients, theme & decor"
+            }
+        }
+        if (p.oneTime) packsBought.add(p.id + (if (p.eventOnly) "-" + Data.currentEvent() + "-" + Calendar.getInstance().get(Calendar.YEAR) else ""))
+        addDiary("Opened the ${p.name}! 🎁")
+        return msg
+    }
+    fun packOwned(p: Pack) = p.oneTime && packsBought.contains(p.id + (if (p.eventOnly) "-" + Data.currentEvent() + "-" + Calendar.getInstance().get(Calendar.YEAR) else ""))
+
+    /** Redeems a gift code. Returns (ok, message). */
+    fun redeem(raw: String): Pair<Boolean, String> {
+        val code = raw.trim().uppercase()
+        val b = Data.CODES[code] ?: return Pair(false, "That code doesn't exist")
+        if (!redeemed.add(code)) return Pair(false, "You already used that code")
+        val got = grant(b)
+        addDiary("Redeemed the code $code 🎁")
+        return Pair(true, "Code redeemed! You got: $got")
+    }
+
+    /** Buys merchant offer k today. Returns a message, or null if it can't be bought. */
+    fun buyOffer(day: Int, k: Int): String? {
+        val o = Data.merchantOffers(day).getOrNull(k) ?: return null
+        val key = "$day-$k"
+        if (merchantBought.contains(key) || dust < o.price) return null
+        dust -= o.price
+        merchantBought.add(key); merchantBuys++
+        return when (o.kind) {
+            0 -> { ingredients[o.item] += o.qty; "${o.qty} ${Data.INGREDIENTS[o.item].name}" }
+            1 -> { seeds[o.item] += o.qty; "${o.qty} ${Data.SEEDS[o.item].name}" }
+            2 -> { accOwned[o.item]++; Data.ACCESSORIES[o.item].name }
+            else -> {   // mystery egg: a pet you don't have yet, or a pile of goodies
+                val missing = Data.PETS.indices.filter { Data.PETS[it].event == 0 && Data.PETS[it].special == 0 && petOwned[it] == 0 }
+                if (missing.isNotEmpty()) { val p = missing.random(); petOwned[p]++; "a ${Data.PETS[p].name} hatched from the egg! 🥚" }
+                else { dust += 500; seeds[Random.nextInt(seeds.size)] += 3; "500 ✦ and seeds from the egg! 🥚" }
+            }
+        }
+    }
+
+    // ---------- Stickers ----------
+
+    /** Awards any stickers you've newly earned and returns them. */
+    fun checkStickers(): List<Int> {
+        val now = ArrayList<Int>()
+        fun cond(i: Int): Boolean = when (i) {
+            0 -> brewed > 0
+            1 -> shinyFound.any { it }
+            2 -> friendship.values.any { it >= 8f }
+            3 -> usedBedtime
+            4 -> jammed
+            5 -> caveOpen()
+            6 -> garden.any { it.pet >= 0 }
+            7 -> harvested > 0
+            8 -> cookedCount > 0
+            9 -> merchantBuys > 0
+            10 -> questStep[1] >= 3
+            11 -> questStep[2] >= 3
+            12 -> questStep[3] >= 3
+            13 -> mysteryClaimed > 0
+            14 -> crosses > 0
+            15 -> contestWins > 0
+            16 -> expDone > 0
+            17 -> discovered.indices.any { discovered[it] && Data.SPECIES[it].tier == 4 }
+            18 -> discovered.indices.any { discovered[it] && Data.SPECIES[it].tier == 3 }
+            else -> discoveredCount() >= 25
+        }
+        for (i in stickers.indices) if (!stickers[i] && cond(i)) { stickers[i] = true; now.add(i) }
+        return now
+    }
 
     // ---------- Friends ----------
 
@@ -264,9 +410,9 @@ class LabState(context: Context) {
         if (questStep[ev] >= q.steps.size) {
             val newPet = petOwned[q.pet] == 0
             if (newPet) petOwned[q.pet] = 1
-            dust += 100
+            dust += 300
             addDiary("${q.title}: ${q.outro}")
-            return "🎉 ${q.title} complete! " + (if (newPet) "You got a ${Data.PETS[q.pet].name} pet! " else "") + "+100 ✦"
+            return "🎉 ${q.title} complete! " + (if (newPet) "You got a ${Data.PETS[q.pet].name} pet! " else "") + "+300 ✦"
         }
         return "✓ ${step.text}. Next: ${q.steps[questStep[ev]].text}"
     }
@@ -278,9 +424,9 @@ class LabState(context: Context) {
         val wk = Data.weekKey()
         if (mysteryClaimed == wk || Data.mysteryFor(wk) != species) return 0
         mysteryClaimed = wk
-        dust += 120
+        dust += 200
         addDiary("Solved the weekly mystery recipe: ${Data.SPECIES[species].name}! 🔮")
-        return 120
+        return 200
     }
 
     // ---------- Backup ----------
@@ -328,8 +474,10 @@ class LabState(context: Context) {
         fun rainy(day: Int = dayKey()) = Random(day * 31 + 7).nextFloat() < 0.27f
 
         /** On rainy days the rain stops in the late afternoon and a rainbow comes out. */
-        fun raining() = rainy() && hour() !in 15f..18f
-        fun rainbow() = rainy() && hour() in 15f..18f
+        /** Test runs can force rain on (true) or off (false). */
+        var forceRain: Boolean? = null
+        fun raining() = forceRain ?: (rainy() && hour() !in 15f..18f)
+        fun rainbow() = forceRain == null && rainy() && hour() in 15f..18f
     }
 
     // ---------- New mushrooms & genetics ----------
@@ -388,6 +536,11 @@ class LabState(context: Context) {
             }
         }
         for (s in garden) {
+            if (!s.away() && s.area == 0 && Random.nextFloat() < hours * 0.05f) {
+                val sd = Random.nextInt(Data.SEEDS.size - (if (Random.nextFloat() < 0.8f) 2 else 0))
+                seeds[sd]++
+                events.add("${s.name} found a ${Data.SEEDS[sd].name}! Plant it in Lab → GROW 🌱")
+            }
             if (s.away()) {
                 // Out exploring: they forage for themselves and grow a little
                 s.xp += 8f * hours
@@ -450,6 +603,7 @@ class LabState(context: Context) {
         s.happy = min(100f, s.happy + 20f)
         val parts = haul.indices.filter { haul[it] > 0 }.map { "${haul[it]} ${Data.INGREDIENTS[it].name}" }.toMutableList()
         parts.add("$dustFound ✦")
+        if (Random.nextFloat() < 0.35f) { val sd = Random.nextInt(Data.SEEDS.size); seeds[sd]++; parts.add("a ${Data.SEEDS[sd].name}") }
         if (Random.nextFloat() < 0.12f + (if (s.trait == 4) 0.1f else 0f)) {
             if (Random.nextBoolean()) {
                 val a = Random.nextInt(6); accOwned[a]++; parts.add("a ${Data.ACCESSORIES[a].name}!")
@@ -493,14 +647,14 @@ class LabState(context: Context) {
         val known = discovered.indices.filter { discovered[it] && Data.SPECIES[it].tier == 1 && !Data.offSeason(it) }
         val type = if (known.isEmpty()) listOf(2, 3).random() else Random.nextInt(8)
         return when (type) {
-            0 -> Request(0, 1, known.random(), 0, 60)
-            1 -> Request(1, 1 + Random.nextInt(2), 0, stat(1), 80)
-            2 -> Request(2, 3 + Random.nextInt(4), 0, stat(2), 50)
-            3 -> Request(3, 5 + Random.nextInt(6), 0, stat(3), 40)
-            4 -> Request(4, placed.size + 2 + Random.nextInt(3), 0, 0, 60)
-            5 -> Request(5, 1 + Random.nextInt(2), 0, stat(5), 90)
-            6 -> Request(6, 1, 0, stat(6), 70)
-            else -> Request(7, 1 + Random.nextInt(2), 0, stat(7), 70)
+            0 -> Request(0, 1, known.random(), 0, 90)
+            1 -> Request(1, 1 + Random.nextInt(2), 0, stat(1), 120)
+            2 -> Request(2, 3 + Random.nextInt(4), 0, stat(2), 75)
+            3 -> Request(3, 5 + Random.nextInt(6), 0, stat(3), 60)
+            4 -> Request(4, placed.size + 2 + Random.nextInt(3), 0, 0, 90)
+            5 -> Request(5, 1 + Random.nextInt(2), 0, stat(5), 135)
+            6 -> Request(6, 1, 0, stat(6), 105)
+            else -> Request(7, 1 + Random.nextInt(2), 0, stat(7), 105)
         }
     }
 
@@ -543,18 +697,18 @@ class LabState(context: Context) {
     fun giftReady() = giftDay != lastLoginDay && lastLoginDay != 0
     fun giftIndex() = (streak - 1).coerceAtLeast(0) % 7
 
-    fun giftText(i: Int) = arrayOf("20 ✦", "3 Compost", "40 ✦", "Ingredient pack", "60 ✦", "Moon Jelly + Gold", "100 ✦ + a hat")[i]
+    fun giftText(i: Int) = arrayOf("50 ✦", "3 Compost", "80 ✦", "Ingredient pack", "120 ✦", "Moon Jelly + Gold", "200 ✦ + a hat")[i]
 
     fun claimGift(): String {
         val i = giftIndex()
         when (i) {
-            0 -> dust += 20
+            0 -> dust += 50
             1 -> foods[1] += 3
-            2 -> dust += 40
+            2 -> dust += 80
             3 -> repeat(6) { ingredients[Random.nextInt(8)]++ }
-            4 -> dust += 60
+            4 -> dust += 120
             5 -> { foods[4]++; ingredients[Data.GOLD]++ }
-            else -> { dust += 100; accOwned[Random.nextInt(9)]++ }
+            else -> { dust += 200; accOwned[Random.nextInt(9)]++ }
         }
         giftDay = lastLoginDay
         // during an event, every gift comes with a couple of its special ingredients
@@ -595,7 +749,7 @@ class LabState(context: Context) {
         list.sortByDescending { it.score }
         lastContest = list
         val place = list.indexOfFirst { it.mine } + 1
-        dust += intArrayOf(120, 60, 30, 10)[place - 1]
+        dust += intArrayOf(200, 100, 50, 20)[place - 1]
         s.happy = min(100f, s.happy + 10f)
         if (place == 1) contestWins++
         addDiary("${s.name} came ${arrayOf("1st 🥇", "2nd 🥈", "3rd 🥉", "4th")[place - 1]} in the beauty contest.")
@@ -695,6 +849,11 @@ class LabState(context: Context) {
         o.put("tucked", tuckedUntil)
         o.put("qy", ints(questYear)); o.put("qs", ints(questStep)); o.put("qc", questCount)
         o.put("myst", mysteryClaimed); o.put("forage", forageAcc.toDouble())
+        o.put("seeds", ints(seeds)); o.put("plotSeed", ints(plotSeed)); o.put("plotAt", JSONArray(plotAt.toList())); o.put("plotWater", bools(plotWater))
+        o.put("stickers", bools(stickers)); o.put("stickerPos", JSONArray(stickerPos.map { if (it.isNaN()) -1.0 else it.toDouble() }))
+        o.put("bedtimeUsed", usedBedtime); o.put("jammed", jammed); o.put("harvested", harvested); o.put("cooked", cookedCount)
+        o.put("merchantBuys", merchantBuys)
+        o.put("redeemed", JSONArray(redeemed.toList())); o.put("packs", JSONArray(packsBought.toList())); o.put("merchantBought", JSONArray(merchantBought.toList()))
         if (noSave) return
         prefs.edit().putString("save", o.toString()).apply()
     }
@@ -751,6 +910,16 @@ class LabState(context: Context) {
             tuckedUntil = o.optLong("tucked")
             readInts(o, "qy", questYear); readInts(o, "qs", questStep); questCount = o.optInt("qc")
             mysteryClaimed = o.optInt("myst"); forageAcc = o.optDouble("forage", 0.0).toFloat()
+            readInts(o, "seeds", seeds); readInts(o, "plotSeed", plotSeed); readBools(o, "plotWater", plotWater)
+            o.optJSONArray("plotAt")?.let { a -> for (i in plotAt.indices) plotAt[i] = a.optLong(i, 0L) }
+            for (i in plotSeed.indices) if (plotSeed[i] >= Data.SEEDS.size) plotSeed[i] = -1
+            readBools(o, "stickers", stickers)
+            o.optJSONArray("stickerPos")?.let { a -> for (i in stickerPos.indices) { val v = a.optDouble(i, -1.0); stickerPos[i] = if (v < 0) Float.NaN else v.toFloat() } }
+            usedBedtime = o.optBoolean("bedtimeUsed"); jammed = o.optBoolean("jammed"); harvested = o.optInt("harvested"); cookedCount = o.optInt("cooked")
+            merchantBuys = o.optInt("merchantBuys")
+            o.optJSONArray("redeemed")?.let { a -> for (i in 0 until a.length()) redeemed.add(a.optString(i)) }
+            o.optJSONArray("packs")?.let { a -> for (i in 0 until a.length()) packsBought.add(a.optString(i)) }
+            o.optJSONArray("merchantBought")?.let { a -> for (i in 0 until a.length()) merchantBought.add(a.optString(i)) }
             o.optJSONArray("garden")?.let { a ->
                 for (i in 0 until a.length()) {
                     val s = a.getJSONObject(i)
