@@ -227,6 +227,7 @@ class LabState(context: Context) {
     fun tick(now: Long = System.currentTimeMillis()) {
         val hours = (min(now - lastTick, 72L * 3600_000L)).coerceAtLeast(0L) / 3600_000f
         lastTick = now
+        expireEventIngredients()
         if (hours <= 0f) return
         val rainMul = if (rainy()) 1.5f else 1f
         val charm = max(0.4f, 1f - 0.06f * placed.size)
@@ -313,8 +314,22 @@ class LabState(context: Context) {
         1 -> discoveredCount(); 2 -> brewed; 3 -> feeds; 5 -> expDone; 6 -> perfect; 7 -> crosses; else -> 0
     }
 
+    /** Event ingredients fade away once their event is over. */
+    fun expireEventIngredients() {
+        val ev = Data.currentEvent()
+        val gone = ArrayList<String>()
+        for (i in ingredients.indices) {
+            val e = Data.INGREDIENTS[i].event
+            if (e != 0 && e != ev && ingredients[i] > 0) { ingredients[i] = 0; gone.add(Data.INGREDIENTS[i].name) }
+        }
+        if (gone.isNotEmpty()) {
+            val msg = "${gone.joinToString(" and ")} faded away until next year"
+            events.add(msg); addDiary(msg)
+        }
+    }
+
     fun newRequest(): Request {
-        val known = discovered.indices.filter { discovered[it] && Data.SPECIES[it].tier == 1 }
+        val known = discovered.indices.filter { discovered[it] && Data.SPECIES[it].tier == 1 && !Data.offSeason(it) }
         val type = if (known.isEmpty()) listOf(2, 3).random() else Random.nextInt(8)
         return when (type) {
             0 -> Request(0, 1, known.random(), 0, 60)
@@ -381,6 +396,13 @@ class LabState(context: Context) {
             else -> { dust += 100; accOwned[Random.nextInt(9)]++ }
         }
         giftDay = lastLoginDay
+        // during an event, every gift comes with a couple of its special ingredients
+        val ev = Data.currentEvent()
+        if (ev > 0) {
+            val evIngs = Data.INGREDIENTS.indices.filter { Data.INGREDIENTS[it].event == ev }
+            for (k in evIngs) ingredients[k] += 2
+            return giftText(i) + " + 2 each of " + evIngs.joinToString(" & ") { Data.INGREDIENTS[it].name }
+        }
         return giftText(i)
     }
 
@@ -426,7 +448,7 @@ class LabState(context: Context) {
         0 -> brewed >= 1
         1 -> discoveredCount() >= 10
         2 -> discoveredCount() >= 25
-        3 -> discoveredCount() >= Data.SPECIES.size
+        3 -> Data.BASE_SPECIES.all { discovered[it] }
         4 -> discovered.indices.any { discovered[it] && Data.SPECIES[it].tier == 2 }
         5 -> discovered.indices.any { discovered[it] && Data.SPECIES[it].tier == 3 }
         6 -> discovered.indices.any { discovered[it] && Data.SPECIES[it].tier == 4 }

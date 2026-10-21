@@ -3,7 +3,7 @@ package com.razedragon.tinylab
 import android.graphics.Color
 
 /** Things you brew with. `icon` picks how the little picture is drawn. */
-class Ingredient(val name: String, val color: Int, val cost: Int)
+class Ingredient(val name: String, val color: Int, val cost: Int, val event: Int = 0)
 
 /** Garden decorations you can buy and place. */
 class Decor(val name: String, val cost: Int, val glow: Boolean = false, val event: Int = 0)
@@ -41,6 +41,8 @@ class Species(
     val hint: String,
     val glow: Boolean = false,
     val crown: Boolean = false,
+    val event: Int = 0,      // only obtainable during this seasonal event (0 = always)
+    val deco: Int = 0,       // extra decoration drawn on the cap (see Data.D_*)
 )
 
 object Data {
@@ -54,6 +56,16 @@ object Data {
     const val CRYSTAL = 6
     const val MOONDEW = 7
     const val GOLD = 8
+    const val PETAL = 9
+    const val HONEY = 10
+    const val SPARK = 11
+    // Event-only ingredients: sold during their event and fade away when it ends
+    const val PUMPKIN = 12
+    const val ECTO = 13
+    const val PEPPERMINT = 14
+    const val GINGER = 15
+    const val CLOVER = 16
+    const val RAINBOW = 17
 
     val INGREDIENTS = arrayOf(
         Ingredient("Water", Color.rgb(90, 170, 255), 3),
@@ -65,7 +77,28 @@ object Data {
         Ingredient("Crystal", Color.rgb(190, 120, 255), 15),
         Ingredient("Moondew", Color.rgb(110, 255, 220), 20),
         Ingredient("Gold", Color.rgb(255, 205, 60), 60),
+        Ingredient("Petal", Color.rgb(255, 140, 190), 10),
+        Ingredient("Honey", Color.rgb(255, 175, 40), 12),
+        Ingredient("Spark", Color.rgb(70, 215, 255), 14),
+        Ingredient("Pumpkin Seed", Color.rgb(255, 135, 35), 10, event = 1),
+        Ingredient("Ecto Goo", Color.rgb(140, 245, 140), 14, event = 1),
+        Ingredient("Peppermint", Color.rgb(235, 60, 75), 10, event = 2),
+        Ingredient("Gingerbread", Color.rgb(185, 115, 55), 12, event = 2),
+        Ingredient("Clover", Color.rgb(70, 190, 85), 10, event = 3),
+        Ingredient("Rainbow Drop", Color.rgb(150, 190, 255), 14, event = 3),
     )
+
+    /** Ingredients you can use right now (event ones only while their event is on). */
+    fun ingredientsNow(): List<Int> {
+        val ev = currentEvent()
+        return INGREDIENTS.indices.filter { INGREDIENTS[it].event == 0 || INGREDIENTS[it].event == ev }
+    }
+
+    // Cap decorations for special species
+    const val D_PUMPKIN = 1; const val D_GHOST = 2; const val D_JACK = 3; const val D_WITCH = 4
+    const val D_BAT = 5; const val D_CANDY = 6; const val D_ICING = 7; const val D_SNOW = 8
+    const val D_HOLLY = 9; const val D_SPROUT = 10; const val D_RAINBOW = 11; const val D_FLOWER = 12
+    const val D_BEE = 13; const val D_CLOVER4 = 14; const val D_BOLT = 15; const val D_HEART = 16; const val D_RIBS = 17
 
     // ---------- Food ----------
     val FOODS = arrayOf(
@@ -170,7 +203,94 @@ object Data {
             "Fire, frost and crystal together"),
         /* 39 */ Species("Midnight Cap", Color.rgb(25, 30, 80), Color.rgb(200, 205, 240), Color.rgb(255, 250, 200), 0, 4, 4,
             "Two moondews and a crystal", glow = true),
+
+        // New ingredients: petal, honey and spark
+        /* 40 */ Species("Petal Cap", Color.rgb(255, 150, 200), Color.rgb(255, 240, 245), Color.WHITE, 0, 1, 2,
+            "Something flowery + something wet or earthy", deco = D_FLOWER),
+        /* 41 */ Species("Rose Morel", Color.rgb(230, 60, 110), Color.rgb(255, 230, 235), Color.rgb(180, 30, 80), 2, 1, 2,
+            "Something flowery + something hot or shiny"),
+        /* 42 */ Species("Honey Cap", Color.rgb(255, 185, 50), Color.rgb(255, 240, 210), Color.rgb(255, 230, 140), 0, 1, 2,
+            "Something sweet + something wet or earthy"),
+        /* 43 */ Species("Amber Puff", Color.rgb(230, 140, 40), Color.rgb(255, 225, 180), Color.rgb(255, 210, 120), 1, 1, 3,
+            "Something sweet + something hot, metal or shiny", glow = true),
+        /* 44 */ Species("Bee Funnel", Color.rgb(255, 210, 60), Color.rgb(255, 245, 220), Color.rgb(255, 235, 150), 3, 1, 2,
+            "Something sweet + something flowery", deco = D_BEE),
+        /* 45 */ Species("Spark Cap", Color.rgb(80, 220, 255), Color.rgb(230, 250, 255), Color.rgb(255, 255, 160), 0, 1, 4,
+            "Something electric + something wet or earthy", glow = true, deco = D_BOLT),
+        /* 46 */ Species("Zap Horn", Color.rgb(120, 150, 255), Color.rgb(225, 230, 255), Color.rgb(255, 240, 120), 4, 1, 3,
+            "Something electric + something metal or precious", glow = true),
+        /* 47 */ Species("Thunder Puff", Color.rgb(110, 120, 170), Color.rgb(225, 225, 240), Color.rgb(255, 240, 120), 1, 1, 0,
+            "Something electric + something cold"),
+        /* 48 */ Species("Lilac Puff", Color.rgb(190, 150, 255), Color.rgb(245, 235, 255), Color.WHITE, 1, 1, 4,
+            "Something flowery + something cold or from the moon"),
+        /* 49 */ Species("Sundae Puff", Color.rgb(255, 235, 215), Color.rgb(240, 190, 150), Color.rgb(255, 120, 160), 1, 1, 2,
+            "Something sweet + something cold or from the moon"),
+        /* 50 */ Species("Neon Morel", Color.rgb(60, 255, 180), Color.rgb(220, 255, 240), Color.rgb(255, 80, 220), 2, 1, 4,
+            "Something electric + something shiny or from the moon", glow = true),
+        /* 51 */ Species("Ash Cap", Color.rgb(90, 85, 95), Color.rgb(210, 200, 200), Color.rgb(255, 120, 60), 0, 1, 3,
+            "Something electric + something hot or smelly"),
+        /* 52 */ Species("Fairy Ring Cap", Color.rgb(255, 170, 230), Color.rgb(255, 245, 250), Color.rgb(200, 255, 240), 0, 4, 4,
+            "Petals, honey and moondew together", glow = true, deco = D_FLOWER),
+        /* 53 */ Species("Tesla Horn", Color.rgb(70, 90, 220), Color.rgb(210, 220, 255), Color.rgb(120, 255, 255), 4, 4, 3,
+            "Two sparks and some iron", glow = true, deco = D_BOLT),
+        /* 54 */ Species("Sweetheart Shroom", Color.rgb(255, 100, 150), Color.rgb(255, 235, 240), Color.rgb(255, 200, 220), 0, 2, 2,
+            "Crossbreed a petal cap with a honey cap", deco = D_HEART),
+        /* 55 */ Species("Lightning Morel", Color.rgb(255, 235, 90), Color.rgb(240, 240, 255), Color.rgb(80, 200, 255), 2, 2, 3,
+            "Crossbreed a spark cap with snow", glow = true),
+        /* 56 */ Species("Garden Sprite", Color.rgb(130, 220, 120), Color.rgb(240, 255, 230), Color.rgb(255, 220, 90), 3, 2, 1,
+            "Crossbreed a bee funnel with moss", glow = true, deco = D_FLOWER),
+        /* 57 */ Species("Eternal Bloom", Color.rgb(255, 130, 200), Color.rgb(255, 245, 230), Color.rgb(255, 240, 150), 0, 3, 4,
+            "Crossbreed a sweetheart with a garden sprite", glow = true, crown = true, deco = D_FLOWER),
+
+        // Shroomoween only
+        /* 58 */ Species("Pumpkin Cap", Color.rgb(255, 140, 30), Color.rgb(240, 230, 200), 0, 0, 1, 5,
+            "Pumpkin Seed + almost anything", event = 1, deco = D_PUMPKIN),
+        /* 59 */ Species("Ghost Puff", Color.rgb(245, 245, 255), Color.rgb(230, 230, 245), 0, 1, 1, 5,
+            "Ecto Goo + almost anything", glow = true, event = 1, deco = D_GHOST),
+        /* 60 */ Species("Jack Cap", Color.rgb(255, 120, 20), Color.rgb(110, 85, 70), 0, 0, 1, 5,
+            "Pumpkin Seed + something hot or electric", glow = true, event = 1, deco = D_JACK),
+        /* 61 */ Species("Witch Morel", Color.rgb(120, 60, 170), Color.rgb(200, 230, 160), Color.rgb(70, 30, 110), 2, 1, 5,
+            "Ecto Goo + something shiny or from the moon", event = 1, deco = D_WITCH),
+        /* 62 */ Species("Bat Cap", Color.rgb(80, 50, 105), Color.rgb(215, 195, 225), Color.rgb(255, 150, 60), 0, 1, 5,
+            "Pumpkin Seed + Ecto Goo", event = 1, deco = D_BAT),
+        /* 63 */ Species("Pumpkin King", Color.rgb(255, 150, 40), Color.rgb(130, 95, 150), 0, 0, 2, 5,
+            "Crossbreed a pumpkin cap with a ghost puff", glow = true, crown = true, event = 1, deco = D_RIBS),
+
+        // Frosty Festival only
+        /* 64 */ Species("Candy Cane Horn", Color.rgb(250, 250, 250), Color.rgb(255, 240, 240), 0, 4, 1, 6,
+            "Peppermint + almost anything", event = 2, deco = D_CANDY),
+        /* 65 */ Species("Gingerbread Cap", Color.rgb(190, 115, 55), Color.rgb(230, 180, 120), Color.rgb(240, 60, 80), 0, 1, 6,
+            "Gingerbread + almost anything", event = 2, deco = D_ICING),
+        /* 66 */ Species("Cocoa Funnel", Color.rgb(130, 80, 50), Color.rgb(240, 225, 210), Color.rgb(255, 250, 245), 3, 1, 6,
+            "Gingerbread + something hot or sweet", event = 2),
+        /* 67 */ Species("Snowglobe Puff", Color.rgb(170, 220, 255), Color.rgb(230, 240, 255), Color.WHITE, 1, 1, 6,
+            "Peppermint + something cold, shiny or from the moon", glow = true, event = 2, deco = D_SNOW),
+        /* 68 */ Species("Sugarplum Puff", Color.rgb(170, 90, 200), Color.rgb(245, 230, 250), Color.WHITE, 1, 1, 6,
+            "Peppermint + Gingerbread", event = 2, deco = D_HOLLY),
+        /* 69 */ Species("Frost Monarch", Color.rgb(200, 235, 255), Color.rgb(240, 245, 255), Color.rgb(240, 60, 80), 0, 2, 6,
+            "Crossbreed a candy cane horn with a gingerbread cap", glow = true, crown = true, event = 2, deco = D_SNOW),
+
+        // Spring Bloom only
+        /* 70 */ Species("Clover Cap", Color.rgb(90, 200, 100), Color.rgb(240, 250, 230), Color.rgb(200, 255, 190), 0, 1, 7,
+            "Clover + almost anything", event = 3, deco = D_SPROUT),
+        /* 71 */ Species("Rainbow Funnel", Color.rgb(255, 120, 160), Color.rgb(255, 250, 255), Color.rgb(140, 220, 255), 3, 1, 7,
+            "Rainbow Drop + almost anything", glow = true, event = 3, deco = D_RAINBOW),
+        /* 72 */ Species("Blossom Cap", Color.rgb(255, 190, 215), Color.rgb(255, 245, 250), Color.WHITE, 0, 1, 7,
+            "Clover or Rainbow Drop + something flowery", event = 3, deco = D_FLOWER),
+        /* 73 */ Species("Bumble Cap", Color.rgb(255, 200, 40), Color.rgb(255, 245, 220), 0, 1, 1, 7,
+            "Clover or Rainbow Drop + something sweet", event = 3, deco = D_BEE),
+        /* 74 */ Species("Lucky Shroom", Color.rgb(60, 190, 90), Color.rgb(255, 245, 200), Color.rgb(255, 215, 80), 0, 1, 7,
+            "Clover + Rainbow Drop", glow = true, event = 3, deco = D_CLOVER4),
+        /* 75 */ Species("Bloom Queen", Color.rgb(255, 150, 200), Color.rgb(255, 250, 240), Color.rgb(255, 240, 150), 0, 2, 7,
+            "Crossbreed a blossom cap with a lucky shroom", glow = true, crown = true, event = 3, deco = D_FLOWER),
     )
+
+    /** Event species start/end dates, for the Shroomdex. */
+    val EVENT_STARTS = arrayOf("", "Oct 10", "Dec 1", "Mar 20")
+    val EVENT_COLORS = intArrayOf(0, Color.rgb(255, 150, 50), Color.rgb(150, 210, 255), Color.rgb(255, 160, 210))
+
+    /** Species you can find any time of year. */
+    val BASE_SPECIES: List<Int> = SPECIES.indices.filter { SPECIES[it].event == 0 }
 
     val TIER_NAMES = arrayOf("", "Common", "Hybrid", "Legendary", "Rare")
     private val TIER_RANK = intArrayOf(0, 0, 2, 3, 1)
@@ -228,7 +348,38 @@ object Data {
         key(IRON, GOLD) to 12,
         key(SULFUR, GOLD) to 12,
         key(GOLD, GOLD) to 12,
+
+        // Petal
+        key(PETAL, WATER) to 40, key(PETAL, SOIL) to 40, key(PETAL, IRON) to 40, key(PETAL, PETAL) to 40,
+        key(PETAL, EMBER) to 41, key(PETAL, CRYSTAL) to 41,
+        key(PETAL, FROST) to 48, key(PETAL, MOONDEW) to 48, key(PETAL, GOLD) to 48,
+        key(PETAL, SULFUR) to 7, key(PETAL, HONEY) to 44, key(PETAL, SPARK) to 50,
+        // Honey
+        key(HONEY, WATER) to 42, key(HONEY, SOIL) to 42, key(HONEY, SULFUR) to 42, key(HONEY, HONEY) to 42,
+        key(HONEY, EMBER) to 43, key(HONEY, IRON) to 43, key(HONEY, CRYSTAL) to 43, key(HONEY, GOLD) to 43,
+        key(HONEY, FROST) to 49, key(HONEY, MOONDEW) to 49, key(HONEY, SPARK) to 45,
+        // Spark
+        key(SPARK, WATER) to 45, key(SPARK, SOIL) to 45,
+        key(SPARK, IRON) to 46, key(SPARK, GOLD) to 46, key(SPARK, SPARK) to 46,
+        key(SPARK, FROST) to 47,
+        key(SPARK, CRYSTAL) to 50, key(SPARK, MOONDEW) to 50,
+        key(SPARK, EMBER) to 51, key(SPARK, SULFUR) to 51,
+
+        // Shroomoween
+        key(PUMPKIN, EMBER) to 60, key(PUMPKIN, SPARK) to 60, key(PUMPKIN, ECTO) to 62,
+        key(ECTO, CRYSTAL) to 61, key(ECTO, MOONDEW) to 61,
+        // Frosty Festival
+        key(GINGER, EMBER) to 66, key(GINGER, HONEY) to 66,
+        key(PEPPERMINT, FROST) to 67, key(PEPPERMINT, CRYSTAL) to 67, key(PEPPERMINT, MOONDEW) to 67,
+        key(PEPPERMINT, GINGER) to 68,
+        // Spring Bloom
+        key(CLOVER, PETAL) to 72, key(RAINBOW, PETAL) to 72,
+        key(CLOVER, HONEY) to 73, key(RAINBOW, HONEY) to 73,
+        key(CLOVER, RAINBOW) to 74,
     )
+
+    /** What an event ingredient grows with anything that isn't a special recipe. */
+    private val EVENT_DEFAULT = mapOf(PUMPKIN to 58, ECTO to 59, PEPPERMINT to 64, GINGER to 65, CLOVER to 70, RAINBOW to 71)
 
     private val CROSSES = hashMapOf(
         key(2, 3) to 13,
@@ -240,10 +391,17 @@ object Data {
         key(5, 11) to 19,
         key(14, 17) to 20,
         key(15, 16) to 21,
+        key(40, 42) to 54,
+        key(45, 11) to 55,
+        key(44, 28) to 56,
+        key(54, 56) to 57,
+        key(58, 59) to 63,
+        key(64, 65) to 69,
+        key(72, 74) to 75,
     )
 
     /** Which species two ingredients make. Every pair has a recipe. */
-    fun brew(a: Int, b: Int): Int = BREWS[key(a, b)] ?: 0
+    fun brew(a: Int, b: Int): Int = BREWS[key(a, b)] ?: EVENT_DEFAULT[a] ?: EVENT_DEFAULT[b] ?: 0
 
     private fun key3(a: Int, b: Int, c: Int) = listOf(a, b, c).sorted().joinToString(",")
 
@@ -254,20 +412,45 @@ object Data {
         key3(EMBER, EMBER, SULFUR) to 37,
         key3(EMBER, FROST, CRYSTAL) to 38,
         key3(MOONDEW, MOONDEW, CRYSTAL) to 39,
+        key3(PETAL, HONEY, MOONDEW) to 52,
+        key3(SPARK, SPARK, IRON) to 53,
     )
 
-    /** Three ingredients: a rare species if it's a recipe, otherwise what two of them make. */
-    fun brew3(a: Int, b: Int, c: Int): Int {
-        BREWS3[key3(a, b, c)]?.let { return it }
-        val pair = listOf(Pair(a, b), Pair(a, c), Pair(b, c)).random()
-        return brew(pair.first, pair.second)
+    /** The rare species these three ingredients can make, or -1 if they aren't a rare recipe. */
+    fun rareRecipe3(a: Int, b: Int, c: Int): Int = BREWS3[key3(a, b, c)] ?: -1
+
+    /**
+     * What three ingredients grow when they aren't a rare recipe (or the rare brew fizzles):
+     * the species most of the ingredient pairs agree on, so it always fits what went in.
+     */
+    fun brew3Common(a: Int, b: Int, c: Int): Int {
+        val results = listOf(brew(a, b), brew(a, c), brew(b, c))
+        val best = results.groupingBy { it }.eachCount()
+        val top = best.maxOf { it.value }
+        return results.first { best[it] == top && (it != 0 || results.all { r -> r == 0 }) }
+    }
+
+    fun brew3(a: Int, b: Int, c: Int): Int = rareRecipe3(a, b, c).takeIf { it >= 0 } ?: brew3Common(a, b, c)
+
+    /** Base odds of a special result working out, before stirring and other bonuses. */
+    fun baseChance(species: Int): Float = when (SPECIES[species].tier) {
+        4 -> 0.40f   // rare 3-ingredient brew
+        3 -> 0.25f   // legendary cross
+        else -> 0.50f // hybrid cross
     }
 
     /** Which species two grown mushrooms make, or -1 if they have no special hybrid. */
-    fun cross(a: Int, b: Int): Int = CROSSES[key(a, b)] ?: -1
+    fun cross(a: Int, b: Int): Int {
+        val r = CROSSES[key(a, b)] ?: return -1
+        return if (SPECIES[r].event != 0 && SPECIES[r].event != currentEvent()) -1 else r
+    }
+
+    /** True if this species can't be made right now because its event is over. */
+    fun offSeason(species: Int): Boolean = SPECIES[species].event != 0 && SPECIES[species].event != currentEvent()
 
     /** Human-readable recipe for the Shroomdex once a species is discovered (up to two ways). */
     fun recipeText(species: Int): String {
+        EVENT_DEFAULT.entries.firstOrNull { it.value == species }?.let { return "${INGREDIENTS[it.key].name} + almost anything" }
         val brews = BREWS.entries.filter { it.value == species }.take(2).map { e ->
             val (a, b) = e.key.split(",").map { it.toInt() }
             "${INGREDIENTS[a].name} + ${INGREDIENTS[b].name}"
@@ -429,7 +612,7 @@ object Data {
         Achievement("First Sprout", "Brew your first mushroom", 10),
         Achievement("Collector", "Discover 10 species", 40),
         Achievement("Scholar", "Discover 25 species", 100),
-        Achievement("Shroomologist", "Discover every species", 500),
+        Achievement("Shroomologist", "Discover every year-round species", 500),
         Achievement("Matchmaker", "Discover a hybrid", 40),
         Achievement("Legend", "Discover a legendary", 150),
         Achievement("Rare Find", "Discover a rare 3-ingredient species", 80),
