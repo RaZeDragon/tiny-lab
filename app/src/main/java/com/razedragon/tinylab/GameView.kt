@@ -1659,9 +1659,6 @@ class GameView(context: Context) : View(context) {
     internal fun testCam(x: Float) { camX = x.coerceIn(camMin(), camMax()); camVel = 0f }
     internal fun testOffer(i: Int) { offerPack = i }
     internal fun testOfferSide(i: Int) { prefs.edit().putLong(offerKey(Data.PACKS[i]) + "_until", System.currentTimeMillis() + OFFER_MS).apply() }
-    internal fun testCam(x: Float) { camX = x.coerceIn(camMin(), camMax()); camVel = 0f }
-    internal fun testOffer(i: Int) { offerPack = i }
-    internal fun testOfferSide(i: Int) { prefs.edit().putLong(offerKey(Data.PACKS[i]) + "_until", System.currentTimeMillis() + OFFER_MS).apply() }
     internal fun testThink(sh: Shroom) { sh.thought = thoughtFor(sh); sh.thoughtT = 3f }
     internal fun testSnowman(gx: Float, gz: Float) { snowmen.add(Snowman(gx, gz, 1f)) }
     internal fun testUpdateWidgetFrame(sh: Shroom) = renderWidgetFrame(sh, 1f)

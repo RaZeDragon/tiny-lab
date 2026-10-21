@@ -272,10 +272,24 @@ class ScreensTest {
         g.testCam(1.5f); g.testFrame(0.5f); save(g.testRender(), "garden_right")
         assertTrue(g.testButtonIds().contains("pan_l"))
         g.testOffer(Data.PACKS.indexOfFirst { it.id == "starter" }); g.testFrame(0.3f); save(g.testRender(), "offer_popup")
+        assertTrue(g.testTap("offer_peek")); g.testFrame(0.5f); save(g.testRender(), "preview_starter_pack")
+        assertTrue(g.testTap("pv_close"))
         assertTrue(g.testTap("offer_close"))
         g.testOfferSide(Data.PACKS.indexOfFirst { it.id == "spores_medium" }); g.testFrame(0.3f)
         assertTrue(g.testButtonIds().any { it.startsWith("offerside") })
         save(g.testRender(), "garden_offer_buttons")
+        // previews from the shop
+        lab.dust = 5000
+        g.testTap("nav4")
+        g.testTap("s3"); assertTrue(g.testTap("prev_3_2")); g.testFrame(0.5f); save(g.testRender(), "preview_theme")
+        g.testTap("pv_close")
+        g.testTap("s2"); assertTrue(g.testTap("prev_2_6")); g.testFrame(0.5f); save(g.testRender(), "preview_decor")
+        g.testTap("pv_close")
+        g.testTap("s4"); assertTrue(g.testTap("prev_4_6")); g.testFrame(0.5f); save(g.testRender(), "preview_hat")
+        assertTrue(g.testTap("pv_buy"))
+        assertEquals(1, lab.accOwned[6])
+        g.testTap("s6"); assertTrue(g.testTap("prev_6_3")); g.testFrame(0.5f); save(g.testRender(), "preview_pet")
+        g.testTap("pv_close")
         reset()
     }
 
