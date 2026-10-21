@@ -35,7 +35,7 @@ class GameView(context: Context) : View(context) {
 
     private class Button(
         val id: String, val rect: RectF, val label: String, val style: Int = STYLE_NORMAL,
-        val enabled: Boolean = true, val custom: ((Canvas, RectF) -> Unit)? = null, val action: () -> Unit,
+        val enabled: Boolean = true, val custom: ((Canvas, RectF) -> Unit)? = null, val clip: RectF? = null, val action: () -> Unit,
     )
     private class Particle(var x: Float, var y: Float, var vx: Float, var vy: Float, var life: Float,
                            val maxLife: Float, val color: Int, val type: Int, var tx: Float = 0f, var ty: Float = 0f)
@@ -647,7 +647,7 @@ class GameView(context: Context) : View(context) {
         for ((i, tb) in tabs.withIndex()) {
             list.add(Button("nav$i", RectF(i * tw, navTop, (i + 1) * tw, h), "", STYLE_CARD,
                 custom = { c, r -> drawNavItem(c, r, tb) }) {
-                if (tab != tb) { tab = tb; selected = -1; feeding = false; styling = false; moreOpen = false; jobbing = false; exploring = false; confirmRelease = false; dexPick = -1; decorating = false }
+                if (tab != tb) { tab = tb; particles.clear(); selected = -1; feeding = false; styling = false; moreOpen = false; jobbing = false; exploring = false; confirmRelease = false; dexPick = -1; decorating = false }
             })
         }
 
@@ -1143,38 +1143,38 @@ class GameView(context: Context) : View(context) {
         for ((k, nm) in names.withIndex()) {
             val col = k % 3; val row = k / 3
             list.add(Button("s$k", RectF(pad + col * tabW + 2f * dp, ty + row * 44f * dp, pad + (col + 1) * tabW - 2f * dp, ty + row * 44f * dp + 38f * dp), nm,
-                if (shopTab == k) STYLE_TAB_ON else STYLE_NORMAL) { shopTab = k })
+                if (shopTab == k) STYLE_TAB_ON else STYLE_NORMAL) { shopTab = k; shopScroll = 0f; shopVel = 0f })
         }
-        val entries = shopEntries()
-        val top = shopTop()
-        val rowH = min(if (shopTab == 7) 104f * dp else 66f * dp, (navTop - top - (if (shopTab == 8) 26f else 8f) * dp) / max(1, entries.size))
-        val p2 = 16f * dp
-        for ((row, e) in entries.withIndex()) {
-            val (kind, i) = e
-            val y = top + row * rowH
-            val b5 = RectF(w - p2 - 64f * dp, y + 5f * dp, w - p2, y + rowH - 5f * dp)
-            val b1 = RectF(b5.left - 8f * dp - 84f * dp, y + 5f * dp, b5.left - 8f * dp, y + rowH - 5f * dp)
+        val clipR = shopListRect()
+        for (r in shopRows()) {
+            if (r.top + r.h < clipR.top || r.top > clipR.bottom) continue
+            val kind = r.kind; val i = r.i
+            val y = r.top
+            val cy = r.top + r.h / 2
+            val bh = 46f * dp
+            val b5 = RectF(w - 16f * dp - 56f * dp, cy - bh / 2, w - 16f * dp, cy + bh / 2)
+            val b1 = RectF(b5.left - 6f * dp - 78f * dp, cy - bh / 2, b5.left - 6f * dp, cy + bh / 2)
+            val wide = RectF(w - 16f * dp - 104f * dp, cy - bh / 2, w - 16f * dp, cy + bh / 2)
             if (kind == 2 || kind == 3 || kind == 4 || kind == 6 || kind == 7)
-                list.add(Button("prev_${kind}_$i", RectF(p2 - 6f * dp, y + 2f * dp, b1.left - 4f * dp, y + rowH - 2f * dp), "", STYLE_GHOST, custom = { _, _ -> }) {
+                list.add(Button("prev_${kind}_$i", RectF(10f * dp, y + 2f * dp, wide.left - 4f * dp, y + r.h - 2f * dp), "", STYLE_GHOST, custom = { _, _ -> }, clip = clipR) {
                     previewKind = kind; previewIdx = i; previewAnim = 0f; sound.play(Fx.POP, 0.5f, 1.2f)
                 })
-            val wide = RectF(b1.left, b1.top, b5.right, b5.bottom)
             when (kind) {
                 0, 1 -> {
                     val cost = if (kind == 0) Data.INGREDIENTS[i].cost else Data.FOODS[i].cost
-                    list.add(Button("buy1_${kind}_$i", b1, "$cost ✦", STYLE_PRIMARY, lab.dust >= cost) { buy(kind, i, 1) })
-                    list.add(Button("buy5_${kind}_$i", b5, "×5", STYLE_NORMAL, lab.dust >= cost * 5) { buy(kind, i, 5) })
+                    list.add(Button("buy1_${kind}_$i", b1, "$cost ✦", STYLE_PRIMARY, lab.dust >= cost, clip = clipR) { buy(kind, i, 1) })
+                    list.add(Button("buy5_${kind}_$i", b5, "×5", STYLE_NORMAL, lab.dust >= cost * 5, clip = clipR) { buy(kind, i, 5) })
                 }
                 2 -> {
                     val cost = Data.DECOR[i].cost
-                    list.add(Button("dbuy$i", wide, "$cost ✦", STYLE_PRIMARY, lab.dust >= cost) {
+                    list.add(Button("dbuy$i", wide, "$cost ✦", STYLE_PRIMARY, lab.dust >= cost, clip = clipR) {
                         if (lab.dust < cost) { sound.play(Fx.DENIED); notEnoughDust() }
                         else { lab.dust -= cost; lab.decorOwned[i]++; sound.play(Fx.COIN); toast("Place it from Garden → DECORATE", MINT); markDirty() }
                     })
                 }
                 4 -> {
                     val a = Data.ACCESSORIES[i]
-                    list.add(Button("abuy$i", wide, "${a.cost} ✦", STYLE_PRIMARY, lab.dust >= a.cost) {
+                    list.add(Button("abuy$i", wide, "${a.cost} ✦", STYLE_PRIMARY, lab.dust >= a.cost, clip = clipR) {
                         if (lab.dust < a.cost) { sound.play(Fx.DENIED); notEnoughDust() }
                         else { lab.dust -= a.cost; lab.accOwned[i]++; sound.play(Fx.COIN); toast("Dress up a mushroom: tap it → STYLE", MINT); markDirty() }
                     })
@@ -1182,8 +1182,8 @@ class GameView(context: Context) : View(context) {
                 7 -> {
                     val pk = Data.PACKS[i]
                     val owned = lab.packOwned(pk)
-                    list.add(Button("pack$i", RectF(w - pad - 104f * dp, y + rowH / 2 - 22f * dp, w - pad, y + rowH / 2 + 22f * dp),
-                        if (owned) "OWNED" else pk.price, if (owned) STYLE_NORMAL else STYLE_PRIMARY, !owned) {
+                    list.add(Button("pack$i", wide,
+                        if (owned) "OWNED" else pk.price, if (owned) STYLE_NORMAL else STYLE_PRIMARY, !owned, clip = clipR) {
                         if (owned) return@Button
                         val act = context as? android.app.Activity ?: return@Button
                         Store.buy(act, pk) { ok ->
@@ -1194,8 +1194,8 @@ class GameView(context: Context) : View(context) {
                 }
                 6 -> {
                     val pt = Data.PETS[i]
-                    if (pt.event > 0) list.add(Button("pbuy$i", wide, "Quest pet", STYLE_NORMAL, false) {})
-                    else list.add(Button("pbuy$i", wide, "${pt.cost} ✦", STYLE_PRIMARY, lab.dust >= pt.cost) {
+                    if (pt.event > 0) list.add(Button("pbuy$i", wide, "Quest pet", STYLE_NORMAL, false, clip = clipR) {})
+                    else list.add(Button("pbuy$i", wide, "${pt.cost} ✦", STYLE_PRIMARY, lab.dust >= pt.cost, clip = clipR) {
                         if (lab.dust < pt.cost) { sound.play(Fx.DENIED); notEnoughDust() }
                         else { lab.dust -= pt.cost; lab.petOwned[i]++; sound.play(Fx.COIN); toast("New pet! Tap a mushroom → STYLE to bring it along", MINT); markDirty() }
                     })
@@ -1205,7 +1205,7 @@ class GameView(context: Context) : View(context) {
                     val lvl = lab.upgrades[i]
                     val maxed = lvl >= u.costs.size
                     list.add(Button("ubuy$i", wide, if (maxed) "MAX" else "${u.costs[lvl]} ✦", if (maxed) STYLE_NORMAL else STYLE_PRIMARY,
-                        !maxed && lab.dust >= u.costs[lvl]) {
+                        !maxed && lab.dust >= u.costs[lvl], clip = clipR) {
                         when {
                             maxed -> {}
                             lab.dust < u.costs[lvl] -> { sound.play(Fx.DENIED); notEnoughDust() }
@@ -1220,7 +1220,7 @@ class GameView(context: Context) : View(context) {
                     val th = Data.THEMES[i]
                     val owned = (lab.themesOwned shr i) and 1 == 1
                     val label = when { lab.theme == i -> "IN USE"; owned -> "USE"; else -> "${th.cost} ✦" }
-                    list.add(Button("tbuy$i", wide, label, if (owned) STYLE_NORMAL else STYLE_PRIMARY, lab.theme != i && (owned || lab.dust >= th.cost)) {
+                    list.add(Button("tbuy$i", wide, label, if (owned) STYLE_NORMAL else STYLE_PRIMARY, lab.theme != i && (owned || lab.dust >= th.cost), clip = clipR) {
                         when {
                             lab.theme == i -> {}
                             owned -> { lab.theme = i; sound.play(Fx.POP); markDirty() }
@@ -1236,90 +1236,109 @@ class GameView(context: Context) : View(context) {
         }
     }
 
+    // Shop list: rows grow to fit their text, and the list scrolls when it's long
+    private var shopScroll = 0f
+    private var shopVel = 0f
+    private var shopMax = 0f
+    private var shopDragging = false
+    private var shopMoved = false
+    private var shopStart = 0f
+    private var shopLastY = 0f
+    private var shopLastT = 0L
+    private class ShopRow(val kind: Int, val i: Int, val top: Float, val h: Float, val name: String, val lines: List<String>)
+
+    private fun shopListRect() = RectF(0f, shopTop(), width.toFloat(), navTop - (if (shopTab == 8) 22f else 4f) * dp)
+
+    private fun shopText(kind: Int, i: Int): Pair<String, String> = when (kind) {
+        0 -> Data.INGREDIENTS[i].name to "You have ${lab.ingredients[i]}"
+        1 -> Data.FOODS[i].let { it.name to "Have ${lab.foods[i]} · +${it.hunger} food, +${it.xp} growth" }
+        2 -> Data.DECOR[i].name to ("Have ${lab.decorOwned[i] + lab.placed.count { it.kind == i }}" + when (i) {
+            in 11..14 -> " · a toy to play with"; 15 -> " · they gather & sing at night"; Data.COZY_BED -> " · one shroom naps here at a time"
+            else -> if (Data.DECOR[i].glow) " · glows at night" else "" })
+        4 -> Data.ACCESSORIES[i].let { it.name to "Have ${lab.accOwned[i]} · " + arrayOf("worn on the cap", "worn on the face", "worn on the stem")[it.slot] }
+        5 -> Data.UPGRADES[i].let { it.name to it.desc }
+        6 -> Data.PETS[i].let { it.name to "Have ${lab.petOwned[i]} · ${it.desc}" }
+        7 -> Data.PACKS[i].let { it.name to it.desc }
+        else -> Data.THEMES[i].name to (if ((lab.themesOwned shr i) and 1 == 1) "Owned" else "New sky, ground and weather")
+    }
+
+    private fun shopRows(): List<ShopRow> {
+        val w = width.toFloat()
+        val textX = 58f * dp
+        var y = shopListRect().top - shopScroll
+        val out = ArrayList<ShopRow>()
+        for ((kind, i) in shopEntries()) {
+            val (name, sub) = shopText(kind, i)
+            val btnW = if (kind == 0 || kind == 1) 140f * dp else 104f * dp
+            text.textSize = 11f * dp
+            val lines = wrap(sub, w - 16f * dp - btnW - 10f * dp - textX)
+            val h = max(if (kind == 7) 78f * dp else 60f * dp, 32f * dp + lines.size * 14f * dp + 10f * dp)
+            out.add(ShopRow(kind, i, y, h, name, lines))
+            y += h
+        }
+        val list = shopListRect()
+        shopMax = max(0f, (y + shopScroll) - list.bottom)
+        return out
+    }
+
     private fun drawShop(c: Canvas, w: Float, h: Float) {
         val pad = 16f * dp
-        val entries = shopEntries()
-        val top = shopTop()
-        val rowH = min(if (shopTab == 7) 104f * dp else 66f * dp, (navTop - top - (if (shopTab == 8) 26f else 8f) * dp) / max(1, entries.size))
-        for ((row, e) in entries.withIndex()) {
-            val (kind, i) = e
-            val y = top + row * rowH
+        val list = shopListRect()
+        val rows = shopRows()
+        shopScroll = shopScroll.coerceIn(0f, shopMax)
+        c.save(); c.clipRect(list)
+        for ((row, r) in rows.withIndex()) {
+            if (r.top + r.h < list.top || r.top > list.bottom) continue
+            val kind = r.kind; val i = r.i
+            val y = r.top; val rowH = r.h
             fill.color = if (row % 2 == 0) PANEL else Color.rgb(40, 28, 74)
             c.drawRoundRect(pad - 6f * dp, y + 2f * dp, w - pad + 6f * dp, y + rowH - 2f * dp, 14f * dp, 14f * dp, fill)
             val cy = y + rowH / 2
-            val name: String
-            val sub: String
             when (kind) {
-                0 -> { drawIngredient(c, i, pad + 20f * dp, cy, 14f * dp); name = Data.INGREDIENTS[i].name; sub = "You have ${lab.ingredients[i]}" }
-                1 -> { drawFood(c, i, pad + 20f * dp, cy, 14f * dp); name = Data.FOODS[i].name
-                    sub = Data.FOODS[i].let { "Have ${lab.foods[i]} · +${it.hunger} food, +${it.xp} growth" } }
-                2 -> {
-                    c.save(); c.clipRect(pad, y + 3f * dp, pad + 44f * dp, y + rowH - 3f * dp)
-                    drawDecor(c, i, pad + 22f * dp, y + rowH - 8f * dp, 0.5f)
-                    c.restore()
-                    name = Data.DECOR[i].name
-                    val placedN = lab.placed.count { it.kind == i }
-                    sub = "Have ${lab.decorOwned[i] + placedN}" + when (i) {
-                        in 11..14 -> " · a toy to play with"; 15 -> " · they gather & sing at night"
-                        else -> if (Data.DECOR[i].glow) " · glows at night" else "" }
-                }
-                4 -> {
-                    drawAccessoryIcon(c, i, pad + 20f * dp, cy, 12f * dp)
-                    val a = Data.ACCESSORIES[i]
-                    name = a.name
-                    sub = "Have ${lab.accOwned[i]} · " + arrayOf("worn on the cap", "worn on the face", "worn on the stem")[a.slot]
-                }
-                7 -> {
-                    val pk = Data.PACKS[i]
-                    drawGiftBox(c, pad + 20f * dp, cy + 12f * dp, 30f * dp, pk.color)
-                    text.textAlign = Paint.Align.LEFT; text.textSize = 15f * dp
-                    c.drawText(pk.name, pad + 44f * dp, y + 24f * dp, text)
-                    val pnw = text.measureText(pk.name)
-                    text.textSize = 10f * dp; text.color = Color.argb(170, 255, 255, 255)
-                    c.drawText("🔍 preview", pad + 52f * dp + pnw, y + 23f * dp, text); text.color = Color.WHITE
-                    text.textSize = 10.5f * dp; text.color = TEXT_DIM
-                    for ((k, l) in wrap(pk.desc, w - pad * 2 - 150f * dp).take(4).withIndex()) c.drawText(l, pad + 44f * dp, y + 40f * dp + k * 13f * dp, text)
-                    text.color = Color.WHITE; text.textAlign = Paint.Align.CENTER
-                    continue
-                }
-                6 -> {
-                    c.save(); c.clipRect(pad - 4f * dp, y + 3f * dp, pad + 44f * dp, y + rowH - 3f * dp)
-                    drawPet(c, i, pad + 20f * dp, cy + 12f * dp, 28f * dp, t * 6f, 1f, false)
-                    c.restore()
-                    name = Data.PETS[i].name
-                    sub = "Have ${lab.petOwned[i]} · ${Data.PETS[i].desc}"
-                }
-                5 -> {
-                    val u = Data.UPGRADES[i]
-                    fill.color = MINT
-                    c.drawCircle(pad + 20f * dp, cy, 14f * dp, fill)
+                0 -> drawIngredient(c, i, pad + 20f * dp, cy, 14f * dp)
+                1 -> drawFood(c, i, pad + 20f * dp, cy, 14f * dp)
+                2 -> { c.save(); c.clipRect(pad, y + 3f * dp, pad + 44f * dp, y + rowH - 3f * dp)
+                    drawDecor(c, i, pad + 22f * dp, cy + 20f * dp, 0.5f); c.restore() }
+                4 -> drawAccessoryIcon(c, i, pad + 20f * dp, cy, 12f * dp)
+                7 -> drawGiftBox(c, pad + 20f * dp, cy + 14f * dp, 30f * dp, Data.PACKS[i].color)
+                6 -> { c.save(); c.clipRect(pad - 4f * dp, y + 3f * dp, pad + 44f * dp, y + rowH - 3f * dp)
+                    drawPet(c, i, pad + 20f * dp, cy + 12f * dp, 28f * dp, t * 6f, 1f, false); c.restore() }
+                5 -> { val u = Data.UPGRADES[i]
+                    fill.color = MINT; c.drawCircle(pad + 20f * dp, cy, 14f * dp, fill)
                     text.textSize = 12f * dp; text.color = BG
-                    c.drawText("${lab.upgrades[i]}/${u.costs.size}", pad + 20f * dp, cy + 4f * dp, text)
-                    text.color = Color.WHITE
-                    name = u.name
-                    sub = u.desc
-                }
-                else -> {
-                    val th = Data.THEMES[i]
+                    c.drawText("${lab.upgrades[i]}/${u.costs.size}", pad + 20f * dp, cy + 4f * dp, text); text.color = Color.WHITE }
+                else -> { val th = Data.THEMES[i]
                     fill.shader = LinearGradient(0f, cy - 14f * dp, 0f, cy + 14f * dp, intArrayOf(th.skyTop, th.skyBottom, th.groundFar, th.groundNear),
                         floatArrayOf(0f, 0.45f, 0.55f, 1f), Shader.TileMode.CLAMP)
-                    c.drawCircle(pad + 20f * dp, cy, 14f * dp, fill); fill.shader = null
-                    name = th.name
-                    sub = if ((lab.themesOwned shr i) and 1 == 1) "Owned" else "New sky, ground and weather"
-                }
+                    c.drawCircle(pad + 20f * dp, cy, 14f * dp, fill); fill.shader = null }
             }
+            // name, a preview hint, then every line of the description
+            val textTop = cy - (18f * dp + r.lines.size * 14f * dp) / 2
             text.textAlign = Paint.Align.LEFT
-            text.textSize = if (rowH < 50f * dp) 13.5f * dp else 15f * dp
-            c.drawText(name, pad + 42f * dp, cy - 2f * dp, text)
-            if (kind == 2 || kind == 3 || kind == 4 || kind == 6) {
-                val nw = text.measureText(name)
+            text.textSize = 15f * dp
+            c.drawText(r.name, 58f * dp, textTop + 14f * dp, text)
+            if (kind == 2 || kind == 3 || kind == 4 || kind == 6 || kind == 7) {
+                val nw = text.measureText(r.name)
                 text.textSize = 10f * dp; text.color = Color.argb(170, 255, 255, 255)
-                c.drawText("🔍", pad + 48f * dp + nw, cy - 3f * dp, text); text.color = Color.WHITE
+                c.drawText("🔍", 64f * dp + nw, textTop + 13f * dp, text); text.color = Color.WHITE
             }
-            text.textSize = 10.5f * dp; text.color = TEXT_DIM
-            c.drawText(sub, pad + 42f * dp, cy + 13f * dp, text)
+            text.textSize = 11f * dp; text.color = TEXT_DIM
+            for ((k, l) in r.lines.withIndex()) c.drawText(l, 58f * dp, textTop + 31f * dp + k * 14f * dp, text)
             text.color = Color.WHITE
             text.textAlign = Paint.Align.CENTER
+        }
+        c.restore()
+        // scroll bar & fade hints when there's more to see
+        if (shopMax > 1f) {
+            val track = list.height() - 12f * dp
+            val bar = max(30f * dp, track * list.height() / (list.height() + shopMax))
+            val by = list.top + 6f * dp + (track - bar) * (shopScroll / shopMax)
+            fill.color = Color.argb(110, 255, 255, 255)
+            c.drawRoundRect(w - 6f * dp, by, w - 3f * dp, by + bar, 2f * dp, 2f * dp, fill)
+            if (shopScroll < shopMax - 2f) {
+                fill.shader = LinearGradient(0f, list.bottom - 26f * dp, 0f, list.bottom, Color.argb(0, 20, 14, 38), Color.argb(200, 20, 14, 38), Shader.TileMode.CLAMP)
+                c.drawRect(0f, list.bottom - 26f * dp, w, list.bottom, fill); fill.shader = null
+            }
         }
         if (shopTab == 8) {
             val ev = eventNow()
@@ -1344,12 +1363,12 @@ class GameView(context: Context) : View(context) {
         if (mini > 0) {
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
-                    pressedId = buttons.lastOrNull { it.rect.contains(x, y) }?.id
+                    pressedId = buttons.lastOrNull { hits(it, x, y) }?.id
                     if (pressedId == null && mini == 1) catchTarget = x
                 }
                 MotionEvent.ACTION_MOVE -> if (pressedId == null && mini == 1) catchTarget = x
                 MotionEvent.ACTION_UP -> {
-                    val b = buttons.lastOrNull { it.id == pressedId && it.rect.contains(x, y) }
+                    val b = buttons.lastOrNull { it.id == pressedId && hits(it, x, y) }
                     pressedId = null
                     b?.let { sound.play(Fx.CLICK, 0.6f); it.action() }
                 }
@@ -1365,7 +1384,7 @@ class GameView(context: Context) : View(context) {
                 revs = 0; lastDxSign = 0; lastMoveX = x; petAcc = 0f
                 prevX = x; prevY = y; prevT = System.nanoTime(); velX = 0f; velY = 0f
                 if (settingsOpen || tutStep == T_WELCOME || tutStep == T_DONE) {
-                    pressedId = buttons.lastOrNull { it.rect.contains(x, y) }?.id
+                    pressedId = buttons.lastOrNull { hits(it, x, y) }?.id
                     return true
                 }
                 if (tab == Tab.LAB && brewing > 0f && popup == null &&
@@ -1375,7 +1394,7 @@ class GameView(context: Context) : View(context) {
                     pressedId = null
                     return true
                 }
-                val b = buttons.lastOrNull { it.rect.contains(x, y) }
+                val b = buttons.lastOrNull { hits(it, x, y) }
                 pressedId = b?.id
                 val id = b?.id ?: ""
                 if (popup == null && brewing <= 0f) {
@@ -1395,6 +1414,9 @@ class GameView(context: Context) : View(context) {
                         val s = shroomAt(x, y)
                         if (s != null) { dragKind = 3; dragShroom = s.id }
                     }
+                }
+                if (tab == Tab.SHOP && previewKind < 0 && offerPack < 0 && !settingsOpen && shopListRect().contains(x, y)) {
+                    shopDragging = true; shopMoved = false; shopStart = shopScroll; shopVel = 0f; shopLastY = y; shopLastT = System.nanoTime()
                 }
                 if (b == null && dragKind == 0 && tab == Tab.GARDEN && popup == null && y > topBar && y < (if (selected >= 0 || decorating) panelTop() else navTop)) {
                     panning = true; panMoved = false; panStartCam = camX; camVel = 0f; panLastX = x; panLastT = System.nanoTime()
@@ -1419,6 +1441,15 @@ class GameView(context: Context) : View(context) {
                         }
                     }
                     return true
+                }
+                if (shopDragging) {
+                    if (!shopMoved && abs(y - downY) > 10f * dp) { shopMoved = true; pressedId = null }
+                    if (shopMoved) {
+                        shopScroll = (shopStart - (y - downY)).coerceIn(0f, shopMax)
+                        val nt = System.nanoTime(); val dtm = (nt - shopLastT) / 1e9f
+                        if (dtm > 0.008f) { shopVel = shopVel * 0.3f + (-(y - shopLastY) / dtm) * 0.7f; shopLastY = y; shopLastT = nt }
+                        return true
+                    }
                 }
                 dragX = x; dragY = y
                 if (panning) {
@@ -1471,6 +1502,10 @@ class GameView(context: Context) : View(context) {
             MotionEvent.ACTION_UP -> {
                 pointerDown = false
                 if (stirring) { stirring = false; return true }
+                if (shopDragging) {
+                    shopDragging = false
+                    if (shopMoved) { shopMoved = false; if (System.nanoTime() - shopLastT > 80_000_000L) shopVel = 0f; pressedId = null; return true }
+                }
                 if (panning) {
                     panning = false
                     if (panMoved) { panMoved = false; if (System.nanoTime() - panLastT > 80_000_000L) camVel = 0f; return true }
@@ -1484,7 +1519,7 @@ class GameView(context: Context) : View(context) {
                     drop(x, y)
                 } else {
                     val id = pressedId
-                    val b = buttons.lastOrNull { it.id == id && it.rect.contains(x, y) }
+                    val b = buttons.lastOrNull { it.id == id && hits(it, x, y) }
                     if (b != null) {
                         sound.play(Fx.CLICK, 0.6f)
                         b.action()
@@ -1498,7 +1533,7 @@ class GameView(context: Context) : View(context) {
                 dragging = false; dragKind = 0
             }
             MotionEvent.ACTION_CANCEL -> {
-                pointerDown = false; petting = false; hugDone = false; panning = false; panMoved = false
+                pointerDown = false; petting = false; hugDone = false; panning = false; panMoved = false; shopDragging = false; shopMoved = false
                 stirring = false
                 pressedId = null
                 shroom(dragShroom)?.held = false
@@ -1656,6 +1691,8 @@ class GameView(context: Context) : View(context) {
     internal fun testProfSay(msg: String) = professorSay(msg, 30f)
     internal fun testSelect(id: Long) { selected = id; panelAnim = 1f }
     internal fun testBedtime() = bedtime()
+    internal fun testEndMini() = endMini()
+    internal fun testShopScroll(y: Float) { shopScroll = y; shopVel = 0f }
     internal fun testCam(x: Float) { camX = x.coerceIn(camMin(), camMax()); camVel = 0f }
     internal fun testOffer(i: Int) { offerPack = i }
     internal fun testOfferSide(i: Int) { prefs.edit().putLong(offerKey(Data.PACKS[i]) + "_until", System.currentTimeMillis() + OFFER_MS).apply() }
@@ -1687,6 +1724,11 @@ class GameView(context: Context) : View(context) {
         updateJam(dt)
         updateSeason(dt)
         updateCamera(dt)
+        if (!shopDragging && abs(shopVel) > 5f) {
+            shopScroll = (shopScroll + shopVel * dt).coerceIn(0f, shopMax)
+            shopVel *= max(0f, 1f - dt * 4f)
+            if (shopScroll <= 0f || shopScroll >= shopMax) shopVel = 0f
+        }
         tickAcc += dt
         if (tickAcc >= 1f) {
             tickAcc = 0f; lab.tick(); markDirty()
@@ -2231,6 +2273,7 @@ class GameView(context: Context) : View(context) {
 
     /** Little particles for whatever a mushroom is doing. */
     private fun actEffects(s: Shroom, dt: Float) {
+        if (tab != Tab.GARDEN) { if (s.act == ACT_SNOWMAN) snowmen.getOrNull(s.actTarget)?.let { it.prog = min(1f, it.prog + dt / 7.5f) }; return }
         val (x, y) = toScreen(s.gx, s.gz)
         val size = shroomSize(s)
         when (s.act) {
@@ -2495,9 +2538,10 @@ class GameView(context: Context) : View(context) {
             c.drawRect(0f, 0f, w, bottom, fill)
             stroke.color = Color.argb(120, 190, 210, 255); stroke.strokeWidth = 1.3f * dp
             for (k in 0 until 45) {
-                val x = (k * 0.0237f * w * 3.7f + t * 40f * dp) % (w + 40f * dp) - 20f * dp
-                val y = ((t * (500f + (k % 5) * 60f) * dp) + k * 97f * dp) % bottom
-                c.drawLine(x, y, x - 4f * dp, y + 14f * dp, stroke)
+                val fall = (t * (520f + (k % 5) * 60f) * dp + k * 97f * dp)
+                val y = fall % bottom
+                val x = (k * 0.0237f * w * 3.7f + y * 0.06f) % (w + 20f * dp) - 10f * dp
+                c.drawLine(x, y, x + 0.9f * dp, y + 15f * dp, stroke)
             }
             stroke.color = Color.argb(90, 200, 220, 255); stroke.strokeWidth = 1f * dp
             for (k in 0 until 6) {   // ripples in puddles
@@ -3502,7 +3546,13 @@ class GameView(context: Context) : View(context) {
 
     // ----- Buttons -----
 
+    private fun hits(b: Button, x: Float, y: Float) = b.rect.contains(x, y) && (b.clip == null || b.clip.contains(x, y))
+
     private fun drawButton(c: Canvas, b: Button) {
+        if (b.clip != null) { c.save(); c.clipRect(b.clip); drawButton0(c, b); c.restore() } else drawButton0(c, b)
+    }
+
+    private fun drawButton0(c: Canvas, b: Button) {
         val pressed = pressedId == b.id && b.enabled
         val r = RectF(b.rect)
         val isNav = b.id.startsWith("nav") || b.id == "gear"
@@ -4664,7 +4714,7 @@ class GameView(context: Context) : View(context) {
         val lx = x + size * 0.12f; val ly = topY - size * 0.18f
         stroke.color = Color.rgb(80, 130, 60); stroke.strokeWidth = max(1.5f * dp, size * 0.03f)
         c.drawLine(lx, ly, x + size * 0.32f, topY + size * 0.45f, stroke)
-        c.save(); c.rotate(-12f + sin(t * 2f) * 4f, lx, ly)
+        c.save(); c.rotate(-4f + sin(t * 2f) * 3f, lx, ly)
         fill.shader = LinearGradient(lx, ly - size * 0.3f, lx, ly + size * 0.1f, Color.rgb(130, 210, 100), Color.rgb(70, 150, 70), Shader.TileMode.CLAMP)
         path.reset(); path.moveTo(lx - size * 0.62f, ly + size * 0.06f)
         path.quadTo(lx, ly - size * 0.5f, lx + size * 0.62f, ly + size * 0.06f)
@@ -5859,7 +5909,7 @@ class GameView(context: Context) : View(context) {
             }
             if (hit) {
                 s.jiggle = max(s.jiggle, 0.35f)
-                if (Random.nextFloat() < 0.35f)
+                if (tab == Tab.GARDEN && Random.nextFloat() < 0.35f)
                     particles.add(Particle(x + (Random.nextFloat() - 0.5f) * 20f * dp, y - shroomSize(s) * 1.1f, (Random.nextFloat() - 0.5f) * 30f * dp, -40f * dp, 1.4f, 1.4f,
                         listOf(Color.rgb(255, 220, 150), ACCENT, MINT, Color.rgb(180, 160, 255)).random(), P_NOTE))
             }
@@ -6595,8 +6645,11 @@ class GameView(context: Context) : View(context) {
 
     private fun miniButtons(list: ArrayList<Button>, w: Float, h: Float) {
         if (miniOver) {
-            list.add(Button("mg_again", RectF(w / 2 - 150f * dp, h * 0.62f, w / 2 - 6f * dp, h * 0.62f + 52f * dp), "PLAY AGAIN", STYLE_PRIMARY) { startMini(mini) })
-            list.add(Button("mg_done", RectF(w / 2 + 6f * dp, h * 0.62f, w / 2 + 150f * dp, h * 0.62f + 52f * dp), "DONE") { mini = 0 })
+            val card = miniCard(w, h)
+            val bw = (card.width() - 48f * dp) / 2
+            val by = card.bottom - 72f * dp
+            list.add(Button("mg_again", RectF(card.left + 18f * dp, by, card.left + 18f * dp + bw, by + 52f * dp), "PLAY AGAIN", STYLE_PRIMARY) { startMini(mini) })
+            list.add(Button("mg_done", RectF(card.right - 18f * dp - bw, by, card.right - 18f * dp, by + 52f * dp), "DONE") { mini = 0 })
             return
         }
         list.add(Button("mg_quit", RectF(w - 98f * dp, 16f * dp, w - 14f * dp, 52f * dp), "QUIT") { mini = 0 })
@@ -6630,6 +6683,8 @@ class GameView(context: Context) : View(context) {
         }
         c.restore()
     }
+
+    private fun miniCard(w: Float, h: Float) = RectF(28f * dp, h * 0.3f, w - 28f * dp, h * 0.3f + 270f * dp)
 
     private fun drawMini(c: Canvas, w: Float, h: Float) {
         fill.shader = LinearGradient(0f, 0f, 0f, h, Color.rgb(50, 32, 92), Color.rgb(24, 16, 44), Shader.TileMode.CLAMP)
@@ -6673,14 +6728,15 @@ class GameView(context: Context) : View(context) {
         }
         if (miniOver) {
             fill.color = Color.argb(170, 10, 6, 24); c.drawRect(0f, 0f, w, h, fill)
-            panel(c, RectF(28f * dp, h * 0.3f, w - 28f * dp, h * 0.6f + 70f * dp), 24f * dp, PANEL_LIGHT)
+            val card = miniCard(w, h)
+            panel(c, card, 24f * dp, PANEL_LIGHT)
             text.textSize = 28f * dp
-            c.drawText(when (mini) { 1 -> "Score: $miniScore"; 3 -> "Found $miniScore of 9!"; else -> "Done in $mmMoves moves!" }, w / 2, h * 0.38f, text)
+            c.drawText(when (mini) { 1 -> "Score: $miniScore"; 3 -> "Found $miniScore of 9!"; else -> "Done in $mmMoves moves!" }, w / 2, card.top + 62f * dp, text)
             text.textSize = 15f * dp; text.color = TEXT_DIM
             val best = when (mini) { 1 -> "Best: ${prefs.getInt("bestCatch", 0)}"; 3 -> "Best: ${prefs.getInt("bestHide", 0)} found"; else -> "Best: ${prefs.getInt("bestMemory", 0)} moves" }
-            c.drawText(best, w / 2, h * 0.38f + 28f * dp, text)
+            c.drawText(best, w / 2, card.top + 92f * dp, text)
             text.textSize = 20f * dp; text.color = DUST
-            c.drawText(if (miniReward > 0) "+$miniReward ✦" else "Daily mini-game dust limit reached", w / 2, h * 0.5f, text)
+            c.drawText(if (miniReward > 0) "+$miniReward ✦" else "Daily mini-game dust limit reached", w / 2, card.top + 150f * dp, text)
             text.color = Color.WHITE
         }
         for (b in buttons) drawButton(c, b)

@@ -293,6 +293,30 @@ class ScreensTest {
         reset()
     }
 
+    /** Every busy screen, to check nothing overlaps or gets cut off. */
+    @Test fun uiAudit() {
+        reset(); LabState.forceRain = true
+        val g = ready(1)
+        val lab = g.testLab()
+        lab.dust = 739
+        lab.garden.clear()
+        for (k in 0 until 5) lab.garden.add(lab.newShroom(listOf(1, 59, 30, 42, 6)[k], 200f, false).apply { gx = 0.2f + k * 0.15f; gz = 0.3f + (k % 2) * 0.3f })
+        g.testFrame(1f); save(g.testRender(), "audit_rain")
+        g.testTap("nav4")
+        for (k in 0..8) {
+            g.testTap("s$k"); g.testFrame(0.2f); save(g.testRender(), "audit_shop_$k")
+        }
+        g.testTap("s2"); g.testShopScroll(10000f); g.testFrame(0.2f); save(g.testRender(), "audit_shop_2_bottom")
+        g.testTap("nav3")
+        for (j in 0..5) { g.testTap("j$j"); g.testFrame(0.2f); save(g.testRender(), "audit_journal_$j") }
+        g.testTap("j4"); g.testTap("play1"); g.testFrame(0.3f); g.testEndMini(); g.testFrame(0.3f); save(g.testRender(), "audit_mini_end")
+        assertTrue(g.testTap("mg_done"))
+        g.testTap("nav2"); g.testTap("dex1"); g.testFrame(0.2f); save(g.testRender(), "audit_dex_detail")
+        g.testTap("nav0"); g.testSelect(lab.garden[0].id); g.testFrame(0.4f); save(g.testRender(), "audit_info")
+        g.testTap("explore"); g.testFrame(0.2f); save(g.testRender(), "audit_explore")
+        reset()
+    }
+
     @Test fun merchantStickersCodes() {
         reset(); Data.forceMerchant = true
         val g = ready(0)
