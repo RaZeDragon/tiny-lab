@@ -11,7 +11,7 @@ permissions:
 jobs:
   qa:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
 
@@ -42,6 +42,8 @@ jobs:
           cat qa-out/machine.txt
 
       - name: Play the game on an emulator
+        id: play1
+        continue-on-error: true
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 29
@@ -50,7 +52,24 @@ jobs:
           profile: pixel_6
           cores: 2
           ram-size: 3072M
-          emulator-boot-timeout: 1200
+          emulator-boot-timeout: 720
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
+          script: |
+            adb install -r app/build/outputs/apk/debug/app-debug.apk
+            python3 qa/run_qa.py 2>&1 | tee qa-out/console.txt
+
+      - name: Play the game on an emulator (second try if it didn't boot)
+        if: steps.play1.outcome == 'failure' && hashFiles('qa-out/report.md') == ''
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 29
+          target: default
+          arch: x86_64
+          profile: pixel_6
+          cores: 2
+          ram-size: 3072M
+          emulator-boot-timeout: 720
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
           script: |
