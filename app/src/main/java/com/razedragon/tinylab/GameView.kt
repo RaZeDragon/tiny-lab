@@ -948,7 +948,7 @@ class GameView(context: Context) : View(context) {
         }
         val entries = shopEntries()
         val top = shopTop()
-        val rowH = min(66f * dp, (navTop - top - 8f * dp) / max(1, entries.size))
+        val rowH = min(66f * dp, (navTop - top - (if (shopTab >= 6) 26f else 8f) * dp) / max(1, entries.size))
         val p2 = 16f * dp
         for ((row, e) in entries.withIndex()) {
             val (kind, i) = e
@@ -1013,7 +1013,7 @@ class GameView(context: Context) : View(context) {
         val pad = 16f * dp
         val entries = shopEntries()
         val top = shopTop()
-        val rowH = min(66f * dp, (navTop - top - 8f * dp) / max(1, entries.size))
+        val rowH = min(66f * dp, (navTop - top - (if (shopTab >= 6) 26f else 8f) * dp) / max(1, entries.size))
         for ((row, e) in entries.withIndex()) {
             val (kind, i) = e
             val y = top + row * rowH
@@ -1072,7 +1072,7 @@ class GameView(context: Context) : View(context) {
         if (shopTab == 6) {
             val ev = eventNow()
             text.textSize = 12f * dp; text.color = DUST
-            c.drawText("${Data.EVENT_ICONS[ev]} ${Data.EVENTS[ev]} items, only until ${Data.EVENT_ENDS[ev]}. Yours to keep!", w / 2, navTop - 4f * dp, text)
+            c.drawText("${Data.EVENT_ICONS[ev]} ${Data.EVENTS[ev]} until ${Data.EVENT_ENDS[ev]} · event ingredients fade after", w / 2, navTop - 4f * dp, text)
             text.color = Color.WHITE
         }
     }

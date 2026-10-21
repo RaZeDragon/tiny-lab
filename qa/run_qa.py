@@ -117,10 +117,14 @@ note("## Fresh install & tutorial")
 adb("shell", "pm", "clear", PKG)
 adb("shell", "pm", "grant", PKG, "android.permission.POST_NOTIFICATIONS")
 adb("logcat", "-b", "crash", "-c")
+# stop Android's "Viewing full screen" banner from eating taps
+adb("shell", "settings", "put", "secure", "immersive_mode_confirmations", "confirmed")
 launch()
-time.sleep(1.8)
+time.sleep(1.5)
 shot("splash")
-time.sleep(4.5)
+time.sleep(1.0)
+shot("splash_b")
+time.sleep(4.0)
 st = state()
 W, H = st["w"], st["h"]
 note(f"Game view {W}x{H} px, density {DENS} (dp={DP:.3f}) = {W / DP:.0f}x{H / DP:.0f} dp")
@@ -277,6 +281,21 @@ time.sleep(10)
 for line in adb("shell", "dumpsys", "gfxinfo", PKG).splitlines():
     if any(k in line for k in ("Total frames rendered", "Janky frames", "50th percentile", "90th percentile", "99th percentile")):
         note("    " + line.strip())
+
+# ---------------------------------------------------------------- event previews
+note("\n## Event splash screens")
+for ev, nm in ((2, "frosty"), (3, "spring"), (0, "normal")):
+    adb("shell", "am", "force-stop", PKG)
+    adb("shell", "am", "start", "-n", f"{PKG}/.MainActivity", "--ez", "qa", "true", "--ei", "event", str(ev))
+    time.sleep(2.0)
+    shot(f"splash_{nm}")
+    time.sleep(3.0)
+    if ev == 2:
+        tap_id("nav1", required=False); time.sleep(1.5); shot("lab_frosty")
+    check_crash(f"event preview {nm}")
+adb("shell", "am", "force-stop", PKG)
+launch()
+time.sleep(5)
 
 # ---------------------------------------------------------------- night time
 note("\n## Night")

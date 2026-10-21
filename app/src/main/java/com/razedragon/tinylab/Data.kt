@@ -567,7 +567,11 @@ object Data {
     val EVENT_ENDS = arrayOf("", "Nov 3", "Jan 6", "Apr 25")
 
     /** Which seasonal event is on today (0 = none). */
+    /** Test runs can pretend an event is on (-1 = use the real date). */
+    var forceEvent = -1
+
     fun currentEvent(cal: java.util.Calendar = java.util.Calendar.getInstance()): Int {
+        if (forceEvent >= 0) return forceEvent
         val m = cal.get(java.util.Calendar.MONTH) + 1
         val d = cal.get(java.util.Calendar.DAY_OF_MONTH)
         return when {

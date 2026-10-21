@@ -11,6 +11,7 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         volumeControlStream = AudioManager.STREAM_MUSIC
+        if (intent.getBooleanExtra("qa", false)) Data.forceEvent = intent.getIntExtra("event", -1)
         game = GameView(this)
         game.qaMode = intent.getBooleanExtra("qa", false)
         setContentView(game)
