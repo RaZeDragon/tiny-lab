@@ -282,6 +282,7 @@ class GameView(context: Context) : View(context) {
             popup != null -> popup = null
             photoMode -> photoMode = false
             feeding -> feeding = false
+            previewKind >= 0 -> { previewKind = -1; previewFromOffer = false }
             familyFor >= 0 -> familyFor = -1
             offerPack >= 0 -> closeOffer()
             growPick >= 0 -> growPick = -1
@@ -565,6 +566,7 @@ class GameView(context: Context) : View(context) {
         if (splashT > 0f) return ArrayList()
         if (mini > 0) return ArrayList<Button>().also { miniButtons(it, w, h) }
         if (settingsOpen) return ArrayList<Button>().also { settingsButtons(it, w, h) }
+        if (previewKind >= 0) return ArrayList<Button>().also { l -> previewButtons(l, w, h) }
         if (offerPack >= 0) return ArrayList<Button>().also { l ->
             val pk = Data.PACKS[offerPack]
             val card = offerCard(w, h)
@@ -574,6 +576,9 @@ class GameView(context: Context) : View(context) {
                     if (ok) { val got = lab.grantPack(pk); offerPack = -1; sound.play(Fx.DISCOVER); burst(w / 2, h * 0.4f, DUST, 50, P_SPARK); toast("🎁 ${pk.name}: $got", DUST); markDirty() }
                     else toast("🎁 Packs open when Shroomology launches on Google Play!", MINT)
                 }
+            })
+            l.add(Button("offer_peek", RectF(card.left + 24f * dp, card.bottom - 166f * dp, card.right - 24f * dp, card.bottom - 124f * dp), "🔍 SEE WHAT'S INSIDE") {
+                previewKind = 7; previewIdx = offerPack; previewAnim = 0f; previewFromOffer = true
             })
             l.add(Button("offer_close", RectF(card.left + 24f * dp, card.bottom - 58f * dp, card.right - 24f * dp, card.bottom - 16f * dp), "Maybe later", STYLE_NORMAL) { closeOffer() })
         }
@@ -1149,6 +1154,10 @@ class GameView(context: Context) : View(context) {
             val y = top + row * rowH
             val b5 = RectF(w - p2 - 64f * dp, y + 5f * dp, w - p2, y + rowH - 5f * dp)
             val b1 = RectF(b5.left - 8f * dp - 84f * dp, y + 5f * dp, b5.left - 8f * dp, y + rowH - 5f * dp)
+            if (kind == 2 || kind == 3 || kind == 4 || kind == 6 || kind == 7)
+                list.add(Button("prev_${kind}_$i", RectF(p2 - 6f * dp, y + 2f * dp, b1.left - 4f * dp, y + rowH - 2f * dp), "", STYLE_GHOST, custom = { _, _ -> }) {
+                    previewKind = kind; previewIdx = i; previewAnim = 0f; sound.play(Fx.POP, 0.5f, 1.2f)
+                })
             val wide = RectF(b1.left, b1.top, b5.right, b5.bottom)
             when (kind) {
                 0, 1 -> {
@@ -1265,6 +1274,9 @@ class GameView(context: Context) : View(context) {
                     drawGiftBox(c, pad + 20f * dp, cy + 12f * dp, 30f * dp, pk.color)
                     text.textAlign = Paint.Align.LEFT; text.textSize = 15f * dp
                     c.drawText(pk.name, pad + 44f * dp, y + 24f * dp, text)
+                    val pnw = text.measureText(pk.name)
+                    text.textSize = 10f * dp; text.color = Color.argb(170, 255, 255, 255)
+                    c.drawText("🔍 preview", pad + 52f * dp + pnw, y + 23f * dp, text); text.color = Color.WHITE
                     text.textSize = 10.5f * dp; text.color = TEXT_DIM
                     for ((k, l) in wrap(pk.desc, w - pad * 2 - 150f * dp).take(4).withIndex()) c.drawText(l, pad + 44f * dp, y + 40f * dp + k * 13f * dp, text)
                     text.color = Color.WHITE; text.textAlign = Paint.Align.CENTER
@@ -1299,6 +1311,11 @@ class GameView(context: Context) : View(context) {
             text.textAlign = Paint.Align.LEFT
             text.textSize = if (rowH < 50f * dp) 13.5f * dp else 15f * dp
             c.drawText(name, pad + 42f * dp, cy - 2f * dp, text)
+            if (kind == 2 || kind == 3 || kind == 4 || kind == 6) {
+                val nw = text.measureText(name)
+                text.textSize = 10f * dp; text.color = Color.argb(170, 255, 255, 255)
+                c.drawText("🔍", pad + 48f * dp + nw, cy - 3f * dp, text); text.color = Color.WHITE
+            }
             text.textSize = 10.5f * dp; text.color = TEXT_DIM
             c.drawText(sub, pad + 42f * dp, cy + 13f * dp, text)
             text.color = Color.WHITE
@@ -1642,6 +1659,9 @@ class GameView(context: Context) : View(context) {
     internal fun testCam(x: Float) { camX = x.coerceIn(camMin(), camMax()); camVel = 0f }
     internal fun testOffer(i: Int) { offerPack = i }
     internal fun testOfferSide(i: Int) { prefs.edit().putLong(offerKey(Data.PACKS[i]) + "_until", System.currentTimeMillis() + OFFER_MS).apply() }
+    internal fun testCam(x: Float) { camX = x.coerceIn(camMin(), camMax()); camVel = 0f }
+    internal fun testOffer(i: Int) { offerPack = i }
+    internal fun testOfferSide(i: Int) { prefs.edit().putLong(offerKey(Data.PACKS[i]) + "_until", System.currentTimeMillis() + OFFER_MS).apply() }
     internal fun testThink(sh: Shroom) { sh.thought = thoughtFor(sh); sh.thoughtT = 3f }
     internal fun testSnowman(gx: Float, gz: Float) { snowmen.add(Snowman(gx, gz, 1f)) }
     internal fun testUpdateWidgetFrame(sh: Shroom) = renderWidgetFrame(sh, 1f)
@@ -1767,6 +1787,7 @@ class GameView(context: Context) : View(context) {
         shownDust += (lab.dust - shownDust) * min(1f, dt * 6f)
         if (abs(lab.dust - shownDust) < 0.5f) shownDust = lab.dust.toFloat()
         if (cardFor >= 0) cardAnim += dt * 3f else cardAnim = 0f
+        if (previewKind >= 0) previewAnim = min(1f, previewAnim + dt * 3.5f)
         val panelKey = if (decorating) -2L else selected
         if (panelKey != lastPanelKey) { if (panelKey != -1L) panelAnim = 0f; lastPanelKey = panelKey }
         panelAnim = min(1f, panelAnim + dt * 3.2f)
@@ -1831,7 +1852,7 @@ class GameView(context: Context) : View(context) {
         fill.color = Color.argb(40, 255, 255, 255)
         c.drawRect(0f, navTop, w, navTop + 1f * dp, fill)
 
-        if (!settingsOpen && cardFor < 0 && familyFor < 0 && !merchantOpen && offerPack < 0) {
+        if (!settingsOpen && cardFor < 0 && familyFor < 0 && !merchantOpen && offerPack < 0 && previewKind < 0) {
             c.save(); c.clipRect(0f, 0f, w, navTop)
             for (b in buttons) if (!b.id.startsWith("tut_") && !b.id.startsWith("nav")) drawButton(c, b)
             c.restore()
@@ -1843,9 +1864,14 @@ class GameView(context: Context) : View(context) {
         popup?.let { drawPopup(c, w, h, it) ; for (b in buttons) if (!b.id.startsWith("tut_")) drawButton(c, b) }
         drawTutorial(c, w, h)
         if (settingsOpen) drawSettings(c, w, h)
-        if (offerPack >= 0) {
+        if (offerPack >= 0 && previewKind < 0) {
             fill.color = Color.argb(205, 10, 6, 24); c.drawRect(0f, 0f, w, h, fill)
             drawOffer(c, w, h)
+            for (b in buttons) drawButton(c, b)
+        }
+        if (previewKind >= 0) {
+            fill.color = Color.argb(215, 10, 6, 24); c.drawRect(0f, 0f, w, h, fill)
+            drawPreview(c, w, h)
             for (b in buttons) drawButton(c, b)
         }
         if (merchantOpen) {
@@ -5152,6 +5178,172 @@ class GameView(context: Context) : View(context) {
         }
     }
 
+    // ---------- Shop previews: see it before you buy it ----------
+
+    private var previewKind = -1      // 2 decor, 3 theme, 4 accessory, 6 pet, 7 pack
+    private var previewIdx = 0
+    private var previewAnim = 0f
+    private var previewFromOffer = false
+
+    private fun previewCard(w: Float, h: Float) = RectF(16f * dp, h * 0.08f, w - 16f * dp, navTop - 8f * dp)
+    private fun previewScene(w: Float, h: Float): RectF { val c = previewCard(w, h); return RectF(c.left + 12f * dp, c.top + 64f * dp, c.right - 12f * dp, c.top + 64f * dp + (c.width() - 24f * dp) * 0.92f) }
+
+    /** The shop's own buy button for this item, so previews buy exactly the same way. */
+    private fun shopBuyButton(kind: Int, i: Int): Button? {
+        val tmp = ArrayList<Button>()
+        val savedTab = shopTab
+        shopTab = when (kind) { 2 -> if (Data.DECOR[i].event > 0) 8 else 2; 3 -> if (Data.THEMES[i].event > 0) 8 else 3; 4 -> if (Data.ACCESSORIES[i].event > 0) 8 else 4; 6 -> 6; else -> 7 }
+        shopButtons(tmp, width.toFloat(), height.toFloat())
+        shopTab = savedTab
+        val id = when (kind) { 2 -> "dbuy$i"; 3 -> "tbuy$i"; 4 -> "abuy$i"; 6 -> "pbuy$i"; else -> "pack$i" }
+        return tmp.firstOrNull { it.id == id }
+    }
+
+    private fun previewButtons(l: ArrayList<Button>, w: Float, h: Float) {
+        val card = previewCard(w, h)
+        val half = (card.width() - 36f * dp) / 2
+        val y = card.bottom - 58f * dp
+        val buy = shopBuyButton(previewKind, previewIdx)
+        val forSale = !(previewKind == 2 && Data.DECOR[previewIdx].special > 0) && !(previewKind == 4 && Data.ACCESSORIES[previewIdx].special > 0)
+        if (buy != null && forSale) {
+            l.add(Button("pv_buy", RectF(card.left + 12f * dp, y, card.left + 12f * dp + half, y + 46f * dp), buy.label, if (buy.enabled) STYLE_PRIMARY else STYLE_NORMAL, buy.enabled) {
+                buy.action()
+                if (previewKind != 3) { previewKind = -1; if (previewFromOffer) { previewFromOffer = false } }
+            })
+        }
+        l.add(Button("pv_close", RectF(card.right - 12f * dp - half, y, card.right - 12f * dp, y + 46f * dp), "CLOSE") {
+            previewKind = -1; previewFromOffer = false
+        })
+    }
+
+    /** A mini garden drawn into r: a theme, some decorations, and a shroom dressed up with a pet. */
+    private fun drawMiniScene(c: Canvas, r: RectF, theme: Int, decor: List<Int>, wear: IntArray, pet: Int, species: Int, bigDecor: Boolean = false) {
+        val w = width.toFloat(); val h = height.toFloat()
+        val savedTheme = lab.theme; val savedArea = area; val savedCam = camX
+        lab.theme = theme; area = 0; camX = 0.5f
+        val src = RectF(0f, h * 0.06f, w, h * 0.66f)
+        val sc = max(r.width() / src.width(), r.height() / src.height())
+        c.save()
+        c.clipRect(r)
+        c.translate(r.centerX(), r.centerY()); c.scale(sc, sc); c.translate(-src.centerX(), -src.centerY())
+        drawGardenScene(c, w, h)
+        // decorations spread around the shroom, big ones in front
+        val spots = listOf(0.22f to 0.35f, 0.78f to 0.4f, 0.3f to 0.7f, 0.72f to 0.75f, 0.5f to 0.2f, 0.12f to 0.85f)
+        val items = ArrayList<Triple<Float, Float, Int>>()
+        if (bigDecor && decor.isNotEmpty()) items.add(Triple(0.36f, 0.55f, decor[0]))
+        else for ((k, d) in decor.withIndex()) spots.getOrNull(k)?.let { items.add(Triple(it.first, it.second, d)) }
+        val shGz = if (bigDecor) 0.62f else 0.55f
+        val shGx = if (bigDecor) 0.64f else 0.5f
+        val all = (items.map { Pair(it.second, it) } + Pair(shGz, null)).sortedBy { it.first }
+        for ((_, it) in all) {
+            if (it != null) {
+                val (sx, sy) = toScreen(it.first, it.second)
+                drawDecor(c, it.third, sx, sy, depth(it.second) * (if (bigDecor) 1.5f else 1f))
+            } else {
+                val (sx, sy) = toScreen(shGx, shGz)
+                val size = 64f * dp * depth(shGz) * (if (bigDecor) 1f else 1.2f)
+                val who = Shroom(-7L, species).apply { xp = 200f; for (k in 0..2) this.wear[k] = wear[k]; expr = E_GIGGLE; exprT = 1f }
+                drawShroom(c, species, sx, sy, size, 0, sin(t * 2.5f), (t % 3f) < 0.12f, false, facing = -1f, who = who)
+                if (pet >= 0) {
+                    if (pet == 1 || pet == 2 || pet == Data.MINI_DRAGON) {
+                        val a = t * 1.6f
+                        drawPet(c, pet, sx + cos(a) * size * 0.6f, sy - size * 1.05f + sin(a * 1.3f) * size * 0.12f, size * 0.32f, t * 10f, if (cos(a) > 0) -1f else 1f, false)
+                    } else {
+                        val (px, py) = toScreen(shGx - 0.14f, shGz + 0.04f)
+                        drawPet(c, pet, px + sin(t * 1.5f) * 6f * dp, py, size * 0.45f, t * 8f, 1f, false)
+                    }
+                }
+            }
+        }
+        drawAmbient(c, w)
+        c.restore()
+        lab.theme = savedTheme; area = savedArea; camX = savedCam
+        stroke.color = Color.argb(160, 255, 255, 255); stroke.strokeWidth = 2f * dp
+        c.drawRoundRect(r, 16f * dp, 16f * dp, stroke)
+    }
+
+    /** Which shroom models the preview: the one you have selected, your first, or a Button Cap. */
+    private fun previewSpecies() = shroom(selected)?.species ?: lab.garden.firstOrNull()?.species ?: 1
+
+    private fun drawPreview(c: Canvas, w: Float, h: Float) {
+        val card = previewCard(w, h)
+        val k = 0.85f + 0.15f * easeOutBack(previewAnim)
+        c.save(); c.scale(k, k, card.centerX(), card.centerY())
+        panel(c, card, 24f * dp, PANEL_LIGHT)
+        val scene = previewScene(w, h)
+        val sp = previewSpecies()
+        val noWear = intArrayOf(-1, -1, -1)
+        var title = ""; var sub = ""
+        when (previewKind) {
+            3 -> { val th = Data.THEMES[previewIdx]; title = th.name; sub = "Garden theme · new sky, ground and weather"
+                drawMiniScene(c, scene, previewIdx, listOf(1, 7), noWear, -1, sp) }
+            2 -> { val d = Data.DECOR[previewIdx]; title = d.name; sub = if (d.glow) "Decoration · glows at night" else if (previewIdx in 11..15) "Toy · your shrooms play with it" else if (previewIdx == Data.COZY_BED) "Decoration · one shroom at a time naps here" else "Decoration"
+                drawMiniScene(c, scene, lab.theme, listOf(previewIdx), noWear, -1, sp, bigDecor = true) }
+            4 -> { val a = Data.ACCESSORIES[previewIdx]; title = a.name; sub = "Worn on the " + arrayOf("cap", "face", "stem")[a.slot]
+                val wr = intArrayOf(-1, -1, -1); wr[a.slot] = previewIdx
+                drawMiniScene(c, scene, lab.theme, emptyList(), wr, -1, sp) }
+            6 -> { val pt = Data.PETS[previewIdx]; title = pt.name; sub = "Pet · " + pt.desc
+                drawMiniScene(c, scene, lab.theme, emptyList(), noWear, previewIdx, sp) }
+            else -> {
+                val pk = Data.PACKS[previewIdx]; title = pk.name; sub = pk.price
+                val b = pk.bundle
+                val ev = eventNow()
+                val theme = b.themes.firstOrNull() ?: (if (pk.id == "event_boost" && ev > 0) Data.THEMES.indices.firstOrNull { Data.THEMES[it].event == ev } else null) ?: lab.theme
+                val decor = if (pk.id == "event_boost" && ev > 0) Data.DECOR.indices.filter { Data.DECOR[it].event == ev } else b.decor.toList()
+                val wr = intArrayOf(-1, -1, -1); for (a in b.acc) { val sl = Data.ACCESSORIES[a].slot; if (wr[sl] < 0 || Data.ACCESSORIES[a].special > 0) wr[sl] = a }
+                drawMiniScene(c, scene, theme, decor.take(5), wr, b.pets.firstOrNull() ?: -1, sp)
+                drawPackContents(c, pk, RectF(card.left + 14f * dp, scene.bottom + 10f * dp, card.right - 14f * dp, card.bottom - 66f * dp))
+            }
+        }
+        text.textSize = 22f * dp; text.color = Color.WHITE
+        c.drawText(title, w / 2, card.top + 32f * dp, text)
+        text.textSize = 12f * dp; text.color = TEXT_DIM
+        c.drawText(sub, w / 2, card.top + 52f * dp, text)
+        text.color = Color.WHITE
+        if (previewKind != 7) {
+            val owned = when (previewKind) { 3 -> (lab.themesOwned shr previewIdx) and 1 == 1; 2 -> lab.decorOwned[previewIdx] > 0 || lab.placed.any { it.kind == previewIdx }
+                4 -> lab.accOwned[previewIdx] > 0; else -> lab.petOwned[previewIdx] > 0 }
+            text.textSize = 13f * dp; text.color = if (owned) MINT else TEXT_DIM
+            c.drawText(if (owned) "✓ You own this" else "Modeled by ${shroom(selected)?.name ?: lab.garden.firstOrNull()?.name ?: "a Button Cap"}", w / 2, scene.bottom + 26f * dp, text)
+            text.color = Color.WHITE
+        }
+        c.restore()
+    }
+
+    /** Little tiles for everything in a pack. */
+    private fun drawPackContents(c: Canvas, pk: Pack, r: RectF) {
+        val b = pk.bundle
+        val ev = eventNow()
+        val tiles = ArrayList<Pair<String, (Float, Float, Float) -> Unit>>()
+        if (b.dust > 0) tiles.add("${b.dust} ✦" to { x, y, s -> fill.shader = RadialGradient(x - s * 0.2f, y - s * 0.2f, s, Color.rgb(255, 245, 190), DUST, Shader.TileMode.CLAMP); c.drawCircle(x, y, s * 0.6f, fill); fill.shader = null })
+        val themes = b.themes.toMutableList(); if (pk.id == "event_boost" && ev > 0) Data.THEMES.indices.filter { Data.THEMES[it].event == ev }.forEach { themes.add(it) }
+        for (t0 in themes) tiles.add(Data.THEMES[t0].name to { x, y, s -> val th = Data.THEMES[t0]
+            fill.shader = LinearGradient(0f, y - s * 0.7f, 0f, y + s * 0.7f, intArrayOf(th.skyTop, th.skyBottom, th.groundFar, th.groundNear), floatArrayOf(0f, 0.45f, 0.55f, 1f), Shader.TileMode.CLAMP)
+            c.drawRoundRect(x - s * 0.75f, y - s * 0.6f, x + s * 0.75f, y + s * 0.6f, s * 0.2f, s * 0.2f, fill); fill.shader = null })
+        val decor = b.decor.toMutableList(); if (pk.id == "event_boost" && ev > 0) Data.DECOR.indices.filter { Data.DECOR[it].event == ev }.forEach { decor.add(it) }
+        for (d in decor) tiles.add((if (Data.DECOR[d].special > 0) "★ " else "") + Data.DECOR[d].name to { x, y, s -> c.save(); c.clipRect(x - s, y - s, x + s, y + s); drawDecor(c, d, x, y + s * 0.75f, s / (40f * dp) * 0.55f); c.restore() })
+        for (a in b.acc) tiles.add((if (Data.ACCESSORIES[a].special > 0) "★ " else "") + Data.ACCESSORIES[a].name to { x, y, s -> drawAccessoryIcon(c, a, x, y, s * 0.55f) })
+        for (p in b.pets) tiles.add("★ " + Data.PETS[p].name to { x, y, s -> drawPet(c, p, x, y + s * 0.4f, s * 0.9f, t * 8f, 1f, false) })
+        if (pk.id == "event_boost" && ev > 0) tiles.add("10× event ingredients" to { x, y, s -> Data.INGREDIENTS.indices.filter { Data.INGREDIENTS[it].event == ev }.forEachIndexed { k, ing -> drawIngredient(c, ing, x + (k - 0.5f) * s * 0.7f, y, s * 0.3f) } })
+        if (b.foods.isNotEmpty()) tiles.add("Treats" to { x, y, s -> drawFood(c, b.foods[0], x, y, s * 0.4f) })
+        val cols = 4
+        val tw = r.width() / cols
+        val th = min(tw * 0.95f, r.height() / max(1, (tiles.size + cols - 1) / cols))
+        for ((k, tile) in tiles.withIndex()) {
+            val tx = r.left + (k % cols) * tw; val ty = r.top + (k / cols) * th
+            fill.color = Color.argb(45, 255, 255, 255); c.drawRoundRect(tx + 3f * dp, ty + 3f * dp, tx + tw - 3f * dp, ty + th - 3f * dp, 12f * dp, 12f * dp, fill)
+            tile.second(tx + tw / 2, ty + th * 0.42f, min(tw, th) * 0.3f)
+            text.textSize = 9.5f * dp; text.color = if (tile.first.startsWith("★")) DUST else Color.WHITE
+            val label = tile.first
+            text.textSize = 9.5f * dp
+            while (text.textSize > 7f * dp && text.measureText(label) > tw - 8f * dp) text.textSize -= 0.5f * dp
+            c.drawText(label, tx + tw / 2, ty + th - 9f * dp, text)
+            text.color = Color.WHITE
+        }
+        text.textSize = 10.5f * dp; text.color = TEXT_DIM
+        c.drawText("★ = only from this pack", r.centerX(), r.bottom + 2f * dp, text); text.color = Color.WHITE
+    }
+
     // ---------- Pack offers: shown once, then a 30-minute button on the garden ----------
 
     private var offerPack = -1
@@ -5194,7 +5386,7 @@ class GameView(context: Context) : View(context) {
         if (lab.brewed >= 3) showOffer(Data.PACKS.indexOfFirst { it.id == "spores_medium" })
     }
 
-    private fun offerCard(w: Float, h: Float) = RectF(24f * dp, h * 0.16f, w - 24f * dp, h * 0.16f + 470f * dp)
+    private fun offerCard(w: Float, h: Float) = RectF(24f * dp, h * 0.13f, w - 24f * dp, h * 0.13f + 510f * dp)
 
     private fun drawOffer(c: Canvas, w: Float, h: Float) {
         val pk = Data.PACKS[offerPack]
