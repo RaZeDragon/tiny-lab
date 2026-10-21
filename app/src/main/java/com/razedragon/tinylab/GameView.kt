@@ -572,7 +572,7 @@ class GameView(context: Context) : View(context) {
         })
         if (decorating) { decorButtons(list, w); return }
         if (selected < 0) {
-            list.add(Button("photo", RectF(w - 58f * dp, topBar + 54f * dp, w - 14f * dp, topBar + 88f * dp), "📷") {
+            list.add(Button("photo", RectF(142f * dp, topBar + 8f * dp, 190f * dp, topBar + 48f * dp), "📷") {
                 photoMode = true; selected = -1; feeding = false; styling = false; exploring = false
                 toast("Photo mode: tap SAVE & SHARE")
             })
@@ -4032,6 +4032,11 @@ class GameView(context: Context) : View(context) {
             if (i > 0) sb.append(",")
             sb.append("{\"id\":${s.id},\"x\":${x.toInt()},\"y\":${(y - size * 0.45f).toInt()},\"act\":${s.act},\"stage\":${s.stage()}}")
         }
+        sb.append("],\"buttons\":[")
+        for ((i, b) in buttons.withIndex()) {
+            if (i > 0) sb.append(",")
+            sb.append("{\"id\":\"${b.id}\",\"x\":${b.rect.centerX().toInt()},\"y\":${b.rect.centerY().toInt()},\"on\":${b.enabled}}")
+        }
         sb.append("]}")
         android.util.Log.d("SHROOMQA", sb.toString())
     }
@@ -4071,6 +4076,7 @@ class GameView(context: Context) : View(context) {
         // title letters hop in one by one
         val title = "Shroomology"
         text.textSize = 44f * dp
+        while (text.textSize > 20f * dp && text.measureText(title) > w - 36f * dp) text.textSize -= 1f * dp
         val total = text.measureText(title)
         var x = w / 2 - total / 2
         text.textAlign = Paint.Align.LEFT
@@ -5168,7 +5174,8 @@ class GameView(context: Context) : View(context) {
         text.textSize = 15f * dp
         val lines = wrap(tutText(), w - 120f * dp)
         val hasNext = tutStep == T_WELCOME || tutStep == T_DONE
-        val ch = 34f * dp + lines.size * 21f * dp + (if (hasNext) 58f else 40f) * dp
+        val hasSkip = tutStep != T_DONE
+        val ch = 44f * dp + lines.size * 21f * dp + (if (hasNext) 52f * dp else 0f) + (if (hasSkip) 30f * dp else 0f)
         val spot = tutSpot(w, h)
         val atTop = spot != null && spot.centerY() > h * 0.45f || tutStep == T_REVEAL
         val y = when {
@@ -5182,14 +5189,15 @@ class GameView(context: Context) : View(context) {
     private fun tutorialButtons(list: ArrayList<Button>, w: Float, h: Float) {
         val r = tutCardRect(w, h)
         if (tutStep == T_WELCOME || tutStep == T_DONE) {
-            list.add(Button("tut_next", RectF(r.centerX() - 80f * dp, r.bottom - 52f * dp, r.centerX() + 80f * dp, r.bottom - 12f * dp),
+            val lift = if (tutStep != T_DONE) 30f * dp else 0f
+            list.add(Button("tut_next", RectF(r.centerX() - 80f * dp, r.bottom - 52f * dp - lift, r.centerX() + 80f * dp, r.bottom - 12f * dp - lift),
                 if (tutStep == T_DONE) "LET'S GO!" else "NEXT", STYLE_PRIMARY) {
                 if (tutStep == T_DONE) setTut(-1)
                 else setTut(if (gardenFull()) T_FEED else T_GO_LAB)
             })
         }
         if (tutStep != T_DONE) {
-            list.add(Button("tut_skip", RectF(r.right - 118f * dp, r.top + 8f * dp, r.right - 10f * dp, r.top + 36f * dp), "Skip tutorial", STYLE_GHOST) {
+            list.add(Button("tut_skip", RectF(r.right - 130f * dp, r.bottom - 34f * dp, r.right - 12f * dp, r.bottom - 6f * dp), "Skip tutorial", STYLE_GHOST) {
                 setTut(-1)
                 toast("Tutorial skipped. You can replay it in Settings ⚙")
             })

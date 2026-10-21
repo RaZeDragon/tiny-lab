@@ -47,14 +47,13 @@ jobs:
           api-level: 29
           target: default
           arch: x86_64
+          profile: pixel_6
           cores: 2
           ram-size: 3072M
           emulator-boot-timeout: 1200
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
           script: |
-            adb shell wm size 1080x2400
-            adb shell wm density 420
             adb install -r app/build/outputs/apk/debug/app-debug.apk
             python3 qa/run_qa.py 2>&1 | tee qa-out/console.txt
 
