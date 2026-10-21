@@ -6,14 +6,14 @@ import android.graphics.Color
 class Ingredient(val name: String, val color: Int, val cost: Int)
 
 /** Garden decorations you can buy and place. */
-class Decor(val name: String, val cost: Int, val glow: Boolean = false)
+class Decor(val name: String, val cost: Int, val glow: Boolean = false, val event: Int = 0)
 
 /** Garden looks. */
 class Theme(val name: String, val cost: Int, val skyTop: Int, val skyBottom: Int, val groundFar: Int,
-            val groundNear: Int, val forest1: Int, val forest2: Int)
+            val groundNear: Int, val forest1: Int, val forest2: Int, val event: Int = 0)
 
 /** Wearable: slot 0 = on the cap, 1 = on the face, 2 = around the stem. */
-class Accessory(val name: String, val cost: Int, val slot: Int, val color: Int)
+class Accessory(val name: String, val cost: Int, val slot: Int, val color: Int, val event: Int = 0)
 
 /** A lab upgrade with one or more levels. */
 class Upgrade(val name: String, val desc: String, val costs: IntArray)
@@ -24,7 +24,7 @@ class Zone(val name: String, val hours: Float, val loot: IntArray, val color: In
 class Achievement(val name: String, val desc: String, val reward: Int)
 
 /** Things you feed your mushrooms. */
-class Food(val name: String, val color: Int, val cost: Int, val hunger: Int, val xp: Int, val happy: Int)
+class Food(val name: String, val color: Int, val cost: Int, val hunger: Int, val xp: Int, val happy: Int, val event: Int = 0)
 
 /**
  * A mushroom species.
@@ -74,6 +74,10 @@ object Data {
         Food("Sugar Cube", Color.rgb(250, 245, 235), 10, 20, 20, 12),
         Food("Mineral Mix", Color.rgb(160, 165, 180), 15, 35, 30, 4),
         Food("Moon Jelly", Color.rgb(200, 120, 255), 40, 50, 80, 20),
+        // Event treats
+        Food("Candy Corn", Color.rgb(255, 170, 60), 12, 15, 15, 30, event = 1),
+        Food("Hot Cocoa", Color.rgb(140, 90, 60), 15, 30, 20, 25, event = 2),
+        Food("Strawberry", Color.rgb(240, 70, 90), 12, 25, 18, 22, event = 3),
     )
 
     // ---------- Species ----------
@@ -298,6 +302,17 @@ object Data {
         Decor("Slide", 120),
         Decor("Trampoline", 110),
         Decor("Campfire", 80, glow = true),
+        // Shroomoween
+        Decor("Jack-o'-lantern", 50, glow = true, event = 1),
+        Decor("Spooky Tree", 70, event = 1),
+        Decor("Tombstone", 40, event = 1),
+        Decor("Candy Bowl", 35, event = 1),
+        // Frosty Festival
+        Decor("Snowman", 60, event = 2),
+        Decor("Gift Box", 40, event = 2),
+        // Spring Bloom
+        Decor("Flower Arch", 80, event = 3),
+        Decor("Egg Basket", 40, event = 3),
     )
 
     val THEMES = arrayOf(
@@ -311,6 +326,10 @@ object Data {
             Color.rgb(70, 60, 110), Color.rgb(90, 60, 160), Color.rgb(60, 40, 120)),
         Theme("Snowy Night", 200, Color.rgb(20, 30, 70), Color.rgb(70, 90, 140), Color.rgb(170, 185, 210),
             Color.rgb(230, 238, 250), Color.rgb(50, 60, 100), Color.rgb(40, 48, 85)),
+        Theme("Spooky Night", 120, Color.rgb(40, 15, 60), Color.rgb(200, 90, 50), Color.rgb(45, 35, 55),
+            Color.rgb(80, 70, 70), Color.rgb(35, 20, 45), Color.rgb(25, 15, 35), event = 1),
+        Theme("Cherry Blossom", 150, Color.rgb(255, 180, 210), Color.rgb(255, 230, 235), Color.rgb(110, 160, 110),
+            Color.rgb(150, 210, 140), Color.rgb(240, 150, 190), Color.rgb(220, 120, 170), event = 3),
     )
 
     val STAGE_NAMES = arrayOf("Sprout", "Young", "Grown", "Elder")
@@ -348,7 +367,33 @@ object Data {
         Accessory("Scarf", 50, 2, Color.rgb(230, 70, 70)),
         Accessory("Bow Tie", 45, 2, Color.rgb(90, 200, 255)),
         Accessory("Headphones", 120, 0, Color.rgb(255, 110, 80)),
+        // Event outfits
+        Accessory("Pumpkin Hat", 40, 0, Color.rgb(255, 140, 40), event = 1),
+        Accessory("Witch Hat", 70, 0, Color.rgb(45, 30, 60), event = 1),
+        Accessory("Ghost Sheet", 80, 0, Color.WHITE, event = 1),
+        Accessory("Bat Wings", 90, 2, Color.rgb(60, 40, 70), event = 1),
+        Accessory("Santa Hat", 60, 0, Color.rgb(220, 40, 50), event = 2),
+        Accessory("Antlers", 70, 0, Color.rgb(150, 100, 60), event = 2),
+        Accessory("Bunny Ears", 60, 0, Color.rgb(250, 245, 250), event = 3),
+        Accessory("Daisy Clip", 40, 0, Color.WHITE, event = 3),
     )
+
+    // ---------- Seasonal events ----------
+    val EVENTS = arrayOf("", "Shroomoween", "Frosty Festival", "Spring Bloom")
+    val EVENT_ICONS = arrayOf("", "🎃", "❄️", "🌸")
+    val EVENT_ENDS = arrayOf("", "Nov 3", "Jan 6", "Apr 25")
+
+    /** Which seasonal event is on today (0 = none). */
+    fun currentEvent(cal: java.util.Calendar = java.util.Calendar.getInstance()): Int {
+        val m = cal.get(java.util.Calendar.MONTH) + 1
+        val d = cal.get(java.util.Calendar.DAY_OF_MONTH)
+        return when {
+            (m == 10 && d >= 10) || (m == 11 && d <= 3) -> 1
+            m == 12 || (m == 1 && d <= 6) -> 2
+            (m == 3 && d >= 20) || (m == 4 && d <= 25) -> 3
+            else -> 0
+        }
+    }
 
     // ---------- Lab upgrades ----------
     const val UP_GARDEN = 0
