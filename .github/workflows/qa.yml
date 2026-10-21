@@ -11,7 +11,7 @@ permissions:
 jobs:
   qa:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v5
 
@@ -41,6 +41,32 @@ jobs:
           { echo "cpus: $(nproc)"; free -m; ls -la /dev/kvm || echo "NO KVM"; } > qa-out/machine.txt
           cat qa-out/machine.txt
 
+      # A booted emulator saved as a snapshot, so later runs start in seconds instead of minutes
+      - name: Restore the saved emulator
+        uses: actions/cache@v4
+        id: avd-cache
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: avd-29-pixel6-v1
+
+      - name: Boot the emulator once and save it
+        if: steps.avd-cache.outputs.cache-hit != 'true'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 29
+          target: default
+          arch: x86_64
+          profile: pixel_6
+          cores: 3
+          ram-size: 3072M
+          emulator-boot-timeout: 900
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: false
+          script: echo "Saved the emulator snapshot."
+
       - name: Play the game on an emulator
         id: play1
         continue-on-error: true
@@ -50,11 +76,12 @@ jobs:
           target: default
           arch: x86_64
           profile: pixel_6
-          cores: 2
+          cores: 3
           ram-size: 3072M
-          emulator-boot-timeout: 720
+          emulator-boot-timeout: 900
+          force-avd-creation: false
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
           script: |
             adb install -r app/build/outputs/apk/debug/app-debug.apk
             python3 qa/run_qa.py 2>&1 | tee qa-out/console.txt
@@ -67,11 +94,12 @@ jobs:
           target: default
           arch: x86_64
           profile: pixel_6
-          cores: 2
+          cores: 3
           ram-size: 3072M
-          emulator-boot-timeout: 720
+          emulator-boot-timeout: 900
+          force-avd-creation: false
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
           script: |
             adb install -r app/build/outputs/apk/debug/app-debug.apk
             python3 qa/run_qa.py 2>&1 | tee qa-out/console.txt
