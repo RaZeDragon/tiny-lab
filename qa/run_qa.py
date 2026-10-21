@@ -283,7 +283,11 @@ for k in range(8):
     swipe(W * (0.2 + 0.6 * (k % 2)), H * 0.85, W * (0.8 - 0.6 * (k % 2)), H * 0.85, 500, 0.1)
     if k == 3:
         shot("spore_catch")
-time.sleep(25)
+end = time.time() + 120
+while time.time() < end:
+    st = state()
+    if st and button(st, "mg_done"):
+        break
 shot("spore_catch_end")
 tap_id("mg_done", 1.0)
 tap_id("play1", 1.0)
@@ -307,10 +311,11 @@ note("\n## Event splash screens")
 for ev, nm in ((2, "frosty"), (3, "spring"), (0, "normal")):
     adb("shell", "am", "force-stop", PKG)
     adb("logcat", "-c")
-    adb("shell", "am", "start", "-n", f"{PKG}/.MainActivity", "--ez", "qa", "true", "--ei", "event", str(ev))
+    adb("shell", "am", "start", "-n", f"{PKG}/.MainActivity", "--ez", "qa", "true", "--ei", "event", str(ev), "--ez", "holdSplash", "true")
     wait_first_frame()
-    time.sleep(1.5)
+    time.sleep(5)
     shot(f"splash_{nm}")
+    raw_tap(W / 2, H / 2, 0.5)   # a tap lets the held splash finish
     wait_splash_done()
     if ev == 2:
         tap_id("nav1", required=False); time.sleep(1.5); shot("lab_frosty")

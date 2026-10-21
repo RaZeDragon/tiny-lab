@@ -14,6 +14,7 @@ class MainActivity : Activity() {
         if (intent.getBooleanExtra("qa", false)) Data.forceEvent = intent.getIntExtra("event", -1)
         game = GameView(this)
         game.qaMode = intent.getBooleanExtra("qa", false)
+        game.holdSplash = game.qaMode && intent.getBooleanExtra("holdSplash", false)
         setContentView(game)
         // Android 13+ asks before an app can show notifications
         if (android.os.Build.VERSION.SDK_INT >= 33 &&

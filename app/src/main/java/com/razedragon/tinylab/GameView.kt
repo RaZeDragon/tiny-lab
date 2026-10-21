@@ -1083,7 +1083,7 @@ class GameView(context: Context) : View(context) {
     override fun onTouchEvent(e: MotionEvent): Boolean {
         val x = e.x; val y = e.y
         if (splashT > 0f) {
-            if (e.actionMasked == MotionEvent.ACTION_UP) splashT = min(splashT, 0.45f)
+            if (e.actionMasked == MotionEvent.ACTION_UP) { holdSplash = false; splashT = min(splashT, 0.45f) }
             return true
         }
         if (mini > 0) {
@@ -1443,7 +1443,7 @@ class GameView(context: Context) : View(context) {
             hugDone = true; pressedId = null
             shroom(dragShroom)?.let { hug(it) }
         }
-        if (splashT > 0f) splashT -= max(dt, realDt)
+        if (splashT > 0f && !(holdSplash && splashT < 0.7f)) splashT -= max(dt, realDt)
         updateMini(dt)
         if (profSayT > 0f) profSayT -= dt
         if (flaskYum > 0f) flaskYum -= dt
@@ -4203,6 +4203,7 @@ class GameView(context: Context) : View(context) {
     // ---------- Splash screen ----------
 
     private var splashT = 2.6f
+    var holdSplash = false   // test runs can freeze the splash fully drawn to photograph it
 
     private fun drawSplash(c: Canvas, w: Float, h: Float) {
         val age = 2.6f - splashT
