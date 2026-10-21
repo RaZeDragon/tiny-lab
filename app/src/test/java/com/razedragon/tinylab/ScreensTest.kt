@@ -242,11 +242,12 @@ class ScreensTest {
         lab.plant(0, 0); lab.plant(1, 3); lab.plant(2, 5); lab.water(1)
         lab.plotAt[0] -= 3 * 3_600_000L
         for (i in lab.ingredients.indices) lab.ingredients[i] = 3
-        g.testTap("nav1"); assertTrue(g.testTap("m2")); g.testFrame(0.4f); save(g.testRender(), "lab_grow")
+        g.testTap("nav0"); g.testCam(1.5f); g.testFrame(0.5f); save(g.testRender(), "garden_patch")
         assertTrue(g.testTap("plot0"))
         assertTrue(lab.harvested == 1)
-        assertTrue(g.testTap("plot3")); g.testFrame(0.2f); save(g.testRender(), "lab_grow_seeds")
+        assertTrue(g.testTap("plot3")); g.testFrame(0.4f); save(g.testRender(), "garden_patch_seeds")
         g.testTap("seed_cancel")
+        g.testTap("nav1")
         assertTrue(g.testTap("m3")); g.testFrame(0.2f); save(g.testRender(), "lab_cook")
         assertTrue(g.testTap("cook0"))
         assertEquals(1, lab.foods[8])
@@ -258,8 +259,24 @@ class ScreensTest {
         val s2 = lab.newShroom(6, 200f, false).apply { gx = 0.3f; gz = 0.75f; wear[0] = Data.SPROUT_CROWN }
         lab.garden.add(s); lab.garden.add(s2)
         for (f in 8..12) lab.foods[f] = 1
-        g.testTap("nav0"); g.testFrame(1f); save(g.testRender(), "garden_new_items")
+        g.testTap("nav0"); g.testCam(0.5f); g.testFrame(1f); save(g.testRender(), "garden_new_items")
         g.testSelect(s.id); g.testFrame(0.3f); assertTrue(g.testTap("feed")); g.testFrame(0.2f); save(g.testRender(), "panel_feed")
+    }
+
+    @Test fun widerGardenAndOffers() {
+        reset()
+        val g = ready(0)
+        val lab = g.testLab(); lab.garden.clear()
+        for (k in 0 until 8) lab.garden.add(lab.newShroom(listOf(1, 2, 3, 6, 13, 30, 42, 45)[k], 200f, false).apply { gx = 0.15f + k * 0.23f; gz = 0.2f + (k % 3) * 0.3f })
+        g.testCam(0.5f); g.testFrame(2f); save(g.testRender(), "garden_left")
+        g.testCam(1.5f); g.testFrame(0.5f); save(g.testRender(), "garden_right")
+        assertTrue(g.testButtonIds().contains("pan_l"))
+        g.testOffer(Data.PACKS.indexOfFirst { it.id == "starter" }); g.testFrame(0.3f); save(g.testRender(), "offer_popup")
+        assertTrue(g.testTap("offer_close"))
+        g.testOfferSide(Data.PACKS.indexOfFirst { it.id == "spores_medium" }); g.testFrame(0.3f)
+        assertTrue(g.testButtonIds().any { it.startsWith("offerside") })
+        save(g.testRender(), "garden_offer_buttons")
+        reset()
     }
 
     @Test fun merchantStickersCodes() {

@@ -95,24 +95,24 @@ object Data {
     const val RAINBOW = 17
 
     val INGREDIENTS = arrayOf(
-        Ingredient("Water", Color.rgb(90, 170, 255), 3),
-        Ingredient("Soil", Color.rgb(150, 100, 60), 3),
-        Ingredient("Ember", Color.rgb(255, 110, 50), 8),
-        Ingredient("Frost", Color.rgb(170, 230, 255), 8),
-        Ingredient("Iron", Color.rgb(150, 155, 170), 10),
-        Ingredient("Sulfur", Color.rgb(230, 220, 70), 8),
-        Ingredient("Crystal", Color.rgb(190, 120, 255), 15),
-        Ingredient("Moondew", Color.rgb(110, 255, 220), 20),
-        Ingredient("Gold", Color.rgb(255, 205, 60), 60),
-        Ingredient("Petal", Color.rgb(255, 140, 190), 10),
-        Ingredient("Honey", Color.rgb(255, 175, 40), 12),
-        Ingredient("Spark", Color.rgb(70, 215, 255), 14),
-        Ingredient("Pumpkin Seed", Color.rgb(255, 135, 35), 10, event = 1),
-        Ingredient("Ecto Goo", Color.rgb(140, 245, 140), 14, event = 1),
-        Ingredient("Peppermint", Color.rgb(235, 60, 75), 10, event = 2),
-        Ingredient("Gingerbread", Color.rgb(185, 115, 55), 12, event = 2),
-        Ingredient("Clover", Color.rgb(70, 190, 85), 10, event = 3),
-        Ingredient("Rainbow Drop", Color.rgb(150, 190, 255), 14, event = 3),
+        Ingredient("Water", Color.rgb(90, 170, 255), 4),
+        Ingredient("Soil", Color.rgb(150, 100, 60), 4),
+        Ingredient("Ember", Color.rgb(255, 110, 50), 12),
+        Ingredient("Frost", Color.rgb(170, 230, 255), 12),
+        Ingredient("Iron", Color.rgb(150, 155, 170), 15),
+        Ingredient("Sulfur", Color.rgb(230, 220, 70), 12),
+        Ingredient("Crystal", Color.rgb(190, 120, 255), 22),
+        Ingredient("Moondew", Color.rgb(110, 255, 220), 30),
+        Ingredient("Gold", Color.rgb(255, 205, 60), 90),
+        Ingredient("Petal", Color.rgb(255, 140, 190), 15),
+        Ingredient("Honey", Color.rgb(255, 175, 40), 18),
+        Ingredient("Spark", Color.rgb(70, 215, 255), 21),
+        Ingredient("Pumpkin Seed", Color.rgb(255, 135, 35), 15, event = 1),
+        Ingredient("Ecto Goo", Color.rgb(140, 245, 140), 21, event = 1),
+        Ingredient("Peppermint", Color.rgb(235, 60, 75), 15, event = 2),
+        Ingredient("Gingerbread", Color.rgb(185, 115, 55), 18, event = 2),
+        Ingredient("Clover", Color.rgb(70, 190, 85), 15, event = 3),
+        Ingredient("Rainbow Drop", Color.rgb(150, 190, 255), 21, event = 3),
     )
 
     /** Ingredients you can use right now (event ones only while their event is on). */
@@ -129,15 +129,15 @@ object Data {
 
     // ---------- Food ----------
     val FOODS = arrayOf(
-        Food("Water Drop", Color.rgb(90, 170, 255), 2, 15, 4, 0),
-        Food("Compost", Color.rgb(120, 85, 55), 5, 30, 10, 2),
-        Food("Sugar Cube", Color.rgb(250, 245, 235), 10, 20, 20, 12),
-        Food("Mineral Mix", Color.rgb(160, 165, 180), 15, 35, 30, 4),
-        Food("Moon Jelly", Color.rgb(200, 120, 255), 40, 50, 80, 20),
+        Food("Water Drop", Color.rgb(90, 170, 255), 3, 15, 4, 0),
+        Food("Compost", Color.rgb(120, 85, 55), 8, 30, 10, 2),
+        Food("Sugar Cube", Color.rgb(250, 245, 235), 15, 20, 20, 12),
+        Food("Mineral Mix", Color.rgb(160, 165, 180), 22, 35, 30, 4),
+        Food("Moon Jelly", Color.rgb(200, 120, 255), 60, 50, 80, 20),
         // Event treats
-        Food("Candy Corn", Color.rgb(255, 170, 60), 12, 15, 15, 30, event = 1),
-        Food("Hot Cocoa", Color.rgb(140, 90, 60), 15, 30, 20, 25, event = 2),
-        Food("Strawberry", Color.rgb(240, 70, 90), 12, 25, 18, 22, event = 3),
+        Food("Candy Corn", Color.rgb(255, 170, 60), 18, 15, 15, 30, event = 1),
+        Food("Hot Cocoa", Color.rgb(140, 90, 60), 22, 30, 20, 25, event = 2),
+        Food("Strawberry", Color.rgb(240, 70, 90), 18, 25, 18, 22, event = 3),
         // Homemade in the Kitchen (never sold)
         Food("Honey Cake", Color.rgb(255, 200, 90), 0, 45, 40, 30, cooked = true),
         Food("Ember Stew", Color.rgb(230, 100, 60), 0, 60, 70, 10, cooked = true),
@@ -522,36 +522,36 @@ object Data {
 
     // ---------- Garden decorations ----------
     val DECOR = arrayOf(
-        Decor("Lantern", 30, glow = true),
-        Decor("Flower Patch", 15),
-        Decor("Big Rock", 20),
-        Decor("Picket Fence", 25),
-        Decor("Pond", 100),
-        Decor("Crystal Cluster", 120, glow = true),
-        Decor("Toadstool House", 250, glow = true),
-        Decor("Bench", 40),
-        Decor("Signpost", 20),
-        Decor("Fairy Lights", 150, glow = true),
-        Decor("Tree Stump", 25),
+        Decor("Lantern", 50, glow = true),
+        Decor("Flower Patch", 20),
+        Decor("Big Rock", 30),
+        Decor("Picket Fence", 40),
+        Decor("Pond", 160),
+        Decor("Crystal Cluster", 190, glow = true),
+        Decor("Toadstool House", 400, glow = true),
+        Decor("Bench", 60),
+        Decor("Signpost", 30),
+        Decor("Fairy Lights", 240, glow = true),
+        Decor("Tree Stump", 40),
         // Toys
-        Decor("Ball", 30),
-        Decor("Swing", 150),
-        Decor("Slide", 200),
-        Decor("Trampoline", 180),
-        Decor("Campfire", 120, glow = true),
+        Decor("Ball", 50),
+        Decor("Swing", 240),
+        Decor("Slide", 320),
+        Decor("Trampoline", 290),
+        Decor("Campfire", 190, glow = true),
         // Shroomoween
-        Decor("Jack-o'-lantern", 50, glow = true, event = 1),
-        Decor("Spooky Tree", 70, event = 1),
-        Decor("Tombstone", 40, event = 1),
-        Decor("Candy Bowl", 35, event = 1),
+        Decor("Jack-o'-lantern", 80, glow = true, event = 1),
+        Decor("Spooky Tree", 110, event = 1),
+        Decor("Tombstone", 60, event = 1),
+        Decor("Candy Bowl", 60, event = 1),
         // Frosty Festival
-        Decor("Snowman", 60, event = 2),
-        Decor("Gift Box", 40, event = 2),
+        Decor("Snowman", 100, event = 2),
+        Decor("Gift Box", 60, event = 2),
         // Spring Bloom
-        Decor("Flower Arch", 80, event = 3),
-        Decor("Egg Basket", 40, event = 3),
+        Decor("Flower Arch", 130, event = 3),
+        Decor("Egg Basket", 60, event = 3),
         // More
-        Decor("Cozy Bed", 150),
+        Decor("Moss Nest", 240),
         Decor("Star Fountain", 0, glow = true, special = 2),
     )
     const val COZY_BED = 24
@@ -595,32 +595,32 @@ object Data {
 
     // ---------- Hats & accessories ----------
     val ACCESSORIES = arrayOf(
-        Accessory("Party Hat", 30, 0, Color.rgb(255, 120, 170)),
-        Accessory("Bow", 30, 0, Color.rgb(255, 90, 130)),
-        Accessory("Beanie", 45, 0, Color.rgb(90, 160, 255)),
-        Accessory("Flower Crown", 60, 0, Color.rgb(255, 230, 120)),
-        Accessory("Top Hat", 80, 0, Color.rgb(40, 35, 50)),
-        Accessory("Cowboy Hat", 90, 0, Color.rgb(170, 110, 60)),
-        Accessory("Wizard Hat", 200, 0, Color.rgb(110, 70, 200)),
-        Accessory("Tiny Crown", 400, 0, Color.rgb(255, 205, 60)),
-        Accessory("Halo", 500, 0, Color.rgb(255, 245, 170)),
-        Accessory("Glasses", 40, 1, Color.rgb(50, 40, 60)),
-        Accessory("Sunglasses", 60, 1, Color.rgb(20, 20, 30)),
-        Accessory("Scarf", 50, 2, Color.rgb(230, 70, 70)),
-        Accessory("Bow Tie", 45, 2, Color.rgb(90, 200, 255)),
-        Accessory("Headphones", 180, 0, Color.rgb(255, 110, 80)),
+        Accessory("Party Hat", 50, 0, Color.rgb(255, 120, 170)),
+        Accessory("Bow", 50, 0, Color.rgb(255, 90, 130)),
+        Accessory("Beanie", 70, 0, Color.rgb(90, 160, 255)),
+        Accessory("Flower Crown", 100, 0, Color.rgb(255, 230, 120)),
+        Accessory("Top Hat", 130, 0, Color.rgb(40, 35, 50)),
+        Accessory("Cowboy Hat", 140, 0, Color.rgb(170, 110, 60)),
+        Accessory("Wizard Hat", 320, 0, Color.rgb(110, 70, 200)),
+        Accessory("Tiny Crown", 640, 0, Color.rgb(255, 205, 60)),
+        Accessory("Halo", 800, 0, Color.rgb(255, 245, 170)),
+        Accessory("Glasses", 60, 1, Color.rgb(50, 40, 60)),
+        Accessory("Sunglasses", 100, 1, Color.rgb(20, 20, 30)),
+        Accessory("Scarf", 80, 2, Color.rgb(230, 70, 70)),
+        Accessory("Bow Tie", 70, 2, Color.rgb(90, 200, 255)),
+        Accessory("Headphones", 290, 0, Color.rgb(255, 110, 80)),
         // Event outfits
-        Accessory("Pumpkin Hat", 40, 0, Color.rgb(255, 140, 40), event = 1),
-        Accessory("Witch Hat", 70, 0, Color.rgb(45, 30, 60), event = 1),
-        Accessory("Ghost Sheet", 80, 0, Color.WHITE, event = 1),
-        Accessory("Bat Wings", 90, 2, Color.rgb(60, 40, 70), event = 1),
-        Accessory("Santa Hat", 60, 0, Color.rgb(220, 40, 50), event = 2),
-        Accessory("Antlers", 70, 0, Color.rgb(150, 100, 60), event = 2),
-        Accessory("Bunny Ears", 60, 0, Color.rgb(250, 245, 250), event = 3),
-        Accessory("Daisy Clip", 40, 0, Color.WHITE, event = 3),
+        Accessory("Pumpkin Hat", 60, 0, Color.rgb(255, 140, 40), event = 1),
+        Accessory("Witch Hat", 110, 0, Color.rgb(45, 30, 60), event = 1),
+        Accessory("Ghost Sheet", 130, 0, Color.WHITE, event = 1),
+        Accessory("Bat Wings", 140, 2, Color.rgb(60, 40, 70), event = 1),
+        Accessory("Santa Hat", 100, 0, Color.rgb(220, 40, 50), event = 2),
+        Accessory("Antlers", 110, 0, Color.rgb(150, 100, 60), event = 2),
+        Accessory("Bunny Ears", 100, 0, Color.rgb(250, 245, 250), event = 3),
+        Accessory("Daisy Clip", 60, 0, Color.WHITE, event = 3),
         // Only from the traveling merchant
-        Accessory("Acorn Cap", 220, 0, Color.rgb(150, 100, 55), special = 1),
-        Accessory("Monocle", 260, 1, Color.rgb(230, 200, 90), special = 1),
+        Accessory("Acorn Cap", 350, 0, Color.rgb(150, 100, 55), special = 1),
+        Accessory("Monocle", 420, 1, Color.rgb(230, 200, 90), special = 1),
         // Only from packs
         Accessory("Sprout Crown", 0, 0, Color.rgb(120, 220, 120), special = 2),
     )
@@ -658,21 +658,21 @@ object Data {
     const val UP_BOOTS = 5
     const val UP_CAVE = 6
     val UPGRADES = arrayOf(
-        Upgrade("Bigger Garden", "+2 garden spots per level", intArrayOf(300, 800, 1600)),
-        Upgrade("Big Flask", "Brew with 3 ingredients for Rare species", intArrayOf(500)),
-        Upgrade("Auto-Feeder", "Feeds hungry mushrooms from your food stock", intArrayOf(600)),
-        Upgrade("Dust Collector", "Collects spore dust for you", intArrayOf(500)),
-        Upgrade("Rest Nook", "Shorter rest after crossbreeding", intArrayOf(200, 500)),
-        Upgrade("Trail Boots", "Expeditions finish 25% faster", intArrayOf(400)),
-        Upgrade("Glow Cave", "A second garden: glowing shrooms grow 50% faster", intArrayOf(2000)),
+        Upgrade("Bigger Garden", "+5 garden spots per level", intArrayOf(800, 2000, 4000)),
+        Upgrade("Big Flask", "Brew with 3 ingredients for Rare species", intArrayOf(800)),
+        Upgrade("Auto-Feeder", "Feeds hungry mushrooms from your food stock", intArrayOf(1000)),
+        Upgrade("Dust Collector", "Collects spore dust for you", intArrayOf(800)),
+        Upgrade("Rest Nook", "Shorter rest after crossbreeding", intArrayOf(300, 800)),
+        Upgrade("Trail Boots", "Expeditions finish 25% faster", intArrayOf(650)),
+        Upgrade("Glow Cave", "A second garden: glowing shrooms grow 50% faster", intArrayOf(3000)),
     )
 
     // ---------- Pets ----------
     val PETS = arrayOf(
-        Pet("Snail", 250, "Slow and loyal, leaves a sparkly trail"),
-        Pet("Ladybug", 300, "Buzzes around its friend's cap"),
-        Pet("Firefly", 450, "Glows softly at night"),
-        Pet("Froggy", 350, "Hops along and says ribbit"),
+        Pet("Snail", 400, "Slow and loyal, leaves a sparkly trail"),
+        Pet("Ladybug", 480, "Buzzes around its friend's cap"),
+        Pet("Firefly", 720, "Glows softly at night"),
+        Pet("Froggy", 560, "Hops along and says ribbit"),
         Pet("Ghostie", 0, "Shroomoween quest reward", event = 1),
         Pet("Penguin", 0, "Frosty Festival quest reward", event = 2),
         Pet("Bunny", 0, "Spring Bloom quest reward", event = 3),
@@ -742,14 +742,14 @@ object Data {
 
     // ---------- Real-money packs ----------
     val PACKS = arrayOf(
-        Pack("spores_small", "Spore Pouch", "$0.99", "1,500 spore dust", Reward(dust = 1500), false, Color.rgb(255, 214, 110)),
-        Pack("spores_medium", "Spore Sack", "$2.99", "5,000 spore dust", Reward(dust = 5000), false, Color.rgb(255, 190, 90)),
-        Pack("spores_large", "Spore Chest", "$4.99", "9,000 spore dust · best value", Reward(dust = 9000), false, Color.rgb(255, 160, 70)),
-        Pack("starter", "Starter Pack", "$1.99", "2,000 ✦, Sunny Day theme, Lantern, Flower Patch, Bench, Bow, Scarf + exclusive Star Fountain & Sprout Crown",
-            Reward(dust = 2000, themes = intArrayOf(1), decor = intArrayOf(0, 1, 7, STAR_FOUNTAIN), acc = intArrayOf(1, 11, SPROUT_CROWN), foods = intArrayOf(2, 2, 2)),
+        Pack("spores_small", "Spore Pouch", "$0.99", "400 spore dust", Reward(dust = 400), false, Color.rgb(255, 214, 110)),
+        Pack("spores_medium", "Spore Sack", "$2.99", "1,300 spore dust", Reward(dust = 1300), false, Color.rgb(255, 190, 90)),
+        Pack("spores_large", "Spore Chest", "$4.99", "2,400 spore dust · best value", Reward(dust = 2400), false, Color.rgb(255, 160, 70)),
+        Pack("starter", "Starter Pack", "$1.99", "500 ✦, Sunny Day theme, Lantern, Flower Patch, Bench, Bow, Scarf + exclusive Star Fountain & Sprout Crown",
+            Reward(dust = 500, themes = intArrayOf(1), decor = intArrayOf(0, 1, 7, STAR_FOUNTAIN), acc = intArrayOf(1, 11, SPROUT_CROWN), foods = intArrayOf(2, 2, 2)),
             true, Color.rgb(140, 220, 160)),
-        Pack("event_boost", "Event Boost", "$2.99", "2,500 ✦, 10 of each event ingredient, the event theme, all event decor + exclusive Mini Dragon pet",
-            Reward(dust = 2500, pets = intArrayOf(MINI_DRAGON)), true, Color.rgb(255, 150, 210), eventOnly = true),
+        Pack("event_boost", "Event Boost", "$2.99", "600 ✦, 10 of each event ingredient, the event theme, all event decor + exclusive Mini Dragon pet",
+            Reward(dust = 600, pets = intArrayOf(MINI_DRAGON)), true, Color.rgb(255, 150, 210), eventOnly = true),
     )
 
     // ---------- The traveling merchant ----------
@@ -763,9 +763,9 @@ object Data {
     fun merchantOffers(day: Int): List<Offer> {
         val r = kotlin.random.Random(day * 977 + 3)
         val pool = mutableListOf(
-            Offer(0, GOLD, 3, 140), Offer(0, MOONDEW, 5, 80), Offer(0, CRYSTAL, 5, 60), Offer(0, SPARK, 6, 70),
-            Offer(1, r.nextInt(SEEDS.size), 3, 60), Offer(1, r.nextInt(SEEDS.size), 2, 45),
-            Offer(2, ACORN_CAP, 1, 220), Offer(2, MONOCLE, 1, 260), Offer(3, 0, 1, 400),
+            Offer(0, GOLD, 3, 200), Offer(0, MOONDEW, 5, 110), Offer(0, CRYSTAL, 5, 80), Offer(0, SPARK, 6, 100),
+            Offer(1, r.nextInt(SEEDS.size), 3, 80), Offer(1, r.nextInt(SEEDS.size), 2, 60),
+            Offer(2, ACORN_CAP, 1, 310), Offer(2, MONOCLE, 1, 360), Offer(3, 0, 1, 560),
         )
         pool.shuffle(r)
         val picks = pool.take(4).toMutableList()
@@ -810,21 +810,21 @@ object Data {
     // ---------- Achievements ----------
     val ACHIEVEMENTS = arrayOf(
         Achievement("First Sprout", "Brew your first mushroom", 10),
-        Achievement("Collector", "Discover 10 species", 40),
-        Achievement("Scholar", "Discover 25 species", 100),
-        Achievement("Shroomologist", "Discover every year-round species", 500),
-        Achievement("Matchmaker", "Discover a hybrid", 40),
-        Achievement("Legend", "Discover a legendary", 150),
-        Achievement("Rare Find", "Discover a rare 3-ingredient species", 80),
-        Achievement("Sparkle!", "Get a shiny mushroom", 60),
-        Achievement("Perfectionist", "Make 10 perfect brews", 60),
-        Achievement("Wise Elder", "Raise a mushroom to Elder", 60),
-        Achievement("Interior Designer", "Place 10 decorations", 50),
-        Achievement("Fashionista", "Own 5 accessories", 50),
-        Achievement("Explorer", "Finish 10 expeditions", 80),
-        Achievement("Champion", "Win a beauty contest", 80),
-        Achievement("Full House", "Fill your garden", 40),
-        Achievement("Regular", "Visit 7 days in a row", 100),
-        Achievement("Mutant", "Get an albino or neon mushroom", 100),
+        Achievement("Collector", "Discover 10 species", 30),
+        Achievement("Scholar", "Discover 25 species", 80),
+        Achievement("Shroomologist", "Discover every year-round species", 400),
+        Achievement("Matchmaker", "Discover a hybrid", 30),
+        Achievement("Legend", "Discover a legendary", 120),
+        Achievement("Rare Find", "Discover a rare 3-ingredient species", 65),
+        Achievement("Sparkle!", "Get a shiny mushroom", 50),
+        Achievement("Perfectionist", "Make 10 perfect brews", 50),
+        Achievement("Wise Elder", "Raise a mushroom to Elder", 50),
+        Achievement("Interior Designer", "Place 10 decorations", 40),
+        Achievement("Fashionista", "Own 5 accessories", 40),
+        Achievement("Explorer", "Finish 10 expeditions", 65),
+        Achievement("Champion", "Win a beauty contest", 65),
+        Achievement("Full House", "Fill your garden", 30),
+        Achievement("Regular", "Visit 7 days in a row", 80),
+        Achievement("Mutant", "Get an albino or neon mushroom", 80),
     )
 }

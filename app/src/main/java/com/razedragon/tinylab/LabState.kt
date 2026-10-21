@@ -205,7 +205,7 @@ class LabState(context: Context) {
     }
 
     fun newId() = nextId++
-    fun gardenSize() = 8 + 2 * upgrades[Data.UP_GARDEN]
+    fun gardenSize() = 10 + 5 * upgrades[Data.UP_GARDEN]
     fun caveOpen() = upgrades[Data.UP_CAVE] > 0
     /** Total room for mushrooms: the meadow plus the cave. */
     fun capacity() = gardenSize() + (if (caveOpen()) 6 else 0)
@@ -306,7 +306,7 @@ class LabState(context: Context) {
             else -> {   // mystery egg: a pet you don't have yet, or a pile of goodies
                 val missing = Data.PETS.indices.filter { Data.PETS[it].event == 0 && Data.PETS[it].special == 0 && petOwned[it] == 0 }
                 if (missing.isNotEmpty()) { val p = missing.random(); petOwned[p]++; "a ${Data.PETS[p].name} hatched from the egg! 🥚" }
-                else { dust += 500; seeds[Random.nextInt(seeds.size)] += 3; "500 ✦ and seeds from the egg! 🥚" }
+                else { dust += 400; seeds[Random.nextInt(seeds.size)] += 3; "400 ✦ and seeds from the egg! 🥚" }
             }
         }
     }
@@ -410,9 +410,9 @@ class LabState(context: Context) {
         if (questStep[ev] >= q.steps.size) {
             val newPet = petOwned[q.pet] == 0
             if (newPet) petOwned[q.pet] = 1
-            dust += 300
+            dust += 250
             addDiary("${q.title}: ${q.outro}")
-            return "🎉 ${q.title} complete! " + (if (newPet) "You got a ${Data.PETS[q.pet].name} pet! " else "") + "+300 ✦"
+            return "🎉 ${q.title} complete! " + (if (newPet) "You got a ${Data.PETS[q.pet].name} pet! " else "") + "+250 ✦"
         }
         return "✓ ${step.text}. Next: ${q.steps[questStep[ev]].text}"
     }
@@ -424,9 +424,9 @@ class LabState(context: Context) {
         val wk = Data.weekKey()
         if (mysteryClaimed == wk || Data.mysteryFor(wk) != species) return 0
         mysteryClaimed = wk
-        dust += 200
+        dust += 160
         addDiary("Solved the weekly mystery recipe: ${Data.SPECIES[species].name}! 🔮")
-        return 200
+        return 160
     }
 
     // ---------- Backup ----------
@@ -459,6 +459,8 @@ class LabState(context: Context) {
     // ---------- Time, weather ----------
 
     companion object {
+        /** The meadow is twice as wide as the screen; gx runs from 0 to WORLD. */
+        const val WORLD = 2f
         fun dayKey(cal: Calendar = Calendar.getInstance()) = cal.get(Calendar.YEAR) * 1000 + cal.get(Calendar.DAY_OF_YEAR)
         fun hour() = Calendar.getInstance().let { it.get(Calendar.HOUR_OF_DAY) + it.get(Calendar.MINUTE) / 60f }
 
@@ -596,7 +598,7 @@ class LabState(context: Context) {
         val n = 2 + Random.nextInt(3) + (if (s.trait == 4) 2 else 0) + (z.hours / 4f).toInt()
         repeat(n) { haul[z.loot.random()]++ }
         for (i in haul.indices) ingredients[i] += haul[i]
-        val dustFound = ((10 + z.hours * 12f) * (1 + s.stage() * 0.3f)).toInt()
+        val dustFound = ((8 + z.hours * 10f) * (1 + s.stage() * 0.3f)).toInt()
         dust += dustFound
         s.xp += z.hours * 15f
         s.hunger = max(s.hunger, 60f)
@@ -615,7 +617,7 @@ class LabState(context: Context) {
         events.add("${s.name} is back from ${z.name}! It $story and brought ${parts.joinToString(", ")}")
         addDiary("${s.name} explored ${z.name} and $story.")
         s.awayZone = -1
-        s.gx = if (Random.nextBoolean()) 0.06f else 0.94f
+        s.gx = if (Random.nextBoolean()) 0.06f else LabState.WORLD - 0.06f
         s.gz = 0.3f + Random.nextFloat() * 0.5f
         s.tx = 0.5f; s.tz = s.gz
         expDone++
@@ -647,14 +649,14 @@ class LabState(context: Context) {
         val known = discovered.indices.filter { discovered[it] && Data.SPECIES[it].tier == 1 && !Data.offSeason(it) }
         val type = if (known.isEmpty()) listOf(2, 3).random() else Random.nextInt(8)
         return when (type) {
-            0 -> Request(0, 1, known.random(), 0, 90)
-            1 -> Request(1, 1 + Random.nextInt(2), 0, stat(1), 120)
-            2 -> Request(2, 3 + Random.nextInt(4), 0, stat(2), 75)
-            3 -> Request(3, 5 + Random.nextInt(6), 0, stat(3), 60)
-            4 -> Request(4, placed.size + 2 + Random.nextInt(3), 0, 0, 90)
-            5 -> Request(5, 1 + Random.nextInt(2), 0, stat(5), 135)
-            6 -> Request(6, 1, 0, stat(6), 105)
-            else -> Request(7, 1 + Random.nextInt(2), 0, stat(7), 105)
+            0 -> Request(0, 1, known.random(), 0, 70)
+            1 -> Request(1, 1 + Random.nextInt(2), 0, stat(1), 95)
+            2 -> Request(2, 3 + Random.nextInt(4), 0, stat(2), 60)
+            3 -> Request(3, 5 + Random.nextInt(6), 0, stat(3), 50)
+            4 -> Request(4, placed.size + 2 + Random.nextInt(3), 0, 0, 70)
+            5 -> Request(5, 1 + Random.nextInt(2), 0, stat(5), 110)
+            6 -> Request(6, 1, 0, stat(6), 85)
+            else -> Request(7, 1 + Random.nextInt(2), 0, stat(7), 85)
         }
     }
 
@@ -697,18 +699,18 @@ class LabState(context: Context) {
     fun giftReady() = giftDay != lastLoginDay && lastLoginDay != 0
     fun giftIndex() = (streak - 1).coerceAtLeast(0) % 7
 
-    fun giftText(i: Int) = arrayOf("50 ✦", "3 Compost", "80 ✦", "Ingredient pack", "120 ✦", "Moon Jelly + Gold", "200 ✦ + a hat")[i]
+    fun giftText(i: Int) = arrayOf("40 ✦", "3 Compost", "65 ✦", "Ingredient pack", "100 ✦", "Moon Jelly + Gold", "160 ✦ + a hat")[i]
 
     fun claimGift(): String {
         val i = giftIndex()
         when (i) {
-            0 -> dust += 50
+            0 -> dust += 40
             1 -> foods[1] += 3
-            2 -> dust += 80
+            2 -> dust += 65
             3 -> repeat(6) { ingredients[Random.nextInt(8)]++ }
-            4 -> dust += 120
+            4 -> dust += 100
             5 -> { foods[4]++; ingredients[Data.GOLD]++ }
-            else -> { dust += 200; accOwned[Random.nextInt(9)]++ }
+            else -> { dust += 160; accOwned[Random.nextInt(9)]++ }
         }
         giftDay = lastLoginDay
         // during an event, every gift comes with a couple of its special ingredients
@@ -749,7 +751,7 @@ class LabState(context: Context) {
         list.sortByDescending { it.score }
         lastContest = list
         val place = list.indexOfFirst { it.mine } + 1
-        dust += intArrayOf(200, 100, 50, 20)[place - 1]
+        dust += intArrayOf(160, 80, 40, 15)[place - 1]
         s.happy = min(100f, s.happy + 10f)
         if (place == 1) contestWins++
         addDiary("${s.name} came ${arrayOf("1st 🥇", "2nd 🥈", "3rd 🥉", "4th")[place - 1]} in the beauty contest.")
