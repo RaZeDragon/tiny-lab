@@ -16,7 +16,19 @@ class Shroom(
     var dust: Float = 0f,         // spore dust waiting to be collected
     var restUntil: Long = 0L,     // can't crossbreed again until this time
     var petAt: Long = 0L,
+    // Where it stands in the garden: gx = left..right (0..1), gz = far..near (0..1)
+    var gx: Float = 0.15f + kotlin.random.Random.nextFloat() * 0.7f,
+    var gz: Float = 0.2f + kotlin.random.Random.nextFloat() * 0.7f,
 ) {
+    // Walking state (not saved)
+    var tx = gx
+    var tz = gz
+    var phase = 0f
+    var idle = kotlin.random.Random.nextFloat() * 2f
+    var facing = 1f
+    var moving = false
+    var held = false
+
     fun stage(): Int {
         var s = 0
         for (i in Data.STAGE_XP.indices) if (xp >= Data.STAGE_XP[i]) s = i
@@ -96,6 +108,7 @@ class LabState(context: Context) {
                 put("id", s.id); put("sp", s.species); put("xp", s.xp.toDouble())
                 put("hu", s.hunger.toDouble()); put("ha", s.happy.toDouble()); put("du", s.dust.toDouble())
                 put("rest", s.restUntil); put("pet", s.petAt)
+                put("gx", s.gx.toDouble()); put("gz", s.gz.toDouble())
             })
         }
         o.put("garden", g)
@@ -129,7 +142,9 @@ class LabState(context: Context) {
                     garden.add(Shroom(s.getLong("id"), s.getInt("sp").coerceIn(0, Data.SPECIES.size - 1),
                         s.optDouble("xp", 0.0).toFloat(), s.optDouble("hu", 70.0).toFloat(),
                         s.optDouble("ha", 70.0).toFloat(), s.optDouble("du", 0.0).toFloat(),
-                        s.optLong("rest", 0L), s.optLong("pet", 0L)))
+                        s.optLong("rest", 0L), s.optLong("pet", 0L),
+                        s.optDouble("gx", 0.2 + Math.random() * 0.6).toFloat(),
+                        s.optDouble("gz", 0.2 + Math.random() * 0.6).toFloat()))
                 }
             }
         } catch (_: Exception) {
