@@ -5056,13 +5056,7 @@ class GameView(context: Context) : View(context) {
                 }
             })
         }
-        val iy = card.top + 64f * dp + toggles.size * rowH
-        list.add(Button("set_icon", RectF(card.left + pad, iy, card.right - pad, iy + rowH - 8f * dp), "", STYLE_CARD,
-            custom = { c, rr -> drawIconRow(c, rr) }) {
-            val next = (prefs.getInt("appIcon", IconSwitcher.AUTO) + 1) % IconSwitcher.NAMES.size
-            prefs.edit().putInt("appIcon", next).apply()
-        })
-        val by = card.top + 64f * dp + (toggles.size + 1) * rowH + 6f * dp
+        val by = card.top + 64f * dp + toggles.size * rowH + 6f * dp
         list.add(Button("set_tut", RectF(card.left + pad, by, card.right - pad, by + 46f * dp), "▶  Replay tutorial") {
             settingsOpen = false
             tab = Tab.GARDEN; selected = -1; feeding = false; styling = false; exploring = false; decorating = false
@@ -5073,7 +5067,7 @@ class GameView(context: Context) : View(context) {
         })
     }
 
-    private fun settingsCard(w: Float, h: Float) = RectF(20f * dp, h * 0.12f, w - 20f * dp, h * 0.12f + 522f * dp)
+    private fun settingsCard(w: Float, h: Float) = RectF(20f * dp, h * 0.12f, w - 20f * dp, h * 0.12f + 470f * dp)
 
     private fun drawSettings(c: Canvas, w: Float, h: Float) {
         fill.color = Color.argb(200, 10, 6, 24)
@@ -5083,7 +5077,7 @@ class GameView(context: Context) : View(context) {
         text.textSize = 24f * dp
         c.drawText("Settings", w / 2, card.top + 42f * dp, text)
         // credits
-        val by = card.top + 64f * dp + 5 * 52f * dp + 62f * dp
+        val by = card.top + 64f * dp + 4 * 52f * dp + 62f * dp
         text.textSize = 13f * dp; text.color = TEXT_DIM
         c.drawText("Shroomology ${versionName()}", w / 2, by + 26f * dp, text)
         text.textSize = 15f * dp; text.color = ACCENT
@@ -5097,31 +5091,6 @@ class GameView(context: Context) : View(context) {
     private fun versionName(): String = try {
         "v" + context.packageManager.getPackageInfo(context.packageName, 0).versionName
     } catch (_: Exception) { "" }
-
-    private val iconDrawables = HashMap<Int, android.graphics.drawable.Drawable?>()
-
-    private fun drawIconRow(c: Canvas, r: RectF) {
-        fill.color = Color.argb(40, 255, 255, 255)
-        c.drawRoundRect(r, 14f * dp, 14f * dp, fill)
-        text.textAlign = Paint.Align.LEFT; text.textSize = 16f * dp
-        c.drawText("App icon", r.left + 16f * dp, r.centerY() + 6f * dp, text)
-        val choice = prefs.getInt("appIcon", IconSwitcher.AUTO)
-        // little preview of the icon it will use
-        val which = IconSwitcher.wanted(context)
-        val icon = iconDrawables.getOrPut(which) {
-            val res = when (which) { 1 -> R.mipmap.ic_spooky_round; 2 -> R.mipmap.ic_festive_round; else -> R.mipmap.ic_classic_round }
-            try { context.getDrawable(res) } catch (_: Exception) { null }
-        }
-        val sz = r.height() - 10f * dp
-        val ix = r.right - 12f * dp - sz
-        if (icon != null) {
-            icon.setBounds(ix.toInt(), (r.centerY() - sz / 2).toInt(), (ix + sz).toInt(), (r.centerY() + sz / 2).toInt())
-            icon.draw(c)
-        }
-        text.textAlign = Paint.Align.RIGHT; text.textSize = 14f * dp; text.color = ACCENT
-        c.drawText(IconSwitcher.NAMES[choice] + "  ›", ix - 8f * dp, r.centerY() + 5f * dp, text)
-        text.color = Color.WHITE; text.textAlign = Paint.Align.CENTER
-    }
 
     private fun drawToggleRow(c: Canvas, r: RectF, label: String, on: Boolean) {
         fill.color = Color.argb(40, 255, 255, 255)

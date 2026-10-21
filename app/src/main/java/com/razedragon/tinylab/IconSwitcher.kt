@@ -4,16 +4,12 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.pm.PackageManager
 
-/** Swaps the home-screen icon between Classic, Spooky and Festive. */
+/** Swaps the home-screen icon to match the current event: Classic, Spooky or Festive. */
 object IconSwitcher {
-    const val AUTO = 0
-    val NAMES = arrayOf("Auto (seasonal)", "Classic", "Spooky", "Festive")
     private val ALIASES = arrayOf("LauncherClassic", "LauncherSpooky", "LauncherFestive")
 
     /** Which alias should be showing right now: 0 classic, 1 spooky, 2 festive. */
-    fun wanted(context: Context): Int {
-        val choice = context.getSharedPreferences("tinylab_settings", Context.MODE_PRIVATE).getInt("appIcon", AUTO)
-        if (choice != AUTO) return choice - 1
+    fun wanted(): Int {
         return when (Data.currentEvent()) {
             1 -> 1
             2 -> 2
@@ -25,7 +21,7 @@ object IconSwitcher {
     fun apply(context: Context) {
         try {
             val pm = context.packageManager
-            val want = wanted(context)
+            val want = wanted()
             for ((i, alias) in ALIASES.withIndex()) {
                 val cn = ComponentName(context.packageName, "com.razedragon.tinylab.$alias")
                 val target = if (i == want) PackageManager.COMPONENT_ENABLED_STATE_ENABLED
