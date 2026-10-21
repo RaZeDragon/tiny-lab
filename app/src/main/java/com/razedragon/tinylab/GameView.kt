@@ -5126,6 +5126,8 @@ class GameView(context: Context) : View(context) {
         fill.color = Color.WHITE; drawSparkle(c, x + s * 0.55f, y - s * 1.05f, s * 0.08f)
     }
 
+    private fun growArea(w: Float, h: Float) = RectF(16f * dp, h * 0.45f + 34f * dp, w - 16f * dp, navTop - 10f * dp)
+
     private fun cookButtons(list: ArrayList<Button>, w: Float, h: Float) {
         val a = growArea(w, h)
         val rh = min(66f * dp, a.height() / Data.RECIPES.size)
@@ -8148,6 +8150,177 @@ class GameView(context: Context) : View(context) {
         }
         p.reset()
     }
+
+    private val decoClip = Path()
+
+    /** Extra touches on special species: pumpkin ribs, witch hats, candy stripes, clovers... */
+    private fun drawCapDeco(c: Canvas, deco: Int, shape: Int, cx: Float, capTop: Float, capBottom0: Float, baseY: Float, s: Float, capC: Int) {
+        val capBottom = if (shape == 1) baseY - s * 0.02f else capBottom0
+        val ch = capBottom - capTop
+        val halfW = when (shape) { 0 -> 0.55f; 1 -> 0.44f; 2 -> 0.4f; 3 -> 0.6f; else -> 0.25f } * s
+        // the outline of the cap, for clipping stripes
+        decoClip.reset()
+        when (shape) {
+            1 -> decoClip.addCircle(cx, baseY - s * 0.46f, s * 0.44f, Path.Direction.CW)
+            4 -> decoClip.addRoundRect(cx - s * 0.25f, capTop, cx + s * 0.25f, capBottom0 + s * 0.03f, s * 0.25f, s * 0.25f, Path.Direction.CW)
+            else -> decoClip.set(path)
+        }
+        fun clipped(block: () -> Unit) { c.save(); c.clipPath(decoClip); block(); c.restore() }
+        fun pumpkinStem() {
+            fill.color = Color.rgb(90, 130, 50)
+            c.drawRoundRect(cx - s * 0.035f, capTop - s * 0.12f, cx + s * 0.035f, capTop + s * 0.03f, s * 0.02f, s * 0.02f, fill)
+            stroke.color = Color.rgb(110, 170, 70); stroke.strokeWidth = s * 0.025f
+            c.drawArc(cx, capTop - s * 0.16f, cx + s * 0.16f, capTop - s * 0.02f, 180f, 200f, false, stroke)
+        }
+        fun ribs() = clipped {
+            stroke.color = shade(capC, -0.3f); stroke.strokeWidth = s * 0.025f
+            for (k in 1..2) c.drawOval(cx - k * halfW * 0.36f, capTop, cx + k * halfW * 0.36f, capBottom + ch * 0.8f, stroke)
+        }
+        when (deco) {
+            Data.D_PUMPKIN -> { ribs(); pumpkinStem() }
+            Data.D_RIBS -> ribs()
+            Data.D_JACK -> {
+                pumpkinStem()
+                val glow = Color.rgb(255, 230, 110 + (50 * sin(t * 7f)).toInt())
+                fill.color = glow
+                val ey = capTop + ch * 0.48f
+                path.reset()
+                for (side in intArrayOf(-1, 1)) {
+                    val ex = cx + side * halfW * 0.38f
+                    path.moveTo(ex - s * 0.06f, ey + s * 0.04f); path.lineTo(ex, ey - s * 0.06f); path.lineTo(ex + s * 0.06f, ey + s * 0.04f); path.close()
+                }
+                c.drawPath(path, fill)
+                path.reset()
+                val my = capTop + ch * 0.74f
+                path.moveTo(cx - halfW * 0.5f, my - s * 0.03f)
+                for (k in 0..4) path.lineTo(cx - halfW * 0.5f + (k + 0.5f) * halfW * 0.2f, my + if (k % 2 == 0) s * 0.04f else -s * 0.01f)
+                path.lineTo(cx + halfW * 0.5f, my - s * 0.03f)
+                path.lineTo(cx + halfW * 0.4f, my + s * 0.06f); path.lineTo(cx - halfW * 0.4f, my + s * 0.06f); path.close()
+                c.drawPath(path, fill)
+            }
+            Data.D_GHOST -> for (k in 0 until 2) {
+                val a = t * 1.3f + k * 3.14f
+                val gx = cx + cos(a) * s * 0.7f; val gy = capTop + s * 0.1f + sin(a * 1.7f) * s * 0.12f
+                val r = s * 0.1f
+                fill.color = Color.argb(200, 255, 255, 255)
+                path.reset()
+                path.moveTo(gx - r, gy + r); path.lineTo(gx - r, gy)
+                path.cubicTo(gx - r, gy - r * 1.4f, gx + r, gy - r * 1.4f, gx + r, gy)
+                path.lineTo(gx + r, gy + r); path.lineTo(gx + r * 0.5f, gy + r * 0.7f); path.lineTo(gx, gy + r); path.lineTo(gx - r * 0.5f, gy + r * 0.7f)
+                path.close(); c.drawPath(path, fill)
+                fill.color = Color.rgb(50, 40, 70)
+                c.drawCircle(gx - r * 0.35f, gy - r * 0.1f, r * 0.15f, fill); c.drawCircle(gx + r * 0.35f, gy - r * 0.1f, r * 0.15f, fill)
+            }
+            Data.D_WITCH -> {
+                val by = capTop + s * 0.05f
+                fill.color = Color.rgb(45, 30, 60)
+                c.drawOval(cx - s * 0.26f, by - s * 0.05f, cx + s * 0.26f, by + s * 0.04f, fill)
+                path.reset(); path.moveTo(cx - s * 0.15f, by - s * 0.02f)
+                path.quadTo(cx - s * 0.05f, by - s * 0.3f, cx + s * 0.14f, by - s * 0.42f)
+                path.quadTo(cx + s * 0.06f, by - s * 0.2f, cx + s * 0.15f, by - s * 0.02f); path.close()
+                c.drawPath(path, fill)
+                fill.color = Color.rgb(255, 150, 60)
+                c.drawRect(cx - s * 0.13f, by - s * 0.09f, cx + s * 0.13f, by - s * 0.04f, fill)
+            }
+            Data.D_BAT -> {
+                fill.color = Color.rgb(60, 40, 75)
+                val flap = sin(t * 8f) * s * 0.05f
+                for (side in intArrayOf(-1, 1)) {
+                    val wx = cx + side * halfW * 0.9f; val wy = capTop + ch * 0.4f
+                    path.reset()
+                    path.moveTo(wx, wy - s * 0.04f)
+                    path.quadTo(wx + side * s * 0.15f, wy - s * 0.2f - flap, wx + side * s * 0.3f, wy - s * 0.1f - flap)
+                    path.quadTo(wx + side * s * 0.24f, wy - s * 0.02f, wx + side * s * 0.2f, wy + s * 0.03f)
+                    path.quadTo(wx + side * s * 0.13f, wy - s * 0.02f, wx + side * s * 0.1f, wy + s * 0.05f)
+                    path.quadTo(wx + side * s * 0.05f, wy, wx, wy + s * 0.04f)
+                    path.close(); c.drawPath(path, fill)
+                }
+            }
+            Data.D_CANDY -> clipped {
+                stroke.color = Color.rgb(230, 50, 60); stroke.strokeWidth = s * 0.08f
+                for (k in -6..6) c.drawLine(cx + k * s * 0.2f - s * 0.4f, capTop + ch + s * 0.1f, cx + k * s * 0.2f + s * 0.4f, capTop - s * 0.1f, stroke)
+            }
+            Data.D_ICING -> clipped {
+                fill.color = Color.rgb(255, 250, 245)
+                c.drawRect(cx - halfW * 1.1f, capBottom - ch * 0.12f, cx + halfW * 1.1f, capBottom + s * 0.1f, fill)
+                for (k in 0..7) c.drawCircle(cx - halfW + k * halfW * 2f / 7f, capBottom - ch * 0.12f, s * 0.055f, fill)
+                fill.color = Color.rgb(255, 250, 245)
+                c.drawOval(cx - halfW * 0.5f, capTop - s * 0.03f, cx + halfW * 0.5f, capTop + ch * 0.25f, fill)
+            }
+            Data.D_SNOW -> {
+                clipped {
+                    fill.color = Color.argb(240, 255, 255, 255)
+                    c.drawOval(cx - halfW * 0.85f, capTop - s * 0.06f, cx + halfW * 0.85f, capTop + ch * 0.3f, fill)
+                }
+                for (k in 0 until 5) {
+                    val f = (t * 0.25f + k * 0.21f) % 1f
+                    fill.color = Color.argb((230 * (1f - f)).toInt(), 255, 255, 255)
+                    c.drawCircle(cx + (k - 2) * s * 0.28f + sin(t + k) * s * 0.05f, capTop - s * 0.25f + f * s * 1.1f, s * 0.025f, fill)
+                }
+            }
+            Data.D_HOLLY -> {
+                val hx = cx + halfW * 0.35f; val hy = capTop + s * 0.08f
+                fill.color = Color.rgb(50, 150, 70)
+                c.drawOval(hx - s * 0.17f, hy - s * 0.05f, hx, hy + s * 0.04f, fill)
+                c.drawOval(hx, hy - s * 0.05f, hx + s * 0.17f, hy + s * 0.04f, fill)
+                fill.color = Color.rgb(220, 40, 50)
+                c.drawCircle(hx - s * 0.03f, hy - s * 0.04f, s * 0.035f, fill)
+                c.drawCircle(hx + s * 0.03f, hy - s * 0.04f, s * 0.035f, fill)
+                c.drawCircle(hx, hy - s * 0.08f, s * 0.035f, fill)
+            }
+            Data.D_SPROUT -> {
+                stroke.color = Color.rgb(70, 150, 60); stroke.strokeWidth = s * 0.03f
+                c.drawLine(cx, capTop + s * 0.02f, cx, capTop - s * 0.1f, stroke)
+                fill.color = Color.rgb(110, 200, 90)
+                c.drawOval(cx - s * 0.16f, capTop - s * 0.17f, cx, capTop - s * 0.08f, fill)
+                c.drawOval(cx, capTop - s * 0.2f, cx + s * 0.16f, capTop - s * 0.11f, fill)
+            }
+            Data.D_CLOVER4 -> {
+                stroke.color = Color.rgb(50, 130, 60); stroke.strokeWidth = s * 0.03f
+                c.drawLine(cx, capTop + s * 0.02f, cx + s * 0.03f, capTop - s * 0.08f, stroke)
+                c.save(); c.rotate(sin(t * 2f) * 10f, cx, capTop)
+                fourLeafClover(c, cx + s * 0.03f, capTop - s * 0.14f, s * 0.17f, Color.rgb(90, 200, 100))
+                c.restore()
+            }
+            Data.D_RAINBOW -> clipped {
+                val cols = intArrayOf(Color.rgb(255, 110, 130), Color.rgb(255, 180, 80), Color.rgb(255, 235, 110), Color.rgb(120, 220, 140), Color.rgb(110, 170, 255))
+                val bh = (ch + s * 0.1f) / cols.size
+                for ((k, cc) in cols.withIndex()) {
+                    fill.color = Color.argb(200, Color.red(cc), Color.green(cc), Color.blue(cc))
+                    c.drawRect(cx - s, capTop - s * 0.05f + k * bh, cx + s, capTop - s * 0.05f + (k + 1) * bh, fill)
+                }
+            }
+            Data.D_FLOWER -> {
+                val fx = cx - halfW * 0.45f; val fy = capTop + ch * 0.18f + s * 0.02f
+                fill.color = Color.WHITE
+                for (k in 0 until 5) {
+                    val a = k * 1.2566f + t * 0.5f
+                    c.drawCircle(fx + cos(a) * s * 0.05f, fy + sin(a) * s * 0.05f, s * 0.042f, fill)
+                }
+                fill.color = Color.rgb(255, 210, 80); c.drawCircle(fx, fy, s * 0.032f, fill)
+            }
+            Data.D_BEE -> {
+                clipped {
+                    fill.color = Color.rgb(60, 40, 40)
+                    for (f in floatArrayOf(0.22f, 0.5f)) c.drawRect(cx - s, capTop + ch * f, cx + s, capTop + ch * f + ch * 0.13f, fill)
+                }
+                fill.color = Color.argb(170, 255, 255, 255)
+                val flap = abs(sin(t * 20f))
+                c.drawOval(cx - s * 0.2f, capTop - s * 0.08f - flap * s * 0.04f, cx - s * 0.02f, capTop + s * 0.02f, fill)
+                c.drawOval(cx + s * 0.02f, capTop - s * 0.08f - flap * s * 0.04f, cx + s * 0.2f, capTop + s * 0.02f, fill)
+            }
+            Data.D_BOLT -> {
+                fill.color = Color.rgb(255, 240, 120)
+                lightningBolt(c, cx + halfW * 0.25f, capTop + ch * 0.5f, min(ch * 0.32f, s * 0.14f))
+            }
+            Data.D_HEART -> {
+                fill.color = Color.rgb(255, 235, 245)
+                for ((px, py, pr) in arrayOf(Triple(-0.3f, 0.45f, 0.06f), Triple(0.1f, 0.22f, 0.05f), Triple(0.32f, 0.58f, 0.045f)))
+                    drawHeart(c, cx + px * halfW * 2f, capTop + py * ch, s * pr)
+            }
+        }
+    }
+
 
     private fun lightningBolt(c: Canvas, x: Float, y: Float, r: Float) {
         path.reset()
