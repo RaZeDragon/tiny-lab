@@ -4557,13 +4557,14 @@ class GameView(context: Context) : View(context) {
         val (px, py) = profPos(w)
         if (profSayT > 0f && profSay.isNotEmpty()) {
             text.textSize = 12f * dp
-            val lines = wrap(profSay, 150f * dp)
+            val lines = wrap(profSay, 120f * dp)
             val bw = (lines.maxOfOrNull { text.measureText(it) } ?: 0f) + 20f * dp
             val bh = lines.size * 15f * dp + 12f * dp
-            val bx = px - 10f * dp; val by = py - 70f * dp - bh
+            // beside the professor's head and below the ingredient slot, so it never covers a slot
+            val bx = px + 16f * dp; val by = slotRect(0).bottom + 8f * dp
             fill.color = Color.WHITE
             c.drawRoundRect(bx, by, bx + bw, by + bh, 10f * dp, 10f * dp, fill)
-            path.reset(); path.moveTo(bx + 12f * dp, by + bh - 1f * dp); path.lineTo(bx + 18f * dp, by + bh + 9f * dp); path.lineTo(bx + 24f * dp, by + bh - 1f * dp); path.close()
+            path.reset(); path.moveTo(bx + 1f * dp, by + bh * 0.45f); path.lineTo(bx - 9f * dp, by + bh * 0.8f); path.lineTo(bx + 1f * dp, by + bh * 0.8f); path.close()
             c.drawPath(path, fill)
             text.color = BG; text.textAlign = Paint.Align.LEFT
             for ((k, l) in lines.withIndex()) c.drawText(l, bx + 10f * dp, by + 18f * dp + k * 15f * dp, text)
