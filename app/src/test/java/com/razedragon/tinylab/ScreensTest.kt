@@ -164,6 +164,9 @@ class ScreensTest {
         g.testTap("jcancel"); g.testSelect(-1)
         g.testFrame(0.3f)
 
+        for (sh in lab.garden) { sh.act = 0; sh.sleeping = false; sh.awakeUntil = Long.MAX_VALUE }
+        lab.tuckedUntil = 0L
+        g.testFrame(0.1f)
         assertTrue(g.testTap("jam"))
         g.testFrame(8f)
         save(g.testRender(), "garden_jam")
