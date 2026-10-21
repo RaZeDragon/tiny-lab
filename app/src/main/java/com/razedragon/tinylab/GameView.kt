@@ -2319,10 +2319,10 @@ class GameView(context: Context) : View(context) {
             }
             return Color.HSVToColor(hsv)
         }
-        val capC = gene(capC)
-        val stemC = if (variant == 1) Color.rgb(255, 240, 242) else stemC
+        val capC = gene(sp.cap)
+        val stemC = if (variant == 1) Color.rgb(255, 240, 242) else sp.stem
         val spotStyle = who?.spots ?: 0
-        val spotC = if (spotStyle == 2) 0 else if (variant == 1) Color.rgb(255, 200, 215) else gene(spotC)
+        val spotC = if (spotStyle == 2) 0 else if (variant == 1) Color.rgb(255, 200, 215) else gene(sp.spots)
         val spotMul = if (spotStyle == 3) 1.5f else 1f
         val glows = sp.glow || variant == 2
         val s = size
