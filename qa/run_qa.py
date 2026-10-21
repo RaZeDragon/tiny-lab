@@ -108,6 +108,27 @@ def check_crash(where):
         adb("logcat", "-b", "crash", "-c")
 
 
+def wait_first_frame(limit=40):
+    """Waits until the game has drawn and reported once."""
+    end = time.time() + limit
+    while time.time() < end:
+        if state(fresh=False):
+            return True
+        time.sleep(0.5)
+    problem("game never drew a frame")
+    return False
+
+
+def wait_splash_done(limit=40):
+    end = time.time() + limit
+    while time.time() < end:
+        st = state()
+        if st and not st.get("splash", False):
+            time.sleep(0.5)
+            return
+    problem("splash screen never finished")
+
+
 def launch():
     adb("shell", "am", "start", "-n", f"{PKG}/.MainActivity", "--ez", "qa", "true")
 
@@ -120,11 +141,10 @@ adb("logcat", "-b", "crash", "-c")
 # stop Android's "Viewing full screen" banner from eating taps
 adb("shell", "settings", "put", "secure", "immersive_mode_confirmations", "confirmed")
 launch()
-time.sleep(1.5)
+wait_first_frame()
+time.sleep(1.2)
 shot("splash")
-time.sleep(1.0)
-shot("splash_b")
-time.sleep(4.0)
+wait_splash_done()
 st = state()
 W, H = st["w"], st["h"]
 note(f"Game view {W}x{H} px, density {DENS} (dp={DP:.3f}) = {W / DP:.0f}x{H / DP:.0f} dp")
@@ -286,16 +306,20 @@ for line in adb("shell", "dumpsys", "gfxinfo", PKG).splitlines():
 note("\n## Event splash screens")
 for ev, nm in ((2, "frosty"), (3, "spring"), (0, "normal")):
     adb("shell", "am", "force-stop", PKG)
+    adb("logcat", "-c")
     adb("shell", "am", "start", "-n", f"{PKG}/.MainActivity", "--ez", "qa", "true", "--ei", "event", str(ev))
-    time.sleep(2.0)
+    wait_first_frame()
+    time.sleep(1.5)
     shot(f"splash_{nm}")
-    time.sleep(3.0)
+    wait_splash_done()
     if ev == 2:
         tap_id("nav1", required=False); time.sleep(1.5); shot("lab_frosty")
     check_crash(f"event preview {nm}")
 adb("shell", "am", "force-stop", PKG)
+adb("logcat", "-c")
 launch()
-time.sleep(5)
+wait_first_frame()
+wait_splash_done()
 
 # ---------------------------------------------------------------- night time
 note("\n## Night")
@@ -304,7 +328,8 @@ adb("shell", "date", time.strftime("%m%d", time.localtime()) + "2330" + time.str
 note("device time now: " + adb("shell", "date").strip())
 adb("shell", "am", "force-stop", PKG)
 launch()
-time.sleep(5)
+wait_first_frame()
+wait_splash_done()
 raw_tap(W / 2, H * 0.14, 0.5)
 time.sleep(5)
 shot("garden_night")

@@ -116,6 +116,7 @@ class GameView(context: Context) : View(context) {
 
     private var tab = Tab.GARDEN
     private var lastFrame = 0L
+    private var realDt = 0f   // unclamped frame time, so the splash lasts the same on slow devices
     private var t = 0f                 // seconds since launch, for animation
     private var tickAcc = 0f
     private var saveAcc = 0f
@@ -1352,6 +1353,7 @@ class GameView(context: Context) : View(context) {
     override fun onDraw(canvas: Canvas) {
         val now = System.nanoTime()
         val dt = if (lastFrame == 0L) 0f else min((now - lastFrame) / 1_000_000_000f, 0.05f)
+        realDt = if (lastFrame == 0L) 0f else min((now - lastFrame) / 1_000_000_000f, 0.5f)
         lastFrame = now
         update(dt)
         buttons = buildButtons()
@@ -1359,12 +1361,14 @@ class GameView(context: Context) : View(context) {
         postInvalidateOnAnimation()
     }
 
+    private var qaAcc = 0f
+
     private fun update(dt: Float) {
         t += dt
+        if (qaMode) { qaAcc += max(dt, realDt); if (qaAcc >= 0.5f) { qaAcc = 0f; qaReport() } }
         tickAcc += dt
         if (tickAcc >= 1f) {
             tickAcc = 0f; lab.tick(); markDirty()
-            if (qaMode) qaReport()
             updateWants(System.currentTimeMillis())
             updateAmbience()
             for (a in lab.checkAchievements()) {
@@ -1439,7 +1443,7 @@ class GameView(context: Context) : View(context) {
             hugDone = true; pressedId = null
             shroom(dragShroom)?.let { hug(it) }
         }
-        if (splashT > 0f) splashT -= dt
+        if (splashT > 0f) splashT -= max(dt, realDt)
         updateMini(dt)
         if (profSayT > 0f) profSayT -= dt
         if (flaskYum > 0f) flaskYum -= dt
@@ -4172,7 +4176,7 @@ class GameView(context: Context) : View(context) {
     var qaMode = false
 
     private fun qaReport() {
-        val sb = StringBuilder("{\"tab\":\"$tab\",\"tut\":$tutStep,\"popup\":${popup != null},\"sel\":$selected,\"dust\":${lab.dust},\"w\":$width,\"h\":$height,\"shrooms\":[")
+        val sb = StringBuilder("{\"splash\":${splashT > 0f},\"tab\":\"$tab\",\"tut\":$tutStep,\"popup\":${popup != null},\"sel\":$selected,\"dust\":${lab.dust},\"w\":$width,\"h\":$height,\"shrooms\":[")
         for ((i, s) in lab.home().withIndex()) {
             val (x, y) = shroomScreen(s)
             val size = shroomSize(s)
