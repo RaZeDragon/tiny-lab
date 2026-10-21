@@ -511,13 +511,13 @@ class GameView(context: Context) : View(context) {
 
     private fun dexButtons(list: ArrayList<Button>, w: Float, h: Float) {
         val pad = 12f * dp
-        val cols = 4
+        val cols = 5
         val rows = (Data.SPECIES.size + cols - 1) / cols
         val cw = (w - pad * 2) / cols
         val ch = (dexBottom() - dexTop()) / rows
-        for (i in Data.SPECIES.indices) {
-            val r = RectF(pad + (i % cols) * cw + 3f * dp, dexTop() + (i / cols) * ch + 3f * dp,
-                pad + (i % cols + 1) * cw - 3f * dp, dexTop() + (i / cols + 1) * ch - 3f * dp)
+        for ((pos, i) in Data.DEX_ORDER.withIndex()) {
+            val r = RectF(pad + (pos % cols) * cw + 3f * dp, dexTop() + (pos / cols) * ch + 3f * dp,
+                pad + (pos % cols + 1) * cw - 3f * dp, dexTop() + (pos / cols + 1) * ch - 3f * dp)
             list.add(Button("dex$i", r, "", if (dexPick == i) STYLE_PICKED else STYLE_CARD,
                 custom = { c, rr -> drawDexCell(c, rr, i) }) { dexPick = i })
         }

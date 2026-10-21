@@ -61,7 +61,7 @@ object Data {
     // ---------- Species ----------
     val SPECIES = arrayOf(
         /* 0 */ Species("Common Shroom", Color.rgb(230, 215, 190), Color.rgb(250, 240, 225), 0, 0, 1, 1,
-            "Grows from combos that don't match a recipe"),
+            "Plain dirt, twice"),
         /* 1 */ Species("Button Cap", Color.rgb(200, 150, 100), Color.rgb(255, 240, 220), Color.rgb(240, 210, 170), 0, 1, 1,
             "Something wet + something earthy"),
         /* 2 */ Species("Ember Cap", Color.rgb(255, 90, 60), Color.rgb(255, 230, 200), Color.rgb(255, 210, 80), 0, 1, 2,
@@ -108,7 +108,36 @@ object Data {
             "Crossbreed prism with aurora", glow = true),
         /* 21 */ Species("Emperor Shroom", Color.rgb(200, 30, 60), Color.rgb(255, 230, 180), Color.rgb(255, 215, 80), 0, 3, 4,
             "Crossbreed a forge king with royalty", crown = true),
+
+        // More common species (every ingredient combo grows something real)
+        /* 22 */ Species("Dewdrop Puff", Color.rgb(140, 200, 255), Color.rgb(225, 240, 255), Color.rgb(210, 235, 255), 1, 1, 0,
+            "Water, and more water"),
+        /* 23 */ Species("Mist Cap", Color.rgb(205, 205, 225), Color.rgb(240, 240, 250), Color.rgb(170, 175, 200), 0, 1, 0,
+            "Something hot meets something wet or cold"),
+        /* 24 */ Species("Swamp Funnel", Color.rgb(110, 160, 80), Color.rgb(200, 210, 160), Color.rgb(70, 110, 50), 3, 1, 1,
+            "Something smelly + something wet or cold"),
+        /* 25 */ Species("Bubble Cap", Color.rgb(255, 170, 210), Color.rgb(255, 235, 245), Color.rgb(200, 230, 255), 1, 1, 2,
+            "Something shiny + something wet"),
+        /* 26 */ Species("Charred Bolete", Color.rgb(110, 70, 50), Color.rgb(220, 200, 180), Color.rgb(255, 130, 50), 0, 1, 1,
+            "Something hot + something earthy"),
+        /* 27 */ Species("Tundra Funnel", Color.rgb(180, 210, 230), Color.rgb(235, 240, 245), Color.rgb(120, 160, 190), 3, 1, 0,
+            "Something cold + something earthy"),
+        /* 28 */ Species("Moss Cap", Color.rgb(90, 190, 110), Color.rgb(220, 240, 210), Color.rgb(160, 230, 150), 0, 1, 1,
+            "Something from the moon + something earthy"),
+        /* 29 */ Species("Fire Puff", Color.rgb(255, 130, 50), Color.rgb(255, 220, 180), Color.rgb(255, 220, 80), 1, 1, 2,
+            "Something hot, twice"),
+        /* 30 */ Species("Ruby Cap", Color.rgb(220, 30, 70), Color.rgb(255, 230, 230), Color.WHITE, 0, 1, 2,
+            "Something shiny + something hot or smelly"),
+        /* 31 */ Species("Firefly Cap", Color.rgb(250, 220, 80), Color.rgb(255, 245, 210), Color.rgb(255, 255, 200), 0, 1, 4,
+            "Something from the moon + something hot or smelly", glow = true),
+        /* 32 */ Species("Sun Cap", Color.rgb(255, 170, 40), Color.rgb(255, 235, 190), Color.rgb(255, 240, 150), 3, 1, 4,
+            "Something precious + something bright", glow = true),
+        /* 33 */ Species("Icicle Horn", Color.rgb(160, 225, 255), Color.rgb(235, 248, 255), Color.WHITE, 4, 1, 0,
+            "Something cold, twice"),
     )
+
+    /** Shroomdex order: commons first, then hybrids, then legendaries. */
+    val DEX_ORDER: List<Int> = SPECIES.indices.sortedWith(compareBy({ SPECIES[it].tier }, { it }))
 
     private fun key(a: Int, b: Int) = if (a <= b) "$a,$b" else "$b,$a"
 
@@ -125,6 +154,41 @@ object Data {
         key(EMBER, IRON) to 10,
         key(FROST, CRYSTAL) to 11,
         key(GOLD, SOIL) to 12,
+
+        // Everything else grows something too
+        key(SOIL, SOIL) to 0,
+        key(WATER, WATER) to 22,
+        key(WATER, EMBER) to 23,
+        key(EMBER, FROST) to 23,
+        key(WATER, SULFUR) to 24,
+        key(FROST, SULFUR) to 24,
+        key(WATER, CRYSTAL) to 25,
+        key(SOIL, EMBER) to 26,
+        key(SOIL, FROST) to 27,
+        key(SOIL, MOONDEW) to 28,
+        key(EMBER, EMBER) to 29,
+        key(EMBER, CRYSTAL) to 30,
+        key(SULFUR, CRYSTAL) to 30,
+        key(EMBER, MOONDEW) to 31,
+        key(SULFUR, MOONDEW) to 31,
+        key(GOLD, EMBER) to 32,
+        key(GOLD, MOONDEW) to 32,
+        key(FROST, FROST) to 33,
+        key(FROST, IRON) to 4,
+        key(IRON, IRON) to 4,
+        key(IRON, MOONDEW) to 4,
+        key(FROST, MOONDEW) to 6,
+        key(MOONDEW, MOONDEW) to 6,
+        key(FROST, GOLD) to 11,
+        key(IRON, SULFUR) to 8,
+        key(IRON, CRYSTAL) to 5,
+        key(CRYSTAL, CRYSTAL) to 5,
+        key(SULFUR, SULFUR) to 7,
+        key(CRYSTAL, GOLD) to 9,
+        key(WATER, GOLD) to 12,
+        key(IRON, GOLD) to 12,
+        key(SULFUR, GOLD) to 12,
+        key(GOLD, GOLD) to 12,
     )
 
     private val CROSSES = hashMapOf(
@@ -139,23 +203,24 @@ object Data {
         key(15, 16) to 21,
     )
 
-    /** Which species two ingredients make (0 = Common Shroom if no recipe). */
+    /** Which species two ingredients make. Every pair has a recipe. */
     fun brew(a: Int, b: Int): Int = BREWS[key(a, b)] ?: 0
 
     /** Which species two grown mushrooms make, or -1 if they have no special hybrid. */
     fun cross(a: Int, b: Int): Int = CROSSES[key(a, b)] ?: -1
 
-    /** Human-readable recipe for the Shroomdex once a species is discovered. */
+    /** Human-readable recipe for the Shroomdex once a species is discovered (up to two ways). */
     fun recipeText(species: Int): String {
-        BREWS.entries.firstOrNull { it.value == species }?.let { e ->
+        val brews = BREWS.entries.filter { it.value == species }.take(2).map { e ->
             val (a, b) = e.key.split(",").map { it.toInt() }
-            return "${INGREDIENTS[a].name} + ${INGREDIENTS[b].name}"
+            "${INGREDIENTS[a].name} + ${INGREDIENTS[b].name}"
         }
+        if (brews.isNotEmpty()) return brews.joinToString("  or  ")
         CROSSES.entries.firstOrNull { it.value == species }?.let { e ->
             val (a, b) = e.key.split(",").map { it.toInt() }
             return "${SPECIES[a].name} × ${SPECIES[b].name}"
         }
-        return "Any combo with no recipe"
+        return "Unknown"
     }
 
     val STAGE_NAMES = arrayOf("Sprout", "Young", "Grown", "Elder")
