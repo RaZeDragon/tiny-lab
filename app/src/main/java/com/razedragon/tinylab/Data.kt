@@ -23,6 +23,16 @@ class Zone(val name: String, val hours: Float, val loot: IntArray, val color: In
 
 class Achievement(val name: String, val desc: String, val reward: Int)
 
+/** A little critter that follows one mushroom around. event > 0 = quest reward from that event. */
+class Pet(val name: String, val cost: Int, val desc: String, val event: Int = 0)
+
+/** A job a Grown mushroom can do. */
+class Job(val name: String, val icon: String, val desc: String)
+
+/** One step of an event quest. type: 0 discover a species, 1 place a decoration, 2 feed a food N times */
+class QuestStep(val text: String, val type: Int, val target: Int, val count: Int = 1)
+class Quest(val title: String, val intro: String, val steps: Array<QuestStep>, val pet: Int, val outro: String)
+
 /** Things you feed your mushrooms. */
 class Food(val name: String, val color: Int, val cost: Int, val hunger: Int, val xp: Int, val happy: Int, val event: Int = 0)
 
@@ -589,6 +599,7 @@ object Data {
     const val UP_COLLECTOR = 3
     const val UP_REST = 4
     const val UP_BOOTS = 5
+    const val UP_CAVE = 6
     val UPGRADES = arrayOf(
         Upgrade("Bigger Garden", "+2 garden spots per level", intArrayOf(200, 500, 1200)),
         Upgrade("Big Flask", "Brew with 3 ingredients for Rare species", intArrayOf(300)),
@@ -596,7 +607,60 @@ object Data {
         Upgrade("Dust Collector", "Collects spore dust for you", intArrayOf(350)),
         Upgrade("Cozy Beds", "Shorter rest after crossbreeding", intArrayOf(150, 400)),
         Upgrade("Trail Boots", "Expeditions finish 25% faster", intArrayOf(250)),
+        Upgrade("Glow Cave", "A second garden: glowing shrooms grow 50% faster", intArrayOf(800)),
     )
+
+    // ---------- Pets ----------
+    val PETS = arrayOf(
+        Pet("Snail", 60, "Slow and loyal, leaves a sparkly trail"),
+        Pet("Ladybug", 80, "Buzzes around its friend's cap"),
+        Pet("Firefly", 120, "Glows softly at night"),
+        Pet("Froggy", 100, "Hops along and says ribbit"),
+        Pet("Ghostie", 0, "Shroomoween quest reward", event = 1),
+        Pet("Penguin", 0, "Frosty Festival quest reward", event = 2),
+        Pet("Bunny", 0, "Spring Bloom quest reward", event = 3),
+    )
+
+    // ---------- Jobs ----------
+    const val JOB_STIR = 1
+    const val JOB_FORAGE = 2
+    const val JOB_GARDEN = 3
+    val JOBS = arrayOf(
+        Job("No job", "", "Just relaxing"),
+        Job("Lab Stirrer", "🥄", "+10% chance on rare brews and special crossbreeds"),
+        Job("Forager", "🧺", "Finds an ingredient every 2 hours"),
+        Job("Gardener", "🌷", "Everyone stays happy longer"),
+    )
+
+    // ---------- Event quests ----------
+    val QUESTS = arrayOf(
+        Quest("", "", arrayOf(), -1, ""),
+        Quest("The Lost Ghost", "A tiny ghost wandered into your garden and can't find its way home!",
+            arrayOf(QuestStep("Brew a Ghost Puff to keep it company", 0, 59),
+                QuestStep("Light the way: place a Jack-o'-lantern", 1, 16),
+                QuestStep("Share treats: feed Candy Corn 3 times", 2, 5, 3)),
+            4, "The little ghost found its way... and decided to stay with you!"),
+        Quest("Snowflake Delivery", "A shivering penguin needs help delivering snowflakes before the festival!",
+            arrayOf(QuestStep("Brew a Snowglobe Puff to hold the snowflakes", 0, 67),
+                QuestStep("Build a Snowman as a landmark", 1, 20),
+                QuestStep("Warm up: feed Hot Cocoa 3 times", 2, 6, 3)),
+            5, "Every snowflake was delivered! The penguin wants to live in your garden."),
+        Quest("The Bloom Party", "A sleepy bunny wants to throw a spring party in your garden!",
+            arrayOf(QuestStep("Brew a Blossom Cap for decorations", 0, 72),
+                QuestStep("Place a Flower Arch for the entrance", 1, 22),
+                QuestStep("Party snacks: feed Strawberries 3 times", 2, 7, 3)),
+            6, "What a party! The bunny hopped right into your heart."),
+    )
+
+    // ---------- Weekly mystery recipe ----------
+    fun weekKey(cal: java.util.Calendar = java.util.Calendar.getInstance()): Int =
+        cal.get(java.util.Calendar.YEAR) * 100 + cal.get(java.util.Calendar.WEEK_OF_YEAR)
+
+    /** This week's mystery species: a year-round common or rare made from ingredients. */
+    fun mysteryFor(week: Int = weekKey()): Int {
+        val pool = SPECIES.indices.filter { SPECIES[it].event == 0 && (SPECIES[it].tier == 1 || SPECIES[it].tier == 4) && it != 0 }
+        return pool[kotlin.random.Random(week * 7919).nextInt(pool.size)]
+    }
 
     // ---------- Expeditions ----------
     val ZONES = arrayOf(

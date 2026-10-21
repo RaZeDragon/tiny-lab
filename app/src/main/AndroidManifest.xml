@@ -51,5 +51,11 @@
             </intent-filter>
         </activity-alias>
         <receiver android:name=".Notifier" android:exported="false" />
+        <receiver android:name=".ShroomWidget" android:exported="false" android:label="Shroomology">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_info" />
+        </receiver>
     </application>
 </manifest>

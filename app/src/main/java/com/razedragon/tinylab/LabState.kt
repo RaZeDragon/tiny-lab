@@ -43,6 +43,17 @@ class Shroom(
     var wantUntil: Long = 0L,
     var nextWantAt: Long = 0L,
 ) {
+    // Family: [parent1, parent2, grandparents x4] as "name|species" ("" = unknown)
+    val family = Array(6) { "" }
+    var bestie = -1L            // id of its best friend
+    var pet = -1                // Data.PETS index following it around
+    var job = 0                 // Data.JOB_*
+    var area = 0                // 0 meadow, 1 glow cave
+    // pet position (not saved)
+    var petGx = Float.NaN
+    var petGz = 0f
+    var petPhase = 0f
+
     // Touch reactions & expressions (not saved)
     var jiggle = 0f
     var expr = 0
@@ -126,6 +137,20 @@ class LabState(context: Context) {
     val accOwned = IntArray(Data.ACCESSORIES.size)
     val achieved = BooleanArray(Data.ACHIEVEMENTS.size)
     val requests = ArrayList<Request>()
+    val petOwned = IntArray(Data.PETS.size)
+    /** Recipe notebook: "a,b" ingredient pair -> species it grew. */
+    val tried = HashMap<String, Int>()
+    /** How many times each rare recipe fizzled. */
+    val fizzles = IntArray(Data.SPECIES.size)
+    /** Friendship points between pairs of mushrooms ("id1-id2"). */
+    val friendship = HashMap<String, Float>()
+    var tuckedUntil = 0L        // tucked in for the night until this time
+    val questYear = IntArray(4)
+    val questStep = IntArray(4)
+    var questCount = 0
+    var mysteryClaimed = 0      // week whose mystery recipe was claimed
+    var forageAcc = 0f
+    var noSave = false          // set after restoring a backup so the old lab doesn't overwrite it
 
     // Stats
     var crosses = 0
@@ -165,6 +190,123 @@ class LabState(context: Context) {
 
     fun newId() = nextId++
     fun gardenSize() = 8 + 2 * upgrades[Data.UP_GARDEN]
+    fun caveOpen() = upgrades[Data.UP_CAVE] > 0
+    /** Total room for mushrooms: the meadow plus the cave. */
+    fun capacity() = gardenSize() + (if (caveOpen()) 6 else 0)
+    fun petAvailable(p: Int) = petOwned[p] - garden.count { it.pet == p }
+    fun jobHolder(job: Int) = garden.firstOrNull { it.job == job && !it.away() }
+
+    // ---------- Friends ----------
+
+    private fun pairKey(a: Shroom, b: Shroom) = if (a.id < b.id) "${a.id}-${b.id}" else "${b.id}-${a.id}"
+
+    /** Two mushrooms spent time together. Returns true when they just became best friends. */
+    fun befriend(a: Shroom, b: Shroom): Boolean {
+        val k = pairKey(a, b)
+        val pts = (friendship[k] ?: 0f) + 1f
+        friendship[k] = pts
+        if (pts >= 8f && a.bestie < 0 && b.bestie < 0) {
+            a.bestie = b.id; b.bestie = a.id
+            addDiary("${a.name} and ${b.name} became best friends! 💕")
+            return true
+        }
+        return false
+    }
+
+    /** Clean up references to a mushroom that's leaving. */
+    fun forget(s: Shroom) {
+        for (o in garden) if (o.bestie == s.id) o.bestie = -1
+        friendship.keys.filter { it.split("-").contains(s.id.toString()) }.forEach { friendship.remove(it) }
+    }
+
+    // ---------- Recipe notebook ----------
+
+    fun noteBrew(a: Int, b: Int, species: Int) { tried[if (a <= b) "$a,$b" else "$b,$a"] = species }
+    fun triedPair(a: Int, b: Int): Int = tried[if (a <= b) "$a,$b" else "$b,$a"] ?: -1
+
+    // ---------- Event quest ----------
+
+    private fun eventYear(): Int {
+        val c = Calendar.getInstance()
+        return if (c.get(Calendar.MONTH) == Calendar.JANUARY) c.get(Calendar.YEAR) - 1 else c.get(Calendar.YEAR)
+    }
+
+    /** Current event's quest step (0..3, 3 = done), resetting each year. -1 when no event is on. */
+    fun questNow(): Int {
+        val ev = Data.currentEvent()
+        if (ev == 0) return -1
+        val y = eventYear()
+        if (questYear[ev] != y) { questYear[ev] = y; questStep[ev] = 0; questCount = 0 }
+        return questStep[ev]
+    }
+
+    fun questFed(food: Int) {
+        val ev = Data.currentEvent(); val st = questNow()
+        if (st < 0 || st >= 3) return
+        val step = Data.QUESTS[ev].steps[st]
+        if (step.type == 2 && step.target == food) questCount++
+    }
+
+    /** Moves the quest along if the current step is done. Returns a message to show, or null. */
+    fun updateQuest(): String? {
+        val st = questNow()
+        if (st < 0 || st >= 3) return null
+        val ev = Data.currentEvent()
+        val q = Data.QUESTS[ev]
+        val step = q.steps[st]
+        val done = when (step.type) {
+            0 -> discovered[step.target]
+            1 -> placed.any { it.kind == step.target }
+            else -> questCount >= step.count
+        }
+        if (!done) return null
+        questStep[ev]++; questCount = 0
+        if (questStep[ev] >= q.steps.size) {
+            val newPet = petOwned[q.pet] == 0
+            if (newPet) petOwned[q.pet] = 1
+            dust += 100
+            addDiary("${q.title}: ${q.outro}")
+            return "🎉 ${q.title} complete! " + (if (newPet) "You got a ${Data.PETS[q.pet].name} pet! " else "") + "+100 ✦"
+        }
+        return "✓ ${step.text}. Next: ${q.steps[questStep[ev]].text}"
+    }
+
+    // ---------- Weekly mystery recipe ----------
+
+    /** Returns the reward if this species is the week's mystery and it hasn't been claimed yet. */
+    fun claimMystery(species: Int): Int {
+        val wk = Data.weekKey()
+        if (mysteryClaimed == wk || Data.mysteryFor(wk) != species) return 0
+        mysteryClaimed = wk
+        dust += 120
+        addDiary("Solved the weekly mystery recipe: ${Data.SPECIES[species].name}! 🔮")
+        return 120
+    }
+
+    // ---------- Backup ----------
+
+    fun exportCode(): String {
+        save()
+        val raw = prefs.getString("save", "") ?: ""
+        val bos = java.io.ByteArrayOutputStream()
+        java.util.zip.GZIPOutputStream(bos).use { it.write(raw.toByteArray()) }
+        return "SHROOM1:" + android.util.Base64.encodeToString(bos.toByteArray(), android.util.Base64.NO_WRAP)
+    }
+
+    /** Replaces the saved lab with a backup code. The game should restart afterwards. */
+    fun importCode(code0: String): Boolean = try {
+        val code = code0.trim()
+        if (!code.startsWith("SHROOM1:")) false else {
+            val bytes = android.util.Base64.decode(code.removePrefix("SHROOM1:"), android.util.Base64.DEFAULT)
+            val raw = java.util.zip.GZIPInputStream(bytes.inputStream()).use { String(it.readBytes()) }
+            val o = JSONObject(raw)
+            if (!o.has("garden")) false else {
+                prefs.edit().putString("save", raw).commit()
+                noSave = true
+                true
+            }
+        }
+    } catch (_: Exception) { false }
     fun home() = garden.filter { !it.away() }
     fun accAvailable(i: Int) = accOwned[i] - garden.count { s -> s.wear.contains(i) }
 
@@ -209,6 +351,9 @@ class LabState(context: Context) {
             }
             s.trait = if (Random.nextFloat() < 0.6f) (if (Random.nextBoolean()) a.trait else b.trait) else s.trait
             s.parentId = if (Random.nextBoolean()) a.id else b.id
+            s.family[0] = "${a.name}|${a.species}"; s.family[1] = "${b.name}|${b.species}"
+            s.family[2] = a.family[0]; s.family[3] = a.family[1]
+            s.family[4] = b.family[0]; s.family[5] = b.family[1]
         } else {
             s.tint = (Random.nextFloat() - 0.5f) * 24f
             s.size = 0.9f + Random.nextFloat() * 0.2f
@@ -231,6 +376,17 @@ class LabState(context: Context) {
         if (hours <= 0f) return
         val rainMul = if (rainy()) 1.5f else 1f
         val charm = max(0.4f, 1f - 0.06f * placed.size)
+        val gardener = jobHolder(Data.JOB_GARDEN) != null
+        val tucked = now < tuckedUntil
+        jobHolder(Data.JOB_FORAGE)?.let { f ->
+            forageAcc += hours
+            while (forageAcc >= 2f) {
+                forageAcc -= 2f
+                val i = intArrayOf(Data.WATER, Data.SOIL, Data.EMBER, Data.FROST, Data.SULFUR, Data.PETAL, Data.HONEY, Data.SPARK, Data.CRYSTAL, Data.IRON).random()
+                ingredients[i]++
+                events.add("${f.name} foraged some ${Data.INGREDIENTS[i].name} 🧺")
+            }
+        }
         for (s in garden) {
             if (s.away()) {
                 // Out exploring: they forage for themselves and grow a little
@@ -240,9 +396,14 @@ class LabState(context: Context) {
             }
             val growing = s.hunger > 0f
             val moodMul = when (s.mood()) { 0 -> 1.4f; 1 -> 1f; 2 -> 0.4f; else -> 0.6f }
-            if (growing) s.xp += 20f * moodMul * rainMul * hours
-            s.hunger = max(0f, s.hunger - 9f * hours * (if (s.trait == 3) 1.3f else 1f))
-            s.happy = max(0f, s.happy - 5f * charm * hours * (if (s.trait == 5) 0.6f else 1f))
+            val glowing = Data.SPECIES[s.species].glow || s.variant == 2
+            val caveMul = if (s.area == 1 && glowing) 1.5f else 1f
+            val bestieNear = s.bestie >= 0 && garden.any { it.id == s.bestie && !it.away() && it.area == s.area }
+            val weather = if (s.area == 1) 1f else rainMul
+            if (growing) s.xp += 20f * moodMul * weather * caveMul * (if (tucked) 1.3f else 1f) * hours
+            s.hunger = max(0f, s.hunger - 9f * hours * (if (s.trait == 3) 1.3f else 1f) * (if (tucked) 0.7f else 1f))
+            s.happy = max(0f, s.happy - 5f * charm * hours * (if (s.trait == 5) 0.6f else 1f) *
+                    (if (gardener) 0.7f else 1f) * (if (bestieNear) 0.75f else 1f) * (if (s.area == 1 && glowing) 0.7f else 1f))
             val rate = floatArrayOf(2f, 6f, 12f, 20f)[s.stage()] * Data.TIER_MUL[s.tier()] *
                     (if (s.hunger <= 0f) 0.5f else 1f) * (if (s.shiny) 2f else 1f)
             s.dust = min(s.dustCap(), s.dust + rate * hours)
@@ -522,10 +683,19 @@ class LabState(context: Context) {
                 put("sp2", s.spots); put("va", s.variant); put("wear", ints(s.wear))
                 put("az", s.awayZone); put("au", s.awayUntil)
                 put("bond", s.bond.toDouble()); put("par", s.parentId)
+                put("fam", JSONArray(s.family.toList())); put("bf", s.bestie); put("pt", s.pet); put("job", s.job); put("ar", s.area)
             })
         }
         o.put("garden", g)
         o.put("diary", JSONArray(diary))
+        o.put("pets", ints(petOwned))
+        o.put("tried", JSONObject(tried as Map<*, *>))
+        o.put("fizz", ints(fizzles))
+        o.put("friends", JSONObject(friendship.mapValues { it.value.toDouble() } as Map<*, *>))
+        o.put("tucked", tuckedUntil)
+        o.put("qy", ints(questYear)); o.put("qs", ints(questStep)); o.put("qc", questCount)
+        o.put("myst", mysteryClaimed); o.put("forage", forageAcc.toDouble())
+        if (noSave) return
         prefs.edit().putString("save", o.toString()).apply()
     }
 
@@ -574,6 +744,13 @@ class LabState(context: Context) {
             nextId = o.optLong("nextId", 1L)
             lastTick = o.optLong("lastTick", System.currentTimeMillis())
             o.optJSONArray("diary")?.let { a -> for (i in 0 until a.length()) diary.add(a.optString(i)) }
+            readInts(o, "pets", petOwned)
+            o.optJSONObject("tried")?.let { t -> for (k in t.keys()) tried[k] = t.optInt(k).coerceIn(0, Data.SPECIES.size - 1) }
+            readInts(o, "fizz", fizzles)
+            o.optJSONObject("friends")?.let { t -> for (k in t.keys()) friendship[k] = t.optDouble(k).toFloat() }
+            tuckedUntil = o.optLong("tucked")
+            readInts(o, "qy", questYear); readInts(o, "qs", questStep); questCount = o.optInt("qc")
+            mysteryClaimed = o.optInt("myst"); forageAcc = o.optDouble("forage", 0.0).toFloat()
             o.optJSONArray("garden")?.let { a ->
                 for (i in 0 until a.length()) {
                     val s = a.getJSONObject(i)
@@ -593,6 +770,11 @@ class LabState(context: Context) {
                     sh.awayUntil = s.optLong("au", 0L)
                     sh.bond = s.optDouble("bond", 0.0).toFloat()
                     sh.parentId = s.optLong("par", -1L)
+                    s.optJSONArray("fam")?.let { f -> for (k in 0..5) sh.family[k] = f.optString(k, "") }
+                    sh.bestie = s.optLong("bf", -1L)
+                    sh.pet = s.optInt("pt", -1).coerceIn(-1, Data.PETS.size - 1)
+                    sh.job = s.optInt("job", 0).coerceIn(0, Data.JOBS.size - 1)
+                    sh.area = s.optInt("ar", 0).coerceIn(0, 1)
                     garden.add(sh)
                 }
             }

@@ -40,6 +40,7 @@ class GameView(context: Context) : View(context) {
     private class Particle(var x: Float, var y: Float, var vx: Float, var vy: Float, var life: Float,
                            val maxLife: Float, val color: Int, val type: Int, var tx: Float = 0f, var ty: Float = 0f)
     private class Toast(val text: String, val color: Int)
+    private class PetRef(val owner: Shroom)
     private class Popup(val species: Int, val isNew: Boolean, val shroomId: Long, val crossed: Boolean,
                         val shiny: Boolean, val quality: Float, val missed: Int = -1)
 
@@ -73,6 +74,7 @@ class GameView(context: Context) : View(context) {
         private const val ACT_SLIDE = 12
         private const val ACT_BOUNCE = 13
         private const val ACT_CAMPFIRE = 14
+        private const val ACT_JAM = 15
 
         private val BG_TOP = Color.rgb(36, 24, 66)
         private val BG = Color.rgb(26, 18, 48)
@@ -126,6 +128,13 @@ class GameView(context: Context) : View(context) {
     private var selected: Long = -1L
     private var feeding = false
     private var styling = false
+    private var moreOpen = false        // the MORE menu on the info panel
+    private var jobbing = false         // picking a job
+    private var familyFor = -1L         // family tree overlay
+    private var area = 0                // 0 meadow, 1 glow cave
+    private fun local() = lab.home().filter { it.area == area }
+    private val caveCrystals = listOf(Placed(5, 0.07f, 0.08f), Placed(5, 0.93f, 0.12f), Placed(5, 0.5f, 0.02f),
+        Placed(5, 0.05f, 0.9f), Placed(5, 0.95f, 0.85f))
     private var exploring = false
     private var confirmRelease = false
 
@@ -237,6 +246,7 @@ class GameView(context: Context) : View(context) {
     fun onAppPause() {
         stopShakeSensor()
         lab.tick(); lab.save()
+        updateWidget()
         sound.onAppPause()
         try { scheduleReminders() } catch (_: Exception) {}
     }
@@ -263,7 +273,10 @@ class GameView(context: Context) : View(context) {
             popup != null -> popup = null
             photoMode -> photoMode = false
             feeding -> feeding = false
+            familyFor >= 0 -> familyFor = -1
             styling -> styling = false
+            jobbing -> jobbing = false
+            moreOpen -> moreOpen = false
             exploring -> exploring = false
             decorating -> decorating = false
             selected >= 0 -> { selected = -1; confirmRelease = false }
@@ -291,7 +304,7 @@ class GameView(context: Context) : View(context) {
 
     // ---------- Game actions ----------
 
-    private fun gardenFull() = lab.garden.size >= lab.gardenSize()
+    private fun gardenFull() = lab.garden.size >= lab.capacity()
 
     private fun reserved(i: Int) = slots.take(slotCount()).count { it == i }
     private fun slotCount() = if (lab.upgrades[Data.UP_FLASK] > 0) 3 else 2
@@ -335,6 +348,7 @@ class GameView(context: Context) : View(context) {
     private fun successChance(target: Int, q: Float = quality()): Float {
         var ch = Data.baseChance(target) + 0.30f * q
         if (lab.discovered[target]) ch += 0.10f
+        if (lab.jobHolder(Data.JOB_STIR) != null) ch += 0.10f
         if (labMode == 1 && picks.size == 2) {
             val hap = picks.mapNotNull { shroom(it)?.happy }.average().toFloat()
             ch += 0.10f * (hap / 100f).coerceIn(0f, 1f)
@@ -351,7 +365,9 @@ class GameView(context: Context) : View(context) {
         if (target >= 0 && (testForceFail || Random.nextFloat() > successChance(target))) {
             missed = target
             sp = Data.brew3Common(slots[0], slots[1], slots[2])
+            lab.fizzles[target]++
         }
+        if (n == 2) lab.noteBrew(slots[0], slots[1], sp)
         for (k in 0..2) slots[k] = -1
         hatch(sp, crossed = false, missed = missed)
         lab.brewed++
@@ -378,7 +394,7 @@ class GameView(context: Context) : View(context) {
         a.restUntil = now + rest; b.restUntil = now + rest
         var sp = Data.cross(a.species, b.species)
         var missed = -1
-        if (sp >= 0 && Random.nextFloat() > chance) { missed = sp; sp = -1 }
+        if (sp >= 0 && Random.nextFloat() > chance) { missed = sp; lab.fizzles[sp]++; sp = -1 }
         if (sp < 0) {
             val parents = listOf(a.species, b.species).filter { !Data.offSeason(it) }
             sp = if (parents.isNotEmpty()) parents.random()
@@ -406,6 +422,7 @@ class GameView(context: Context) : View(context) {
         if (q >= 1f) lab.perfect++
         lab.garden.add(s)
         popup = Popup(sp, isNew, s.id, crossed, shiny, q, missed)
+        lab.claimMystery(sp).let { if (it > 0) toast("🔮 You solved this week's mystery recipe! +$it ✦", DUST) }
         if (missed >= 0) lab.addDiary("Tried for a ${if (lab.discovered[missed]) Data.SPECIES[missed].name else Data.TIER_NAMES[Data.SPECIES[missed].tier].lowercase() + " mushroom"}, but it fizzled into ${s.name} the ${Data.SPECIES[sp].name}.")
         popupT = 0f
         flashT = 0.35f
@@ -429,6 +446,7 @@ class GameView(context: Context) : View(context) {
         val before = s.stage()
         lab.foods[f]--
         lab.feeds++
+        lab.questFed(f)
         s.hunger = min(100f, s.hunger + food.hunger)
         s.xp += food.xp * (if (fav) 2f else 1f) * (if (s.trait == 3) 1.2f else 1f)
         s.happy = min(100f, s.happy + food.happy + if (fav) 15f else 0f)
@@ -474,6 +492,7 @@ class GameView(context: Context) : View(context) {
 
     private fun release(s: Shroom) {
         val reward = (10 + (s.xp / 5f).toInt() * Data.TIER_MUL[s.tier()]) * (if (s.shiny) 2 else 1)
+        lab.forget(s)
         lab.garden.remove(s)
         lab.dust += reward
         selected = -1; confirmRelease = false; feeding = false
@@ -531,6 +550,9 @@ class GameView(context: Context) : View(context) {
         if (splashT > 0f) return ArrayList()
         if (mini > 0) return ArrayList<Button>().also { miniButtons(it, w, h) }
         if (settingsOpen) return ArrayList<Button>().also { settingsButtons(it, w, h) }
+        if (familyFor >= 0) return ArrayList<Button>().also { l ->
+            l.add(Button("fam_close", RectF(w / 2 - 90f * dp, h * 0.86f, w / 2 + 90f * dp, h * 0.86f + 50f * dp), "CLOSE") { familyFor = -1 })
+        }
         if (cardFor >= 0) return ArrayList<Button>().also { l ->
             val r = cardRect(w, h)
             val bw = (r.width() - 12f * dp) / 2
@@ -575,7 +597,7 @@ class GameView(context: Context) : View(context) {
         for ((i, tb) in tabs.withIndex()) {
             list.add(Button("nav$i", RectF(i * tw, navTop, (i + 1) * tw, h), "", STYLE_CARD,
                 custom = { c, r -> drawNavItem(c, r, tb) }) {
-                if (tab != tb) { tab = tb; selected = -1; feeding = false; styling = false; exploring = false; confirmRelease = false; dexPick = -1; decorating = false }
+                if (tab != tb) { tab = tb; selected = -1; feeding = false; styling = false; moreOpen = false; jobbing = false; exploring = false; confirmRelease = false; dexPick = -1; decorating = false }
             })
         }
 
@@ -605,15 +627,25 @@ class GameView(context: Context) : View(context) {
     private fun panelBottom() = navTop - 6f * dp + panelSlide()
 
     private fun gardenButtons(list: ArrayList<Button>, w: Float, h: Float) {
-        list.add(Button("decorate", RectF(14f * dp, topBar + 8f * dp, 134f * dp, topBar + 48f * dp),
+        if (lab.caveOpen() && !decorating) {
+            list.add(Button("area", RectF(112f * dp, 16f * dp, 196f * dp, 50f * dp), if (area == 0) "⛰ Cave" else "🌿 Meadow") {
+                area = 1 - area; selected = -1; feeding = false; styling = false; moreOpen = false; jobbing = false; exploring = false
+                sound.play(Fx.POP); waveHello()
+            })
+        }
+        if (area == 1) {
+            if (selected < 0) list.add(Button("photo", RectF(14f * dp, topBar + 8f * dp, 62f * dp, topBar + 48f * dp), "📷") {
+                photoMode = true; selected = -1; toast("Photo mode: tap SAVE & SHARE")
+            })
+        } else list.add(Button("decorate", RectF(14f * dp, topBar + 8f * dp, 134f * dp, topBar + 48f * dp),
             if (decorating) "DONE" else "DECORATE", if (decorating) STYLE_PRIMARY else STYLE_NORMAL) {
             decorating = !decorating
-            selected = -1; feeding = false; styling = false; exploring = false; confirmRelease = false
+            selected = -1; feeding = false; styling = false; moreOpen = false; jobbing = false; exploring = false; confirmRelease = false
         })
         if (decorating) { decorButtons(list, w); return }
-        if (selected < 0) {
+        if (selected < 0 && area == 0) {
             list.add(Button("photo", RectF(142f * dp, topBar + 8f * dp, 190f * dp, topBar + 48f * dp), "📷") {
-                photoMode = true; selected = -1; feeding = false; styling = false; exploring = false
+                photoMode = true; selected = -1; feeding = false; styling = false; moreOpen = false; jobbing = false; exploring = false
                 toast("Photo mode: tap SAVE & SHARE")
             })
         }
@@ -632,11 +664,26 @@ class GameView(context: Context) : View(context) {
             })
         }
 
+        if (selected < 0) {
+            val now = System.currentTimeMillis()
+            val here = local()
+            val night = LabState.darkness() > 0.6f
+            val by0 = groundBottom() + 58f * dp
+            val btns = ArrayList<Pair<String, () -> Unit>>()
+            if (night && now >= lab.tuckedUntil && here.isNotEmpty()) btns.add("🌙 BEDTIME" to { bedtime() })
+            if (jamT <= 0f && now >= lab.tuckedUntil && here.count { !it.sleeping } >= 2) btns.add("🎵 JAM" to { startJam() })
+            val bw = 150f * dp
+            for ((k, b) in btns.withIndex()) {
+                val x0 = w / 2 - (btns.size * bw + (btns.size - 1) * 10f * dp) / 2 + k * (bw + 10f * dp)
+                list.add(Button(if (b.first.contains("BED")) "bedtime" else "jam", RectF(x0, by0, x0 + bw, by0 + 40f * dp), b.first) { b.second() })
+            }
+        }
         val s = shroom(selected) ?: return
         val top = panelTop()
         val pad = 16f * dp
         val by = navTop - 62f * dp + panelSlide()
         if (styling) { styleButtons(list, s, w, top, by); return }
+        if (jobbing) { jobButtons(list, s, w, top, by); return }
         if (exploring) { exploreButtons(list, s, w, top, by); return }
         if (feeding) {
             val foodsShown = Data.FOODS.indices.filter { Data.FOODS[it].event == 0 || lab.foods[it] > 0 }
@@ -653,7 +700,27 @@ class GameView(context: Context) : View(context) {
             fun cell(col: Int, row: Int) = RectF(pad + col * (bw + 8f * dp), by - (1 - row) * 54f * dp,
                 pad + col * (bw + 8f * dp) + bw, by - (1 - row) * 54f * dp + 46f * dp)
             list.add(Button("feed", cell(0, 0), "FEED", STYLE_PRIMARY) { feeding = true; confirmRelease = false })
-            list.add(Button("card", cell(1, 0), "CARD") { cardFor = s.id; confirmRelease = false })
+            if (moreOpen) {
+                list.add(Button("card", cell(0, 0), "CARD") { cardFor = s.id; moreOpen = false })
+                list.add(Button("family", cell(1, 0), "FAMILY") { familyFor = s.id; moreOpen = false })
+                list.add(Button("job", cell(2, 0), if (s.job > 0) Data.JOBS[s.job].icon + " JOB" else "JOB") { jobbing = true; moreOpen = false })
+                list.add(Button("move", cell(0, 1), if (!lab.caveOpen()) "🔒 CAVE" else if (s.area == 0) "TO CAVE" else "TO MEADOW", STYLE_NORMAL, lab.caveOpen()) {
+                    if (!lab.caveOpen()) { toast("Unlock the Glow Cave in the Shop → LAB"); return@Button }
+                    s.area = 1 - s.area; s.act = 0; s.pendingAct = 0; s.sleeping = false
+                    s.gx = 0.2f + Random.nextFloat() * 0.6f; s.gz = 0.3f + Random.nextFloat() * 0.5f; s.tx = s.gx; s.tz = s.gz; s.petGx = Float.NaN
+                    toast(if (s.area == 1) "${s.name} moved to the Glow Cave ⛰" else "${s.name} moved to the meadow 🌿", MINT)
+                    sound.play(Fx.WHEE); selected = -1; moreOpen = false; markDirty()
+                })
+                val fav = prefs.getLong("widgetShroom", -1L) == s.id
+                list.add(Button("widget", cell(1, 1), if (fav) "★ ON WIDGET" else "☆ WIDGET", if (fav) STYLE_PICKED else STYLE_NORMAL) {
+                    prefs.edit().putLong("widgetShroom", s.id).apply()
+                    updateWidget()
+                    toast("${s.name} will live on your home-screen widget! Add it: long-press your home screen → Widgets → Shroomology", MINT)
+                })
+                list.add(Button("mback", cell(2, 1), "BACK") { moreOpen = false })
+                return
+            }
+            list.add(Button("more", cell(1, 0), "MORE") { moreOpen = true; confirmRelease = false })
             list.add(Button("style", cell(2, 0), "STYLE") { styling = true; confirmRelease = false })
             list.add(Button("explore", cell(0, 1), "EXPLORE") { exploring = true; confirmRelease = false })
             list.add(Button("rename", cell(1, 1), "NAME") { renameDialog(s); confirmRelease = false })
@@ -665,12 +732,32 @@ class GameView(context: Context) : View(context) {
 
     private fun styleButtons(list: ArrayList<Button>, s: Shroom, w: Float, top: Float, by: Float) {
         val pad = 16f * dp
-        val owned = Data.ACCESSORIES.indices.filter { lab.accOwned[it] > 0 }
+        val owned = Data.ACCESSORIES.indices.filter { lab.accOwned[it] > 0 }.take(10)
+        val pets = Data.PETS.indices.filter { lab.petOwned[it] > 0 }
         val cols = 5
         val cw = (w - pad * 2) / cols
         val gy = top + 96f * dp
-        val ch = min(70f * dp, (by - 8f * dp - gy) / 2)
-        for ((pos, a) in owned.take(10).withIndex()) {
+        val rows = max(1, (owned.size + pets.size + cols - 1) / cols)
+        val ch = min(70f * dp, (by - 8f * dp - gy) / max(2, rows))
+        for ((k, p) in pets.withIndex()) {
+            val pos = owned.size + k
+            val mine = s.pet == p
+            val r = RectF(pad + (pos % cols) * cw + 3f * dp, gy + (pos / cols) * ch + 3f * dp,
+                pad + (pos % cols + 1) * cw - 3f * dp, gy + (pos / cols + 1) * ch - 3f * dp)
+            list.add(Button("pet$p", r, "", if (mine) STYLE_PICKED else STYLE_CARD, mine || lab.petAvailable(p) > 0, custom = { c, rr ->
+                drawPet(c, p, rr.centerX(), rr.centerY() + rr.height() * 0.12f, rr.height() * 0.45f, t * 6f, 1f, false)
+                text.textSize = 9.5f * dp
+                c.drawText(if (mine) "with you" else Data.PETS[p].name, rr.centerX(), rr.bottom - 5f * dp, text)
+            }) {
+                when {
+                    mine -> s.pet = -1
+                    lab.petAvailable(p) <= 0 -> toast("That pet is following someone else")
+                    else -> { s.pet = p; s.petGx = Float.NaN; sound.play(Fx.PET); toast("${Data.PETS[p].name} will follow ${s.name} around!", MINT) }
+                }
+                markDirty()
+            })
+        }
+        for ((pos, a) in owned.withIndex()) {
             val slot = Data.ACCESSORIES[a].slot
             val worn = s.wear[slot] == a
             val r = RectF(pad + (pos % cols) * cw + 3f * dp, gy + (pos / cols) * ch + 3f * dp,
@@ -689,6 +776,36 @@ class GameView(context: Context) : View(context) {
             })
         }
         list.add(Button("sdone", RectF(pad, by, w - pad, by + 46f * dp), "DONE") { styling = false })
+    }
+
+    private fun jobButtons(list: ArrayList<Button>, s: Shroom, w: Float, top: Float, by: Float) {
+        val pad = 16f * dp
+        val gy = top + 96f * dp
+        val rh = min(52f * dp, (by - 8f * dp - gy) / Data.JOBS.size)
+        for ((j, job) in Data.JOBS.withIndex()) {
+            val r = RectF(pad, gy + j * rh + 2f * dp, w - pad, gy + (j + 1) * rh - 2f * dp)
+            val holder = if (j == 0) null else lab.jobHolder(j)
+            val mine = s.job == j
+            val ok = j == 0 || (s.stage() >= 2 && (holder == null || holder === s))
+            list.add(Button("job$j", r, "", if (mine) STYLE_PICKED else STYLE_CARD, ok || mine, custom = { c, rr ->
+                text.textAlign = Paint.Align.LEFT; text.textSize = 14f * dp
+                c.drawText((if (job.icon.isNotEmpty()) job.icon + "  " else "") + job.name, rr.left + 14f * dp, rr.centerY() - 1f * dp, text)
+                text.textSize = 11f * dp; text.color = TEXT_DIM
+                c.drawText(when {
+                    j > 0 && s.stage() < 2 -> "Needs a Grown mushroom"
+                    holder != null && holder !== s -> "${holder.name} has this job"
+                    else -> job.desc
+                }, rr.left + 14f * dp, rr.centerY() + 14f * dp, text)
+                text.color = Color.WHITE; text.textAlign = Paint.Align.CENTER
+            }) {
+                if (!ok) { toast(if (s.stage() < 2) "Only Grown mushrooms can work" else "Someone else has that job"); return@Button }
+                s.job = j
+                if (j > 0) { toast("${s.name} is now the ${job.name}! ${job.icon}", MINT); sound.play(Fx.GROW); express(s, E_SPARKLE, 2f) }
+                jobbing = false
+                markDirty()
+            })
+        }
+        list.add(Button("jcancel", RectF(pad, by, w - pad, by + 46f * dp), "CANCEL") { jobbing = false })
     }
 
     private fun exploreButtons(list: ArrayList<Button>, s: Shroom, w: Float, top: Float, by: Float) {
@@ -913,7 +1030,7 @@ class GameView(context: Context) : View(context) {
     // Shop rows: kind 0 ingredient, 1 food, 2 decoration, 3 theme, 4 accessory, 5 lab upgrade
     private fun shopTabs(): List<String> {
         val ev = eventNow()
-        val base = listOf("INGREDIENTS", "FOOD", "DECOR", "THEMES", "STYLE", "LAB")
+        val base = listOf("INGREDIENTS", "FOOD", "DECOR", "THEMES", "STYLE", "LAB", "PETS")
         return if (ev > 0) base + "${Data.EVENT_ICONS[ev]} EVENT" else base
     }
 
@@ -926,6 +1043,7 @@ class GameView(context: Context) : View(context) {
             3 -> Data.THEMES.indices.filter { Data.THEMES[it].event == 0 }.map { 3 to it }
             4 -> Data.ACCESSORIES.indices.filter { Data.ACCESSORIES[it].event == 0 }.map { 4 to it }
             5 -> Data.UPGRADES.indices.map { 5 to it }
+            6 -> Data.PETS.indices.filter { Data.PETS[it].event == 0 || lab.petOwned[it] > 0 }.map { 6 to it }
             else -> Data.INGREDIENTS.indices.filter { Data.INGREDIENTS[it].event == ev }.map { 0 to it } +
                 Data.ACCESSORIES.indices.filter { Data.ACCESSORIES[it].event == ev }.map { 4 to it } +
                 Data.DECOR.indices.filter { Data.DECOR[it].event == ev }.map { 2 to it } +
@@ -949,7 +1067,7 @@ class GameView(context: Context) : View(context) {
         }
         val entries = shopEntries()
         val top = shopTop()
-        val rowH = min(66f * dp, (navTop - top - (if (shopTab >= 6) 26f else 8f) * dp) / max(1, entries.size))
+        val rowH = min(66f * dp, (navTop - top - (if (shopTab >= 7) 26f else 8f) * dp) / max(1, entries.size))
         val p2 = 16f * dp
         for ((row, e) in entries.withIndex()) {
             val (kind, i) = e
@@ -977,6 +1095,14 @@ class GameView(context: Context) : View(context) {
                         else { lab.dust -= a.cost; lab.accOwned[i]++; sound.play(Fx.COIN); toast("Dress up a mushroom: tap it → STYLE", MINT); markDirty() }
                     })
                 }
+                6 -> {
+                    val pt = Data.PETS[i]
+                    if (pt.event > 0) list.add(Button("pbuy$i", wide, "Quest pet", STYLE_NORMAL, false) {})
+                    else list.add(Button("pbuy$i", wide, "${pt.cost} ✦", STYLE_PRIMARY, lab.dust >= pt.cost) {
+                        if (lab.dust < pt.cost) { sound.play(Fx.DENIED); toast("Not enough spore dust ✦", ACCENT) }
+                        else { lab.dust -= pt.cost; lab.petOwned[i]++; sound.play(Fx.COIN); toast("New pet! Tap a mushroom → STYLE to bring it along", MINT); markDirty() }
+                    })
+                }
                 5 -> {
                     val u = Data.UPGRADES[i]
                     val lvl = lab.upgrades[i]
@@ -986,7 +1112,10 @@ class GameView(context: Context) : View(context) {
                         when {
                             maxed -> {}
                             lab.dust < u.costs[lvl] -> { sound.play(Fx.DENIED); toast("Not enough spore dust ✦", ACCENT) }
-                            else -> { lab.dust -= u.costs[lvl]; lab.upgrades[i]++; sound.play(Fx.DISCOVER); toast("Upgraded: ${u.name}!", MINT); markDirty() }
+                            else -> {
+                                lab.dust -= u.costs[lvl]; lab.upgrades[i]++; sound.play(Fx.DISCOVER)
+                                toast(if (i == Data.UP_CAVE) "The Glow Cave is open! Tap ⛰ Cave in the Garden" else "Upgraded: ${u.name}!", MINT); markDirty()
+                            }
                         }
                     })
                 }
@@ -1014,7 +1143,7 @@ class GameView(context: Context) : View(context) {
         val pad = 16f * dp
         val entries = shopEntries()
         val top = shopTop()
-        val rowH = min(66f * dp, (navTop - top - (if (shopTab >= 6) 26f else 8f) * dp) / max(1, entries.size))
+        val rowH = min(66f * dp, (navTop - top - (if (shopTab >= 7) 26f else 8f) * dp) / max(1, entries.size))
         for ((row, e) in entries.withIndex()) {
             val (kind, i) = e
             val y = top + row * rowH
@@ -1043,6 +1172,13 @@ class GameView(context: Context) : View(context) {
                     name = a.name
                     sub = "Have ${lab.accOwned[i]} · " + arrayOf("worn on the cap", "worn on the face", "worn on the stem")[a.slot]
                 }
+                6 -> {
+                    c.save(); c.clipRect(pad - 4f * dp, y + 3f * dp, pad + 44f * dp, y + rowH - 3f * dp)
+                    drawPet(c, i, pad + 20f * dp, cy + 12f * dp, 28f * dp, t * 6f, 1f, false)
+                    c.restore()
+                    name = Data.PETS[i].name
+                    sub = "Have ${lab.petOwned[i]} · ${Data.PETS[i].desc}"
+                }
                 5 -> {
                     val u = Data.UPGRADES[i]
                     fill.color = MINT
@@ -1070,7 +1206,7 @@ class GameView(context: Context) : View(context) {
             text.color = Color.WHITE
             text.textAlign = Paint.Align.CENTER
         }
-        if (shopTab == 6) {
+        if (shopTab == 7) {
             val ev = eventNow()
             text.textSize = 12f * dp; text.color = DUST
             c.drawText("${Data.EVENT_ICONS[ev]} ${Data.EVENTS[ev]} until ${Data.EVENT_ENDS[ev]} · event ingredients fade after", w / 2, navTop - 4f * dp, text)
@@ -1080,8 +1216,12 @@ class GameView(context: Context) : View(context) {
 
     // ---------- Input ----------
 
+    private var touchX = 0f
+    private var touchY = 0f
+
     override fun onTouchEvent(e: MotionEvent): Boolean {
         val x = e.x; val y = e.y
+        if (e.actionMasked == MotionEvent.ACTION_DOWN) { touchX = x; touchY = y }
         if (splashT > 0f) {
             if (e.actionMasked == MotionEvent.ACTION_UP) { holdSplash = false; splashT = min(splashT, 0.45f) }
             return true
@@ -1319,7 +1459,7 @@ class GameView(context: Context) : View(context) {
 
     /** The mushroom under a screen point, nearest (front-most) first. */
     private fun shroomAt(x: Float, y: Float): Shroom? {
-        for (s in lab.home().sortedByDescending { it.gz }) {
+        for (s in local().sortedByDescending { it.gz }) {
             if (s.act == ACT_INSIDE) continue
             val (sx, sy) = shroomScreen(s)
             val size = shroomSize(s)
@@ -1334,7 +1474,7 @@ class GameView(context: Context) : View(context) {
         val s = shroomAt(x, y)
         if (s != null) {
             collect(s, lab.garden.indexOf(s))
-            if (selected != s.id) { selected = s.id; feeding = false; styling = false; exploring = false; confirmRelease = false }
+            if (selected != s.id) { selected = s.id; feeding = false; styling = false; moreOpen = false; jobbing = false; exploring = false; confirmRelease = false }
             poke(s)
             if (s.act == ACT_SLEEP || s.act == ACT_NAP) {
                 s.act = 0; s.sleeping = false
@@ -1345,7 +1485,7 @@ class GameView(context: Context) : View(context) {
             if (lab.tutorial == 2) lab.tutorial = 3
             return
         }
-        selected = -1; feeding = false; styling = false; exploring = false; confirmRelease = false
+        selected = -1; feeding = false; styling = false; moreOpen = false; jobbing = false; exploring = false; confirmRelease = false
     }
 
     // ---------- Loop ----------
@@ -1381,6 +1521,9 @@ class GameView(context: Context) : View(context) {
     }
     internal fun testSkipIntro() { splashT = 0f; holdSplash = false; tutStep = -1; prefs.edit().putInt("tutStep", -1).apply(); toasts.clear() }
     internal fun testProfSay(msg: String) = professorSay(msg, 30f)
+    internal fun testSelect(id: Long) { selected = id; panelAnim = 1f }
+    internal fun testBedtime() = bedtime()
+    internal fun testUpdateWidgetFrame(sh: Shroom) = renderWidgetFrame(sh, 1f)
     internal fun testRender(): android.graphics.Bitmap {
         val bmp = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
         buttons = buildButtons()
@@ -1403,9 +1546,11 @@ class GameView(context: Context) : View(context) {
     private fun update(dt: Float) {
         t += dt
         if (qaMode) { qaAcc += max(dt, realDt); if (qaAcc >= 0.5f) { qaAcc = 0f; qaReport() } }
+        updateJam(dt)
         tickAcc += dt
         if (tickAcc >= 1f) {
             tickAcc = 0f; lab.tick(); markDirty()
+            lab.updateQuest()?.let { toast(it, DUST); sound.play(Fx.DISCOVER); buzz(40) }
             updateWants(System.currentTimeMillis())
             updateAmbience()
             for (a in lab.checkAchievements()) {
@@ -1554,7 +1699,7 @@ class GameView(context: Context) : View(context) {
         fill.color = Color.argb(40, 255, 255, 255)
         c.drawRect(0f, navTop, w, navTop + 1f * dp, fill)
 
-        if (!settingsOpen && cardFor < 0) {
+        if (!settingsOpen && cardFor < 0 && familyFor < 0) {
             c.save(); c.clipRect(0f, 0f, w, navTop)
             for (b in buttons) if (!b.id.startsWith("tut_") && !b.id.startsWith("nav")) drawButton(c, b)
             c.restore()
@@ -1566,6 +1711,11 @@ class GameView(context: Context) : View(context) {
         popup?.let { drawPopup(c, w, h, it) ; for (b in buttons) if (!b.id.startsWith("tut_")) drawButton(c, b) }
         drawTutorial(c, w, h)
         if (settingsOpen) drawSettings(c, w, h)
+        if (familyFor >= 0) shroom(familyFor)?.let { s ->
+            fill.color = Color.argb(215, 10, 6, 24); c.drawRect(0f, 0f, w, h, fill)
+            drawFamily(c, w, h, s)
+            for (b in buttons) drawButton(c, b)
+        } ?: run { familyFor = -1 }
         if (cardFor >= 0) shroom(cardFor)?.let { s ->
             fill.color = Color.argb(200, 10, 6, 24); c.drawRect(0f, 0f, w, h, fill)
             val r = cardRect(w, h)
@@ -1627,7 +1777,7 @@ class GameView(context: Context) : View(context) {
         text.textAlign = Paint.Align.LEFT
         text.textSize = 25f * dp
         text.color = Color.WHITE
-        val title = when (tab) { Tab.GARDEN -> "Garden"; Tab.LAB -> "Lab"; Tab.DEX -> "Shroomdex"; Tab.SHOP -> "Shop"; Tab.JOURNAL -> "Journal" }
+        val title = when (tab) { Tab.GARDEN -> if (area == 1) "Cave" else "Garden"; Tab.LAB -> "Lab"; Tab.DEX -> "Shroomdex"; Tab.SHOP -> "Shop"; Tab.JOURNAL -> "Journal" }
         c.drawText(title, 18f * dp, 43f * dp, text)
         // spore dust pill
         text.textSize = 18f * dp
@@ -1683,7 +1833,7 @@ class GameView(context: Context) : View(context) {
     private fun updateWalkers(dt: Float) {
         val now = System.currentTimeMillis()
         val dark = LabState.darkness()
-        val home = lab.home()
+        val home = local()
         for (s in home) {
             if (s.held) continue
             if (s.airborne()) { s.moving = false; continue }
@@ -1741,6 +1891,16 @@ class GameView(context: Context) : View(context) {
             }
         }
         for (s in home) { s.gx = s.gx.coerceIn(0.05f, 0.95f); s.gz = s.gz.coerceIn(0f, 1f) }
+        // pets trot after their friend
+        for (s in home) {
+            if (s.pet < 0) continue
+            if (s.petGx.isNaN()) { s.petGx = s.gx - 0.06f; s.petGz = s.gz + 0.02f }
+            val tx = (s.gx - s.facing * 0.075f).coerceIn(0.03f, 0.97f); val tz = (s.gz + 0.015f).coerceIn(0f, 1f)
+            val dx = tx - s.petGx; val dz = tz - s.petGz
+            val d = hypot(dx, dz)
+            val speed = if (s.pet == 0) 0.05f else 0.14f
+            if (d > 0.01f) { val st = min(d, speed * dt); s.petGx += dx / d * st; s.petGz += dz / d * st; s.petPhase += dt * 8f }
+        }
     }
 
     /** Decide where to wander next: a decoration, a friend, or just somewhere. */
@@ -1761,7 +1921,7 @@ class GameView(context: Context) : View(context) {
             return
         }
         // cozy up to the campfire at night
-        val fireIdx = lab.placed.indices.firstOrNull { lab.placed[it].kind == 15 }
+        val fireIdx = if (area != 0) null else lab.placed.indices.firstOrNull { lab.placed[it].kind == 15 }
         if (fireIdx != null && dark > 0.5f && Random.nextFloat() < 0.5f) {
             val d = lab.placed[fireIdx]
             val a = Random.nextFloat() * 6.283f
@@ -1770,7 +1930,7 @@ class GameView(context: Context) : View(context) {
             return
         }
         fun taken(i: Int, act: Int) = home.any { it !== s && it.actTarget == i && (it.act == act || it.pendingAct == act) }
-        val usable = lab.placed.indices.filter {
+        val usable = if (area != 0) emptyList() else lab.placed.indices.filter {
             when (lab.placed[it].kind) {
                 7, 4, 10, 1, 6, 9, 11, 13, 15 -> true
                 12 -> !taken(it, ACT_SWING)
@@ -1802,8 +1962,10 @@ class GameView(context: Context) : View(context) {
             s.pendingAct = act; s.actTarget = di
             return
         }
-        if (s.trait != 2 && r < decoChance + 0.15f) {
-            val friend = home.filter { it !== s && it.act == 0 && it.pendingAct == 0 && it.trait != 2 && !it.held && it.id != selected }.randomOrNull()
+        val bf = home.firstOrNull { it.id == s.bestie && it.act == 0 && it.pendingAct == 0 && !it.held && it.id != selected }
+        if ((s.trait != 2 || bf != null) && r < decoChance + (if (bf != null) 0.4f else 0.15f)) {
+            val friend = bf?.takeIf { Random.nextFloat() < 0.7f }
+                ?: home.filter { it !== s && it.act == 0 && it.pendingAct == 0 && it.trait != 2 && !it.held && it.id != selected }.randomOrNull()
             if (friend != null) {
                 val mx = (s.gx + friend.gx) / 2; val mz = (s.gz + friend.gz) / 2
                 s.tx = (mx - 0.05f).coerceIn(0.05f, 0.95f); s.tz = mz
@@ -1834,16 +1996,27 @@ class GameView(context: Context) : View(context) {
             ACT_SLIDE -> 12f
             ACT_BOUNCE -> 6f + Random.nextFloat() * 5f
             ACT_CAMPFIRE -> 12f + Random.nextFloat() * 14f
+            ACT_JAM -> max(1f, jamT)
             else -> if (s.trait == 0) 40f + Random.nextFloat() * 60f else 20f + Random.nextFloat() * 40f   // sleep
         }
         if (act == ACT_CHAT) {
-            val other = lab.home().filter { it !== s && it.act == ACT_CHAT || (it !== s && it.pendingAct == ACT_CHAT) }
+            val other = local().filter { it !== s && it.act == ACT_CHAT || (it !== s && it.pendingAct == ACT_CHAT) }
                 .minByOrNull { hypot(it.gx - s.gx, it.gz - s.gz) }
             if (other != null) {
                 s.facing = if (other.gx > s.gx) 1f else -1f
                 val key = listOf(s.id, other.id).sorted().joinToString("-") + "-" + LabState.dayKey()
                 if (chatted.add(key)) lab.addDiary("${s.name} and ${other.name} had a little chat.")
+                if (lab.befriend(s, other)) {
+                    toast("💕 ${s.name} and ${other.name} are now best friends!", ACCENT)
+                    sound.play(Fx.DISCOVER, 0.6f)
+                    val (bx, by) = toScreen((s.gx + other.gx) / 2, (s.gz + other.gz) / 2)
+                    burst(bx, by - 60f * dp, ACCENT, 14, P_HEART)
+                    express(s, E_HEART, 2.5f); express(other, E_HEART, 2.5f)
+                }
             }
+        }
+        if (act == ACT_SLEEP && s.bestie >= 0) local().firstOrNull { it.id == s.bestie && it.act == 0 && it.pendingAct == 0 && !it.held && it.id != selected }?.let { b ->
+            b.tx = (s.gx + 0.07f).coerceIn(0.05f, 0.95f); b.tz = s.gz; b.pendingAct = ACT_SLEEP; b.actTarget = -1; b.idle = 0f
         }
         if (act == ACT_SNIFF) lab.placed.getOrNull(target)?.let { s.facing = if (it.gx > s.gx) 1f else -1f }
         if (act == ACT_INSIDE) sound.play(Fx.POP, 0.4f, 0.8f)
@@ -2055,7 +2228,7 @@ class GameView(context: Context) : View(context) {
             c.drawCircle(x, gy, sz * 1.5f, fill)
             fill.shader = null
         }
-        for (sh in lab.home()) {
+        for (sh in local()) {
             if (!(Data.SPECIES[sh.species].glow || sh.variant == 2) || sh.act == ACT_INSIDE) continue
             val (x, y) = toScreen(sh.gx, sh.gz)
             val sz = shroomSize(sh)
@@ -2148,9 +2321,9 @@ class GameView(context: Context) : View(context) {
     private fun gardenItemCount() = lab.decorOwned.sum() + lab.placed.size
 
     private fun drawGarden(c: Canvas, w: Float, h: Float) {
-        drawGardenScene(c, w, h)
+        if (area == 1) drawCaveScene(c, w, h) else drawGardenScene(c, w, h)
 
-        if (lab.home().isEmpty() && !decorating) {
+        if (local().isEmpty() && !decorating) {
             text.textSize = 17f * dp; text.color = Color.WHITE
             c.drawText("Your garden is empty", w / 2, h * 0.42f, text)
             text.textSize = 14f * dp; text.color = TEXT_DIM
@@ -2161,17 +2334,20 @@ class GameView(context: Context) : View(context) {
         if (selected < 0 && !decorating && !photoMode) {
             text.textSize = 12f * dp; text.color = Color.argb(200, 255, 255, 255)
             val awayN = lab.garden.count { it.away() }
-            c.drawText("${lab.garden.size} / ${lab.gardenSize()} mushrooms" + (if (awayN > 0) " · $awayN exploring" else " · drag them to move"), w / 2, groundBottom() + 44f * dp, text)
+            c.drawText("${lab.garden.size} / ${lab.capacity()} mushrooms" + (if (awayN > 0) " · $awayN exploring" else " · drag them to move"), w / 2, groundBottom() + 44f * dp, text)
             text.color = Color.WHITE
         }
 
-        drawBlooms(c)
-        for (cr in critters) if (cr.type != 0) drawCritter(c, cr)
+        if (area == 0) {
+            drawBlooms(c)
+            for (cr in critters) if (cr.type != 0) drawCritter(c, cr)
+        }
 
         // Draw decorations and mushrooms together, far-to-near, so closer things overlap ones behind
         val items = ArrayList<Pair<Float, Any>>()
-        for (d in lab.placed) items.add(Pair(d.gz, d))
-        for (s in lab.home()) items.add(Pair(s.gz + (if (s.act == ACT_SIT || s.act == ACT_NAP) 0.02f else 0f), s))
+        if (area == 0) for (d in lab.placed) items.add(Pair(d.gz, d)) else for (d in caveCrystals) items.add(Pair(d.gz, d))
+        for (s in local()) if (s.pet >= 0 && !s.petGx.isNaN() && s.pet != 1 && s.pet != 2) items.add(Pair(s.petGz, PetRef(s)))
+        for (s in local()) items.add(Pair(s.gz + (if (s.act == ACT_SIT || s.act == ACT_NAP) 0.02f else 0f), s))
         items.sortBy { it.first }
         for ((_, obj) in items) {
             if (obj is Placed) {
@@ -2182,8 +2358,14 @@ class GameView(context: Context) : View(context) {
                     c.drawOval(x - 30f * dp * depth(obj.gz), y - 8f * dp, x + 30f * dp * depth(obj.gz), y + 8f * dp, stroke)
                 }
                 val idx = lab.placed.indexOf(obj)
-                val occ = if (obj.kind == 12 || obj.kind == 14) lab.home().firstOrNull { it.actTarget == idx && (it.act == ACT_SWING || it.act == ACT_BOUNCE) } else null
+                val occ = if (obj.kind == 12 || obj.kind == 14) local().firstOrNull { it.actTarget == idx && (it.act == ACT_SWING || it.act == ACT_BOUNCE) } else null
                 drawDecor(c, obj.kind, x, y, depth(obj.gz), occ)
+                continue
+            }
+            if (obj is PetRef) {
+                val o = obj.owner
+                val (px, py) = toScreen(o.petGx, o.petGz)
+                drawPet(c, o.pet, px, py, shroomSize(o) * 0.42f * depth(o.petGz) / depth(o.gz), o.petPhase, if (o.petGx < o.gx) 1f else -1f, o.sleeping)
                 continue
             }
             val s = obj as Shroom
@@ -2202,7 +2384,13 @@ class GameView(context: Context) : View(context) {
             drawShroom(c, s.species, x, y, size, s.mood(), sin(t * 2.2f + i * 1.3f), isBlinking(s.id), false,
                 facing = s.facing, phase = s.phase, moving = s.moving || (s.act == ACT_SLIDE && (s.phase % 4f) > 2.4f), shiny = s.shiny, who = s, sleeping = s.sleeping)
             if (pose != null && pose[2] != 0f) c.restore()
-            if (LabState.raining() && !s.held) drawLeafUmbrella(c, x, y - s.airH - size * 1.0f, size)
+            if (s.sleeping && System.currentTimeMillis() < lab.tuckedUntil && !s.held) drawBlanket(c, x, y, size, s.id)
+            if (s.pet == 1 || s.pet == 2) {   // flying pets circle the cap
+                val a = t * 1.6f + s.id
+                drawPet(c, s.pet, x + cos(a) * size * 0.6f, y - s.airH - size * 1.05f + sin(a * 1.3f) * size * 0.12f, size * 0.32f, t * 10f, if (cos(a) > 0) -1f else 1f, s.sleeping)
+            }
+            if (s.act == ACT_JAM) drawInstrument(c, jamInst[s.id] ?: 0, x + s.facing * size * 0.45f, y - size * 0.3f, size * 0.38f, s.jiggle)
+            if (area == 0 && LabState.raining() && !s.held) drawLeafUmbrella(c, x, y - s.airH - size * 1.0f, size)
             drawWantBubble(c, s, x, y - s.airH - size * (if (LabState.raining()) 1.35f else 1.05f))
             if (s.act == ACT_CHAT) {
                 val bx = x + s.facing * size * 0.3f; val by = y - size * 1.15f
@@ -2226,10 +2414,17 @@ class GameView(context: Context) : View(context) {
                 text.color = Color.WHITE
             }
         }
-        for (cr in critters) if (cr.type == 0) drawCritter(c, cr)
-        drawNight(c, w)
-        drawAmbient(c, w)
-        drawWeatherLabel(c, w)
+        drawBestieHearts(c)
+        if (area == 0) {
+            for (cr in critters) if (cr.type == 0) drawCritter(c, cr)
+            drawNight(c, w)
+            drawAmbient(c, w)
+            drawWeatherLabel(c, w)
+        } else {
+            text.textSize = 12f * dp; text.color = Color.argb(220, 200, 255, 240)
+            c.drawText("⛰ Glow Cave · glowing shrooms grow 50% faster", w / 2, topBar + 66f * dp, text)
+            text.color = Color.WHITE
+        }
         drawEventBanner(c, w)
 
         if (photoMode) return
@@ -2427,8 +2622,11 @@ class GameView(context: Context) : View(context) {
 
         val modeHint = when {
             feeding -> "Tap a food, or drag it onto any mushroom"
-            styling -> if (Data.ACCESSORIES.indices.none { lab.accOwned[it] > 0 }) "Buy hats & accessories in the Shop → STYLE" else "Tap to put on or take off"
+            styling -> if (Data.ACCESSORIES.indices.none { lab.accOwned[it] > 0 } && Data.PETS.indices.none { lab.petOwned[it] > 0 }) "Buy hats in Shop → STYLE and pets in Shop → PETS" else "Tap to put on, take off, or bring a pet along"
             exploring -> "Send ${s.name} exploring. It comes back with loot!"
+            jobbing -> "Give ${s.name} a job (one mushroom per job)"
+            moreOpen -> "More for ${s.name}" + (if (s.job > 0) " · ${Data.JOBS[s.job].icon} ${Data.JOBS[s.job].name}" else "") +
+                (lab.garden.firstOrNull { it.id == s.bestie }?.let { " · 💕 ${it.name}" } ?: "")
             else -> null
         }
         if (modeHint != null) {
@@ -2722,7 +2920,8 @@ class GameView(context: Context) : View(context) {
         val sp = Data.SPECIES[target]
         val ch = successChance(target)
         val best = successChance(target, 1f)
-        val label = "${Data.TIER_NAMES[sp.tier]}: ${if (lab.discovered[target]) sp.name else "???"} · ${(ch * 100).toInt()}% chance"
+        val label = "${Data.TIER_NAMES[sp.tier]}: ${if (lab.discovered[target] || lab.fizzles[target] >= 2) sp.name else "???"} · ${(ch * 100).toInt()}% chance" +
+            (if (lab.jobHolder(Data.JOB_STIR) != null) " 🥄" else "")
         text.textSize = 13f * dp; text.color = DUST
         c.drawText(label, cx, y + 8f * dp, text)
         val bw = 190f * dp; val bh = 9f * dp; val by = y + 16f * dp
@@ -3039,6 +3238,7 @@ class GameView(context: Context) : View(context) {
         val radius = min(16f * dp, r.height() / 2)
         val custom = b.custom
 
+        if (b.style == STYLE_GHOST && custom != null) { custom(c, r); return }
         if (b.style == STYLE_GHOST) {
             text.textSize = 12f * dp; text.color = Color.argb(if (pressed) 255 else 190, 255, 255, 255)
             c.drawText(b.label, r.centerX(), r.centerY() + 4f * dp, text)
@@ -3577,7 +3777,7 @@ class GameView(context: Context) : View(context) {
 
     private fun journalButtons(list: ArrayList<Button>, w: Float, h: Float) {
         val pad = 16f * dp
-        val tabs = arrayOf("TODAY", "CONTEST", "AWARDS", "DIARY", "GAMES")
+        val tabs = arrayOf("TODAY", "CONTEST", "AWARDS", "DIARY", "GAMES", "NOTES")
         val tw = (w - pad * 2) / tabs.size
         val ty = topBar + 6f * dp
         for ((k, nm) in tabs.withIndex()) {
@@ -3585,9 +3785,16 @@ class GameView(context: Context) : View(context) {
                 if (journalTab == k) STYLE_TAB_ON else STYLE_NORMAL) { journalTab = k })
         }
         val top = ty + 54f * dp
+        if (journalTab == 5) {
+            val (gx, gy, cell) = notesGrid(w)
+            list.add(Button("notes_grid", RectF(gx, gy, gx + cell * 12, gy + cell * 12), "", STYLE_GHOST, custom = { _, _ -> }) {
+                val col = ((touchX - gx) / cell).toInt(); val row = ((touchY - gy) / cell).toInt()
+                if (col in 0..11 && row in 0..11) { notesPick = row * 12 + col; sound.play(Fx.CLICK, 0.5f) }
+            })
+        }
         if (journalTab == 4) {
-            for (g in 0..1) {
-                val r = RectF(pad, top + 10f * dp + g * 190f * dp, w - pad, top + 10f * dp + g * 190f * dp + 176f * dp)
+            for (g in 0..2) {
+                val r = RectF(pad, top + 10f * dp + g * 158f * dp, w - pad, top + 10f * dp + g * 158f * dp + 148f * dp)
                 list.add(Button("play$g", RectF(r.right - 132f * dp, r.bottom - 54f * dp, r.right - 16f * dp, r.bottom - 14f * dp), "PLAY", STYLE_PRIMARY) {
                     startMini(g + 1)
                 })
@@ -3666,6 +3873,7 @@ class GameView(context: Context) : View(context) {
         val top = topBar + 60f * dp
         if (journalTab == 3) { drawDiary(c, w, top); return }
         if (journalTab == 4) { drawGamesTab(c, w, top + 10f * dp); return }
+        if (journalTab == 5) { drawNotes(c, w, top); return }
         when (journalTab) {
             0 -> {
                 // daily gift
@@ -3717,6 +3925,7 @@ class GameView(context: Context) : View(context) {
                         text.color = Color.WHITE
                     }
                 }
+                drawQuestAndMystery(c, w, ry + lab.requests.size * 74f * dp + 4f * dp)
             }
             1 -> {
                 val now = System.currentTimeMillis()
@@ -4037,8 +4246,8 @@ class GameView(context: Context) : View(context) {
 
     private fun updateBlooms(dt: Float) {
         blooms.removeAll { t - it.born > 90f }
-        if (blooms.size >= 30) return
-        for (s in lab.home()) {
+        if (blooms.size >= 30 || area != 0) return
+        for (s in local()) {
             if (s.moving && s.mood() == 0 && Random.nextFloat() < dt * 0.25f) {
                 blooms.add(Bloom(s.gx, s.gz, t, listOf(ACCENT, Color.rgb(255, 230, 120), Color.WHITE, Color.rgb(170, 150, 255), Color.rgb(255, 160, 100)).random()))
             }
@@ -4067,7 +4276,7 @@ class GameView(context: Context) : View(context) {
             if (d.kind != 11) continue
             val v = ballVel.getOrPut(d) { floatArrayOf(0f, 0f) }
             // mushrooms walking into the ball give it a nudge
-            for (s in lab.home()) {
+            for (s in local()) {
                 if (!s.moving && s.act != ACT_KICK) continue
                 val dx = d.gx - s.gx; val dz = (d.gz - s.gz) * 1.6f
                 val dist = hypot(dx, dz)
@@ -4444,6 +4653,541 @@ class GameView(context: Context) : View(context) {
         c.restore()
     }
 
+    // ---------- Glow Cave ----------
+
+    private fun drawCaveScene(c: Canvas, w: Float, h: Float) {
+        val saved = lab.theme
+        lab.theme = 3
+        drawGardenScene(c, w, h)
+        lab.theme = saved
+        // glowing spores drifting up through the cave
+        for (k in 0 until 26) {
+            val f = (t * (0.03f + (k % 4) * 0.01f) + k * 0.173f) % 1f
+            val x = w * ((k * 0.137f) % 1f) + sin(t + k) * 10f * dp
+            val y = groundBottom() - f * (groundBottom() - horizon() * 0.3f)
+            val col = if (k % 3 == 0) Color.rgb(190, 140, 255) else Color.rgb(120, 255, 220)
+            val a = (sin(f * 3.14f) * 200).toInt().coerceIn(0, 255)
+            fill.color = Color.argb(a / 3, Color.red(col), Color.green(col), Color.blue(col)); c.drawCircle(x, y, 6f * dp, fill)
+            fill.color = Color.argb(a, Color.red(col), Color.green(col), Color.blue(col)); c.drawCircle(x, y, 1.8f * dp, fill)
+        }
+    }
+
+    // ---------- Best friends, bedtime, the garden band ----------
+
+    private fun drawBestieHearts(c: Canvas) {
+        val here = local()
+        for (a in here) {
+            if (a.bestie < 0 || a.sleeping) continue
+            val b = here.firstOrNull { it.id == a.bestie } ?: continue
+            if (a.id > b.id || hypot(a.gx - b.gx, (a.gz - b.gz) * 1.6f) > 0.17f) continue
+            val (ax, ay) = shroomScreen(a); val (bx, by) = shroomScreen(b)
+            val hy = min(ay - shroomSize(a), by - shroomSize(b)) - 14f * dp + sin(t * 3f) * 3f * dp
+            fill.color = Color.argb((170 + 60 * sin(t * 4f)).toInt(), 255, 110, 160)
+            drawHeart(c, (ax + bx) / 2, hy, 5f * dp)
+        }
+    }
+
+    private fun bedtime() {
+        val cal = java.util.Calendar.getInstance()
+        if (cal.get(java.util.Calendar.HOUR_OF_DAY) >= 7) cal.add(java.util.Calendar.DAY_OF_YEAR, 1)
+        cal.set(java.util.Calendar.HOUR_OF_DAY, 7); cal.set(java.util.Calendar.MINUTE, 0)
+        lab.tuckedUntil = cal.timeInMillis
+        for (s in lab.home()) {
+            if (s.held) continue
+            s.act = ACT_SLEEP; s.actTarget = -1; s.pendingAct = 0; s.actTimer = 900f; s.sleeping = true; s.awakeUntil = 0L
+        }
+        sound.play(Fx.YAWN, 0.7f)
+        for (s in local()) { val (x, y) = shroomScreen(s); burst(x, y - shroomSize(s), Color.rgb(200, 210, 255), 3, P_Z) }
+        toast("Sweet dreams! 🌙 Tucked in, they grow 30% faster until morning", MINT)
+        lab.addDiary("Tucked everyone in for the night. 🌙")
+        markDirty()
+    }
+
+    /** A cozy patchwork blanket over a sleeping, tucked-in mushroom. */
+    private fun drawBlanket(c: Canvas, x: Float, y: Float, size: Float, id: Long) {
+        val cols = intArrayOf(Color.rgb(255, 150, 180), Color.rgb(150, 190, 255), Color.rgb(170, 220, 150), Color.rgb(255, 210, 120), Color.rgb(200, 160, 255))
+        val col = cols[(id % cols.size).toInt()]
+        val bw = size * 0.62f; val top = y - size * 0.34f
+        path.reset()
+        path.moveTo(x - bw, y + size * 0.04f)
+        path.quadTo(x - bw * 1.05f, top + size * 0.05f, x - bw * 0.6f, top)
+        path.lineTo(x + bw * 0.6f, top)
+        path.quadTo(x + bw * 1.05f, top + size * 0.05f, x + bw, y + size * 0.04f)
+        path.close()
+        fill.color = col; c.drawPath(path, fill)
+        c.save(); c.clipPath(path)
+        fill.color = shade(col, 0.25f)
+        val sq = size * 0.16f
+        var row = 0
+        var yy = top
+        while (yy < y + size * 0.05f) {
+            var xx = x - bw + (if (row % 2 == 0) 0f else sq)
+            while (xx < x + bw) { c.drawRect(xx, yy, xx + sq, yy + sq, fill); xx += sq * 2 }
+            yy += sq; row++
+        }
+        c.restore()
+        fill.color = Color.rgb(255, 250, 245)
+        c.drawRoundRect(x - bw * 0.65f, top - size * 0.03f, x + bw * 0.65f, top + size * 0.05f, size * 0.04f, size * 0.04f, fill)
+    }
+
+    // The band: every jam lasts a little while; members play their part on each beat
+    private var jamT = 0f
+    private var jamBeat = 0f
+    private var jamStep = 0
+    private val jamInst = HashMap<Long, Int>()
+    private val JAM_MELODY = intArrayOf(0, 2, 4, 7, 4, 2, 0, -1, 4, 7, 9, 7, 4, 2, 4, -1, 0, 2, 4, 2, 0, -3, 0, -1)
+
+    private fun startJam() {
+        val band = local().filter { !it.sleeping && !it.held && it.act != ACT_INSIDE && !it.airborne() }.take(5)
+        if (band.size < 2) return
+        jamT = 18f; jamBeat = 0f; jamStep = 0; jamInst.clear()
+        val n = band.size
+        for ((k, s) in band.withIndex()) {
+            jamInst[s.id] = k
+            s.act = 0; s.pendingAct = ACT_JAM; s.actTarget = -1; s.idle = 0f; s.sleeping = false
+            val off = k - (n - 1) / 2f
+            s.tx = (0.5f + off * 0.16f).coerceIn(0.08f, 0.92f); s.tz = (0.42f + abs(off) * 0.06f).coerceIn(0f, 1f)
+        }
+        sound.play(Fx.CLINK, 0.6f)
+        toast("🎵 The garden band is getting together!", MINT)
+    }
+
+    private fun updateJam(dt: Float) {
+        if (jamT <= 0f) return
+        jamT -= dt
+        val band = local().filter { it.act == ACT_JAM }
+        for (s in band) { s.facing = if (s.gx < 0.5f) 1f else -1f; s.actTimer = max(s.actTimer, 0.5f) }
+        if (jamT <= 0f) {
+            for (s in local().filter { it.act == ACT_JAM || it.pendingAct == ACT_JAM }) {
+                if (s.act == ACT_JAM) endAct(s)
+                s.pendingAct = 0
+                s.happy = min(100f, s.happy + 15f)
+                express(s, E_BLISS, 2f)
+            }
+            jamInst.clear()
+            toast("What a jam! Everyone's happier 🎵", MINT)
+            val key = "jam-" + LabState.dayKey()
+            if (chatted.add(key)) lab.addDiary("The garden band played a little song together. 🎵")
+            markDirty()
+            return
+        }
+        if (band.isEmpty()) return
+        jamBeat += dt
+        if (jamBeat < 0.28f) return
+        jamBeat -= 0.28f
+        val step = jamStep++
+        val note = JAM_MELODY[step % JAM_MELODY.size]
+        fun ratio(semi: Int) = Math.pow(2.0, semi / 12.0).toFloat()
+        for (s in band) {
+            val (x, y) = shroomScreen(s)
+            val hit = when (jamInst[s.id] ?: 0) {
+                0 -> when (step % 4) { 0 -> { sound.play(Fx.BOING, 0.5f, 0.55f); true }; 2 -> { sound.play(Fx.CLICK, 0.45f, 0.7f); true }; else -> false }
+                1 -> if (note >= 0 || note == -3) { sound.play(Fx.POP, 0.45f, ratio(if (note == -3) -3 else note)); true } else false
+                2 -> if (step % 2 == 0 && note >= 0) { sound.play(Fx.CHIRP, 0.3f, 0.85f * ratio(note)); true } else false
+                3 -> { sound.play(Fx.CLICK, 0.18f, 1.7f); step % 2 == 0 }
+                else -> if (step % 8 == 0) { sound.play(Fx.CLINK, 0.35f, 1.2f); true } else false
+            }
+            if (hit) {
+                s.jiggle = max(s.jiggle, 0.35f)
+                if (Random.nextFloat() < 0.35f)
+                    particles.add(Particle(x + (Random.nextFloat() - 0.5f) * 20f * dp, y - shroomSize(s) * 1.1f, (Random.nextFloat() - 0.5f) * 30f * dp, -40f * dp, 1.4f, 1.4f,
+                        listOf(Color.rgb(255, 220, 150), ACCENT, MINT, Color.rgb(180, 160, 255)).random(), P_NOTE))
+            }
+        }
+    }
+
+    /** 0 drum, 1 ukulele, 2 flute, 3 maracas, 4 triangle */
+    private fun drawInstrument(c: Canvas, k: Int, x: Float, y: Float, s: Float, hit: Float) {
+        c.save(); c.rotate(hit * 20f, x, y)
+        when (k) {
+            0 -> {
+                fill.color = Color.rgb(230, 80, 90); c.drawRoundRect(x - s * 0.5f, y - s * 0.2f, x + s * 0.5f, y + s * 0.35f, s * 0.1f, s * 0.1f, fill)
+                fill.color = Color.rgb(250, 240, 225); c.drawOval(x - s * 0.5f, y - s * 0.32f, x + s * 0.5f, y - s * 0.08f, fill)
+                stroke.color = Color.rgb(255, 210, 90); stroke.strokeWidth = s * 0.06f
+                c.drawLine(x - s * 0.5f, y + s * 0.08f, x + s * 0.5f, y + s * 0.08f, stroke)
+            }
+            1 -> {
+                fill.color = Color.rgb(200, 130, 70); c.drawCircle(x, y + s * 0.15f, s * 0.3f, fill); c.drawCircle(x, y - s * 0.12f, s * 0.22f, fill)
+                fill.color = Color.rgb(90, 55, 35); c.drawCircle(x, y + s * 0.05f, s * 0.09f, fill)
+                c.drawRect(x - s * 0.05f, y - s * 0.75f, x + s * 0.05f, y - s * 0.1f, fill)
+            }
+            2 -> {
+                stroke.color = Color.rgb(170, 220, 255); stroke.strokeWidth = s * 0.14f
+                c.drawLine(x - s * 0.55f, y + s * 0.2f, x + s * 0.45f, y - s * 0.3f, stroke)
+                fill.color = Color.rgb(60, 90, 140)
+                for (h in 0..2) c.drawCircle(x - s * 0.2f + h * s * 0.2f, y + s * 0.03f - h * s * 0.1f, s * 0.035f, fill)
+            }
+            3 -> for (side in intArrayOf(-1, 1)) {
+                val mx = x + side * s * 0.28f; val my = y - s * 0.1f + (if (side > 0) hit else -hit) * s * 0.2f
+                stroke.color = Color.rgb(140, 90, 60); stroke.strokeWidth = s * 0.08f
+                c.drawLine(mx, my, mx, my + s * 0.45f, stroke)
+                fill.color = if (side < 0) Color.rgb(255, 200, 70) else Color.rgb(120, 220, 160); c.drawCircle(mx, my, s * 0.2f, fill)
+            }
+            else -> {
+                stroke.color = Color.rgb(220, 225, 235); stroke.strokeWidth = s * 0.06f
+                path.reset(); path.moveTo(x, y - s * 0.45f); path.lineTo(x + s * 0.4f, y + s * 0.3f); path.lineTo(x - s * 0.4f, y + s * 0.3f); path.close()
+                c.drawPath(path, stroke)
+            }
+        }
+        c.restore()
+    }
+
+    // ---------- Pets ----------
+
+    /** 0 snail, 1 ladybug, 2 firefly, 3 froggy, 4 ghostie, 5 penguin, 6 bunny */
+    private fun drawPet(c: Canvas, p: Int, x: Float, y0: Float, s: Float, phase: Float, facing: Float, asleep: Boolean) {
+        val f = if (facing >= 0) 1f else -1f
+        val eye = Color.rgb(45, 30, 55)
+        fun eyes(ex: Float, ey: Float, r: Float, gap: Float) {
+            fill.color = eye
+            if (asleep) { stroke.color = eye; stroke.strokeWidth = r * 0.6f
+                c.drawLine(ex - gap - r, ey, ex - gap + r, ey, stroke); c.drawLine(ex + gap - r, ey, ex + gap + r, ey, stroke) }
+            else { c.drawCircle(ex - gap, ey, r, fill); c.drawCircle(ex + gap, ey, r, fill)
+                fill.color = Color.WHITE; c.drawCircle(ex - gap + r * 0.3f, ey - r * 0.3f, r * 0.35f, fill); c.drawCircle(ex + gap + r * 0.3f, ey - r * 0.3f, r * 0.35f, fill) }
+        }
+        when (p) {
+            0 -> { // snail
+                groundShadow(c, x, y0, s * 0.5f, 70)
+                fill.color = Color.rgb(200, 215, 190)
+                c.drawRoundRect(x - s * 0.55f, y0 - s * 0.18f, x + s * 0.55f, y0, s * 0.09f, s * 0.09f, fill)
+                stroke.color = Color.rgb(200, 215, 190); stroke.strokeWidth = s * 0.05f
+                val hx = x + f * s * 0.48f
+                c.drawLine(hx, y0 - s * 0.15f, hx + f * s * 0.08f, y0 - s * 0.42f, stroke)
+                c.drawLine(hx - f * s * 0.1f, y0 - s * 0.15f, hx - f * s * 0.06f, y0 - s * 0.4f, stroke)
+                fill.color = eye; c.drawCircle(hx + f * s * 0.08f, y0 - s * 0.44f, s * 0.05f, fill); c.drawCircle(hx - f * s * 0.06f, y0 - s * 0.42f, s * 0.05f, fill)
+                fill.shader = RadialGradient(x - f * s * 0.1f, y0 - s * 0.45f, s * 0.4f, Color.rgb(255, 190, 170), Color.rgb(220, 120, 110), Shader.TileMode.CLAMP)
+                c.drawCircle(x - f * s * 0.08f, y0 - s * 0.35f, s * 0.32f, fill); fill.shader = null
+                stroke.color = Color.rgb(190, 90, 90); stroke.strokeWidth = s * 0.05f
+                c.drawArc(x - f * s * 0.08f - s * 0.2f, y0 - s * 0.55f, x - f * s * 0.08f + s * 0.2f, y0 - s * 0.15f, 0f, 270f, false, stroke)
+                c.drawArc(x - f * s * 0.08f - s * 0.09f, y0 - s * 0.44f, x - f * s * 0.08f + s * 0.09f, y0 - s * 0.26f, 90f, 270f, false, stroke)
+                fill.color = Color.argb(140, 255, 245, 200)
+                for (k in 1..3) c.drawCircle(x - f * (s * 0.5f + k * s * 0.25f), y0 - s * 0.02f, s * 0.035f, fill)
+            }
+            1 -> { // ladybug
+                val flap = abs(sin(phase * 2f))
+                fill.color = Color.argb(140, 255, 255, 255)
+                c.drawOval(x - s * 0.5f, y0 - s * 0.45f - flap * s * 0.15f, x - s * 0.05f, y0 - s * 0.1f, fill)
+                c.drawOval(x + s * 0.05f, y0 - s * 0.45f - flap * s * 0.15f, x + s * 0.5f, y0 - s * 0.1f, fill)
+                fill.color = Color.rgb(40, 30, 40); c.drawCircle(x + f * s * 0.3f, y0, s * 0.16f, fill)
+                fill.color = Color.rgb(230, 50, 60); c.drawOval(x - s * 0.32f, y0 - s * 0.26f, x + s * 0.3f, y0 + s * 0.24f, fill)
+                fill.color = Color.rgb(40, 30, 40)
+                c.drawRect(x - s * 0.01f, y0 - s * 0.26f, x + s * 0.01f, y0 + s * 0.24f, fill)
+                for ((dx, dy) in arrayOf(-0.15f to -0.08f, 0.13f to -0.1f, -0.12f to 0.1f, 0.12f to 0.1f)) c.drawCircle(x + dx * s, y0 + dy * s, s * 0.06f, fill)
+            }
+            2 -> { // firefly
+                val glow = 0.5f + 0.5f * sin(phase * 0.6f)
+                val night = 0.4f + 0.6f * LabState.darkness()
+                fill.shader = RadialGradient(x - f * s * 0.2f, y0 + s * 0.05f, s * 0.9f, Color.argb((160 * glow * night).toInt(), 255, 240, 120), Color.argb(0, 255, 240, 120), Shader.TileMode.CLAMP)
+                c.drawCircle(x - f * s * 0.2f, y0 + s * 0.05f, s * 0.9f, fill); fill.shader = null
+                fill.color = Color.argb(150, 255, 255, 255)
+                val flap = abs(sin(phase * 2.5f))
+                c.drawOval(x - s * 0.3f, y0 - s * 0.4f - flap * s * 0.12f, x, y0 - s * 0.1f, fill)
+                c.drawOval(x, y0 - s * 0.4f - flap * s * 0.12f, x + s * 0.3f, y0 - s * 0.1f, fill)
+                fill.color = Color.rgb(70, 60, 80); c.drawOval(x - s * 0.25f, y0 - s * 0.14f, x + s * 0.25f, y0 + s * 0.14f, fill)
+                fill.color = Color.rgb(255, 245, 140); c.drawCircle(x - f * s * 0.22f, y0 + s * 0.04f, s * 0.13f, fill)
+            }
+            3 -> { // froggy hops along
+                val hop = abs(sin(phase * 0.5f)) * s * 0.3f
+                groundShadow(c, x, y0, s * 0.45f, 70)
+                val y = y0 - hop
+                fill.color = Color.rgb(110, 200, 110); c.drawOval(x - s * 0.45f, y - s * 0.5f, x + s * 0.45f, y, fill)
+                c.drawCircle(x - s * 0.22f, y - s * 0.5f, s * 0.15f, fill); c.drawCircle(x + s * 0.22f, y - s * 0.5f, s * 0.15f, fill)
+                fill.color = Color.WHITE; c.drawCircle(x - s * 0.22f, y - s * 0.52f, s * 0.1f, fill); c.drawCircle(x + s * 0.22f, y - s * 0.52f, s * 0.1f, fill)
+                eyes(x, y - s * 0.52f, s * 0.055f, s * 0.22f)
+                fill.color = Color.rgb(170, 235, 160); c.drawOval(x - s * 0.25f, y - s * 0.25f, x + s * 0.25f, y - s * 0.02f, fill)
+                stroke.color = Color.rgb(60, 120, 60); stroke.strokeWidth = s * 0.04f
+                c.drawArc(x - s * 0.15f, y - s * 0.38f, x + s * 0.15f, y - s * 0.24f, 20f, 140f, false, stroke)
+            }
+            4 -> { // ghostie floats
+                val y = y0 - s * 0.35f + sin(phase * 0.4f) * s * 0.12f
+                groundShadow(c, x, y0, s * 0.35f, 40)
+                fill.color = Color.argb(225, 250, 250, 255)
+                path.reset()
+                path.moveTo(x - s * 0.38f, y + s * 0.3f); path.lineTo(x - s * 0.38f, y - s * 0.05f)
+                path.cubicTo(x - s * 0.38f, y - s * 0.55f, x + s * 0.38f, y - s * 0.55f, x + s * 0.38f, y - s * 0.05f)
+                path.lineTo(x + s * 0.38f, y + s * 0.3f)
+                for (k in 0..3) path.lineTo(x + s * 0.38f - (k + 0.5f) * s * 0.19f, y + s * (if (k % 2 == 0) 0.18f else 0.3f))
+                path.lineTo(x - s * 0.38f, y + s * 0.3f); path.close()
+                c.drawPath(path, fill)
+                eyes(x + f * s * 0.04f, y - s * 0.08f, s * 0.06f, s * 0.13f)
+                fill.color = Color.argb(150, 255, 140, 170); c.drawCircle(x - s * 0.22f, y + s * 0.05f, s * 0.05f, fill); c.drawCircle(x + s * 0.26f, y + s * 0.05f, s * 0.05f, fill)
+            }
+            5 -> { // penguin waddles
+                c.save(); c.rotate(sin(phase * 0.8f) * 8f, x, y0)
+                groundShadow(c, x, y0, s * 0.35f, 70)
+                fill.color = Color.rgb(255, 160, 60)
+                c.drawOval(x - s * 0.25f, y0 - s * 0.06f, x - s * 0.02f, y0 + s * 0.04f, fill); c.drawOval(x + s * 0.02f, y0 - s * 0.06f, x + s * 0.25f, y0 + s * 0.04f, fill)
+                fill.color = Color.rgb(45, 50, 70); c.drawOval(x - s * 0.32f, y0 - s * 0.85f, x + s * 0.32f, y0 - s * 0.02f, fill)
+                fill.color = Color.WHITE; c.drawOval(x - s * 0.21f, y0 - s * 0.62f, x + s * 0.21f, y0 - s * 0.06f, fill)
+                eyes(x + f * s * 0.04f, y0 - s * 0.62f, s * 0.045f, s * 0.1f)
+                fill.color = Color.rgb(255, 170, 60)
+                path.reset(); path.moveTo(x + f * s * 0.02f, y0 - s * 0.56f); path.lineTo(x + f * s * 0.2f, y0 - s * 0.52f); path.lineTo(x + f * s * 0.02f, y0 - s * 0.48f); path.close(); c.drawPath(path, fill)
+                fill.color = Color.rgb(220, 50, 60); c.drawRect(x - s * 0.28f, y0 - s * 0.47f, x + s * 0.28f, y0 - s * 0.4f, fill)
+                c.restore()
+            }
+            else -> { // bunny
+                val hop = abs(sin(phase * 0.45f)) * s * 0.22f
+                groundShadow(c, x, y0, s * 0.4f, 70)
+                val y = y0 - hop
+                fill.color = Color.rgb(250, 248, 252)
+                c.drawOval(x - s * 0.18f, y - s * 1.0f, x - s * 0.03f, y - s * 0.45f, fill); c.drawOval(x + s * 0.03f, y - s * 1.0f, x + s * 0.18f, y - s * 0.45f, fill)
+                fill.color = Color.rgb(255, 180, 200)
+                c.drawOval(x - s * 0.14f, y - s * 0.92f, x - s * 0.07f, y - s * 0.55f, fill); c.drawOval(x + s * 0.07f, y - s * 0.92f, x + s * 0.14f, y - s * 0.55f, fill)
+                fill.color = Color.rgb(250, 248, 252)
+                c.drawOval(x - s * 0.36f, y - s * 0.58f, x + s * 0.36f, y, fill)
+                c.drawCircle(x - f * s * 0.36f, y - s * 0.18f, s * 0.1f, fill)
+                eyes(x + f * s * 0.05f, y - s * 0.36f, s * 0.045f, s * 0.11f)
+                fill.color = Color.rgb(255, 150, 180); c.drawCircle(x + f * s * 0.05f, y - s * 0.27f, s * 0.035f, fill)
+            }
+        }
+    }
+
+    // ---------- Journal extras: event quest, weekly mystery, recipe notebook ----------
+
+    private fun drawQuestAndMystery(c: Canvas, w: Float, y0: Float) {
+        val pad = 16f * dp
+        var y = y0
+        val step = lab.questNow()
+        val ev = eventNow()
+        if (step >= 0) {
+            val q = Data.QUESTS[ev]
+            val r = RectF(pad, y, w - pad, y + 92f * dp)
+            fill.color = Color.argb(70, Color.red(Data.EVENT_COLORS[ev]), Color.green(Data.EVENT_COLORS[ev]), Color.blue(Data.EVENT_COLORS[ev]))
+            c.drawRoundRect(r, 16f * dp, 16f * dp, fill)
+            stroke.color = Data.EVENT_COLORS[ev]; stroke.strokeWidth = 1.5f * dp; c.drawRoundRect(r, 16f * dp, 16f * dp, stroke)
+            drawPet(c, q.pet, r.right - 34f * dp, r.top + 58f * dp, 34f * dp, t * 6f, -1f, false)
+            text.textAlign = Paint.Align.LEFT; text.textSize = 14f * dp
+            c.drawText("${Data.EVENT_ICONS[ev]} ${q.title}" + if (step >= 3) "  ✓" else "  (${step + 1}/3)", r.left + 14f * dp, r.top + 22f * dp, text)
+            text.textSize = 11.5f * dp; text.color = TEXT_DIM
+            val body = if (step >= 3) q.outro else q.intro
+            for ((k, l) in wrap(body, r.width() - 90f * dp).take(2).withIndex()) c.drawText(l, r.left + 14f * dp, r.top + 40f * dp + k * 15f * dp, text)
+            if (step < 3) {
+                val st = q.steps[step]
+                text.color = MINT; text.textSize = 12f * dp
+                c.drawText("→ " + st.text + (if (st.type == 2) "  (${lab.questCount}/${st.count})" else ""), r.left + 14f * dp, r.bottom - 12f * dp, text)
+            }
+            text.color = Color.WHITE; text.textAlign = Paint.Align.CENTER
+            y += 100f * dp
+        }
+        val wk = Data.weekKey()
+        val m = Data.mysteryFor(wk)
+        val solved = lab.mysteryClaimed == wk
+        val r = RectF(pad, y, w - pad, y + 64f * dp)
+        fill.color = PANEL; c.drawRoundRect(r, 16f * dp, 16f * dp, fill)
+        drawShroom(c, m, r.left + 30f * dp, r.top + 50f * dp, 30f * dp, 0, sin(t * 2f), false, !solved)
+        text.textAlign = Paint.Align.LEFT; text.textSize = 14f * dp
+        c.drawText("🔮 Mystery recipe of the week" + if (solved) "  ✓" else "  · 120 ✦", r.left + 58f * dp, r.top + 24f * dp, text)
+        text.textSize = 11.5f * dp; text.color = if (solved) MINT else TEXT_DIM
+        c.drawText(if (solved) "Solved: ${Data.SPECIES[m].name}! A new one comes next week." else "Hint: ${Data.SPECIES[m].hint}", r.left + 58f * dp, r.top + 44f * dp, text)
+        text.color = Color.WHITE; text.textAlign = Paint.Align.CENTER
+    }
+
+    private var notesPick = -1
+    private var notesBmp: android.graphics.Bitmap? = null
+    private var notesKey = ""
+
+    private fun notesGrid(w: Float): Triple<Float, Float, Float> {
+        val pad = 16f * dp
+        val head = 24f * dp
+        val cell = (w - pad * 2 - head) / 12
+        return Triple(pad + head, topBar + 60f * dp + 30f * dp + head, cell)
+    }
+
+    private fun drawNotes(c: Canvas, w: Float, top: Float) {
+        val pad = 16f * dp
+        val (gx, gy, cell) = notesGrid(w)
+        text.textSize = 12f * dp; text.color = TEXT_DIM
+        c.drawText("Every pair you've brewed · ${lab.tried.count { it.key.split(",").all { k -> k.toInt() < 12 } }} of 78 tried · tap a square", w / 2, top + 16f * dp, text)
+        text.color = Color.WHITE
+        // the grid only changes when you brew, so it's drawn once into a picture
+        val key = "${lab.tried.size}-${width}-${lab.tried.values.sum()}"
+        if (notesBmp == null || key != notesKey) {
+            notesKey = key
+            val bmp = android.graphics.Bitmap.createBitmap((cell * 12 + 24f * dp + 2).toInt(), (cell * 12 + 24f * dp + 2).toInt(), android.graphics.Bitmap.Config.ARGB_8888)
+            val bc = Canvas(bmp)
+            val ox = 24f * dp; val oy = 24f * dp
+            for (i in 0 until 12) {
+                drawIngredient(bc, i, ox + i * cell + cell / 2, oy / 2, 7f * dp)
+                drawIngredient(bc, i, oy / 2, oy + i * cell + cell / 2, 7f * dp)
+            }
+            for (a in 0 until 12) for (b in 0 until 12) {
+                val x = ox + b * cell; val yy = oy + a * cell
+                fill.color = if ((a + b) % 2 == 0) Color.argb(40, 255, 255, 255) else Color.argb(22, 255, 255, 255)
+                bc.drawRoundRect(x + 1f, yy + 1f, x + cell - 1f, yy + cell - 1f, 5f * dp, 5f * dp, fill)
+                val sp = lab.triedPair(a, b)
+                if (sp >= 0) drawShroom(bc, sp, x + cell / 2, yy + cell * 0.88f, cell * 0.62f, 0, 0f, false, false)
+                else { fill.color = Color.argb(60, 255, 255, 255); bc.drawCircle(x + cell / 2, yy + cell / 2, 1.6f * dp, fill) }
+            }
+            notesBmp = bmp
+        }
+        notesBmp?.let { c.drawBitmap(it, gx - 24f * dp, gy - 24f * dp, null) }
+        if (notesPick >= 0) {
+            val a = notesPick / 12; val b = notesPick % 12
+            stroke.color = DUST; stroke.strokeWidth = 2f * dp
+            c.drawRoundRect(gx + b * cell, gy + a * cell, gx + (b + 1) * cell, gy + (a + 1) * cell, 5f * dp, 5f * dp, stroke)
+        }
+        var y = gy + cell * 12 + 22f * dp
+        text.textSize = 13f * dp
+        if (notesPick >= 0) {
+            val a = notesPick / 12; val b = notesPick % 12
+            val sp = lab.triedPair(a, b)
+            c.drawText("${Data.INGREDIENTS[a].name} + ${Data.INGREDIENTS[b].name} → " + (if (sp >= 0) Data.SPECIES[sp].name else "not tried yet"), w / 2, y, text)
+        } else {
+            text.color = TEXT_DIM; c.drawText("Tap a square to see what that pair grows", w / 2, y, text); text.color = Color.WHITE
+        }
+        y += 24f * dp
+        text.textAlign = Paint.Align.LEFT; text.textSize = 13f * dp
+        c.drawText("Rare 3-ingredient recipes", pad, y, text)
+        y += 6f * dp
+        for (i in Data.SPECIES.indices.filter { Data.SPECIES[it].tier == 4 && Data.SPECIES[it].event == 0 }) {
+            y += 17f * dp
+            if (y > navTop - 8f * dp) break
+            val known = lab.discovered[i]
+            val f = lab.fizzles[i]
+            text.textSize = 11.5f * dp
+            text.color = if (known) MINT else Color.WHITE
+            val nm = if (known || f >= 2) Data.SPECIES[i].name else "???"
+            c.drawText((if (known) "✓ " else "• ") + nm, pad, y, text)
+            text.color = TEXT_DIM
+            c.drawText(if (known) Data.recipeText(i) else (if (f > 0) "fizzled ${f}× · " else "") + Data.SPECIES[i].hint, pad + 120f * dp, y, text)
+        }
+        text.color = Color.WHITE; text.textAlign = Paint.Align.CENTER
+    }
+
+    // ---------- Hide & Seek ----------
+
+    private val hsHidden = IntArray(9) { -1 }      // species hiding in each bush
+    private val hsFound = BooleanArray(9)
+    private val hsTapped = BooleanArray(9)
+    private val hsRustle = FloatArray(9)
+    private var hsTaps = 0
+    private var hsRound = 0
+    private var hsNext = 0f
+    private var hsHint = 0f
+
+    private fun hsNewRound() {
+        hsRound++
+        for (i in 0 until 9) { hsHidden[i] = -1; hsFound[i] = false; hsTapped[i] = false; hsRustle[i] = 0f }
+        val kinds = lab.home().map { it.species }.ifEmpty { listOf(1, 2, 3) }
+        for (b in (0 until 9).shuffled().take(3)) hsHidden[b] = kinds.random()
+        hsTaps = 5; hsNext = 0f; hsHint = 1f
+    }
+
+    private fun tapBush(i: Int) {
+        if (miniOver || hsNext > 0f || hsTapped[i]) return
+        hsTapped[i] = true; hsTaps--
+        if (hsHidden[i] >= 0) {
+            hsFound[i] = true; miniScore++
+            sound.play(Fx.GIGGLE, 0.7f, 1f + Random.nextFloat() * 0.3f); buzz(25)
+        } else sound.play(Fx.POP, 0.5f, 0.7f)
+        val left = (0 until 9).count { hsHidden[it] >= 0 && !hsFound[it] }
+        if (left == 0 || hsTaps <= 0) hsNext = 1.4f
+    }
+
+    private fun updateHide(dt: Float) {
+        for (i in 0 until 9) hsRustle[i] = max(0f, hsRustle[i] - dt)
+        if (hsNext > 0f) {
+            hsNext -= dt
+            if (hsNext <= 0f) { if (hsRound >= 3) endMini() else hsNewRound() }
+            return
+        }
+        hsHint -= dt
+        if (hsHint <= 0f) {
+            hsHint = 0.9f + Random.nextFloat() * 0.9f
+            val hiding = (0 until 9).filter { hsHidden[it] >= 0 && !hsFound[it] }
+            val b = if (hiding.isNotEmpty() && Random.nextFloat() < 0.7f) hiding.random() else (0 until 9).filter { !hsTapped[it] }.randomOrNull() ?: return
+            hsRustle[b] = 0.6f
+        }
+    }
+
+    private fun hideRect(i: Int, w: Float, h: Float): RectF {
+        val cell = min((w - 40f * dp) / 3, (h * 0.62f) / 3)
+        val gx = w / 2 - cell * 1.5f; val gy = topBar + 90f * dp
+        return RectF(gx + (i % 3) * cell + 4f * dp, gy + (i / 3) * cell + 4f * dp, gx + (i % 3 + 1) * cell - 4f * dp, gy + (i / 3 + 1) * cell - 4f * dp)
+    }
+
+    private fun drawBush(c: Canvas, x: Float, y: Float, s: Float, wiggle: Float) {
+        c.save(); c.rotate(wiggle * 6f, x, y)
+        groundShadow(c, x, y, s * 0.6f, 80)
+        for ((k, d) in arrayOf(Triple(-0.3f, -0.35f, 0.32f), Triple(0.3f, -0.35f, 0.32f), Triple(0f, -0.55f, 0.36f), Triple(-0.1f, -0.25f, 0.34f), Triple(0.15f, -0.22f, 0.3f)).withIndex()) {
+            fill.color = if (k % 2 == 0) Color.rgb(70, 150, 80) else Color.rgb(90, 175, 95)
+            c.drawCircle(x + d.first * s, y + d.second * s, d.third * s, fill)
+        }
+        fill.color = Color.argb(70, 255, 255, 255)
+        c.drawCircle(x - s * 0.1f, y - s * 0.72f, s * 0.1f, fill)
+        c.restore()
+    }
+
+    private fun drawHideCell(c: Canvas, r: RectF, i: Int) {
+        val x = r.centerX(); val y = r.bottom - r.height() * 0.12f
+        val s = r.width() * 0.62f
+        val reveal = hsFound[i] || (hsNext > 0f && hsHidden[i] >= 0)
+        if (reveal) {
+            val pop = if (hsFound[i]) 1f else 0.6f
+            drawShroom(c, hsHidden[i], x + s * 0.25f, y - s * 0.35f * pop, s * 0.55f, 0, sin(t * 4f), false, !hsFound[i],
+                who = Shroom(-9L, hsHidden[i]).apply { expr = E_GIGGLE; exprT = 1f; xp = 200f })
+        }
+        drawBush(c, x, y, s, if (hsRustle[i] > 0f) sin(t * 40f) else 0f)
+        if (hsTapped[i] && hsHidden[i] < 0) { text.textSize = 13f * dp; text.color = TEXT_DIM; c.drawText("nobody", x, r.top + 16f * dp, text); text.color = Color.WHITE }
+    }
+
+    // ---------- Family tree ----------
+
+    private fun drawFamily(c: Canvas, w: Float, h: Float, s: Shroom) {
+        text.textSize = 24f * dp; text.color = Color.WHITE
+        c.drawText("${s.name}'s family", w / 2, h * 0.1f, text)
+        text.textSize = 12f * dp; text.color = TEXT_DIM
+        c.drawText(if (s.family[0].isEmpty()) "Brewed in the lab, so Professor Spore is like a parent!" else "Grandparents · parents · ${s.name}", w / 2, h * 0.1f + 22f * dp, text)
+        text.color = Color.WHITE
+        // positions: grandparents row, parents row, the mushroom itself
+        val gy = h * 0.3f; val py = h * 0.52f; val cy = h * 0.76f
+        val gxs = floatArrayOf(w * 0.14f, w * 0.38f, w * 0.62f, w * 0.86f)
+        val pxs = floatArrayOf(w * 0.26f, w * 0.74f)
+        stroke.color = Color.argb(120, 255, 200, 230); stroke.strokeWidth = 2.5f * dp
+        fun link(x1: Float, y1: Float, x2: Float, y2: Float) {
+            path.reset(); path.moveTo(x1, y1); path.cubicTo(x1, (y1 + y2) / 2, x2, (y1 + y2) / 2, x2, y2); c.drawPath(path, stroke)
+        }
+        if (s.family[0].isNotEmpty()) {
+            for (k in 0..1) {
+                link(pxs[k], py + 8f * dp, w / 2, cy - 80f * dp)
+                for (g in 0..1) if (s.family[2 + k * 2 + g].isNotEmpty()) link(gxs[k * 2 + g], gy + 8f * dp, pxs[k], py - 64f * dp)
+            }
+        }
+        fun member(entry: String, x: Float, y: Float, size: Float) {
+            val parts = entry.split("|")
+            if (entry.isEmpty() || parts.size < 2) {
+                fill.color = Color.argb(40, 255, 255, 255); c.drawCircle(x, y - size * 0.5f, size * 0.45f, fill)
+                text.textSize = 16f * dp; text.color = TEXT_DIM; c.drawText("?", x, y - size * 0.4f, text)
+                text.textSize = 11f * dp; c.drawText("unknown", x, y + 16f * dp, text); text.color = Color.WHITE
+                return
+            }
+            val sp = parts[1].toIntOrNull()?.coerceIn(0, Data.SPECIES.size - 1) ?: 0
+            drawShroom(c, sp, x, y, size, 0, sin(t * 2f + x), (t + x) % 4f < 0.12f, false)
+            text.textSize = 12f * dp; text.color = Color.WHITE
+            c.drawText(parts[0], x, y + 17f * dp, text)
+            text.textSize = 10f * dp; text.color = TEXT_DIM
+            c.drawText(Data.SPECIES[sp].name, x, y + 30f * dp, text)
+            text.color = Color.WHITE
+        }
+        if (s.family[0].isNotEmpty()) {
+            for (g in 0..3) member(s.family[2 + g], gxs[g], gy, 46f * dp)
+            for (k in 0..1) member(s.family[k], pxs[k], py, 62f * dp)
+        } else {
+            drawShroom(c, professor.species, w / 2, py, 70f * dp, 0, sin(t * 2f), (t % 4f) < 0.12f, false, who = professor)
+            text.textSize = 13f * dp; c.drawText("Professor Spore", w / 2, py + 20f * dp, text)
+            link(w / 2, py + 30f * dp, w / 2, cy - 80f * dp)
+        }
+        drawShroom(c, s.species, w / 2, cy, 84f * dp, s.mood(), sin(t * 2.5f), (t % 3f) < 0.12f, false, shiny = s.shiny, who = s)
+        text.textSize = 16f * dp; c.drawText(s.name, w / 2, cy + 22f * dp, text)
+        // brothers and sisters still in the garden
+        val sibs = lab.garden.filter { it !== s && it.family[0].isNotEmpty() && setOf(it.family[0], it.family[1]) == setOf(s.family[0], s.family[1]) }
+        if (sibs.isNotEmpty()) {
+            text.textSize = 11f * dp; text.color = TEXT_DIM
+            c.drawText("Siblings: " + sibs.joinToString(", ") { it.name }, w / 2, cy + 40f * dp, text)
+            text.color = Color.WHITE
+        }
+    }
+
     // ---------- Profile cards ----------
 
     private var cardFor = -1L
@@ -4629,7 +5373,7 @@ class GameView(context: Context) : View(context) {
 
     // ---------- Mini-games: Spore Catch & Memory Match ----------
 
-    private var mini = 0               // 0 none, 1 Spore Catch, 2 Memory Match
+    private var mini = 0               // 0 none, 1 Spore Catch, 2 Memory Match, 3 Hide & Seek
     private var miniOver = false
     private var miniScore = 0
     private var miniReward = 0
@@ -4658,6 +5402,8 @@ class GameView(context: Context) : View(context) {
             drops.clear(); catchX = width / 2f; catchTarget = catchX; dropTimer = 0.5f; catchDizzy = 0f
             catchSpecies = lab.home().randomOrNull()?.species ?: 1
             miniT = 30f
+        } else if (kind == 3) {
+            hsRound = 0; hsNewRound()
         } else {
             val known = Data.DEX_ORDER.filter { lab.discovered[it] }.shuffled()
             val pool = (known + Data.SPECIES.indices.filter { Data.SPECIES[it].tier == 1 }.shuffled()).distinct().take(8)
@@ -4685,6 +5431,9 @@ class GameView(context: Context) : View(context) {
             val best = prefs.getInt("bestCatch", 0)
             if (miniScore > best) prefs.edit().putInt("bestCatch", miniScore).apply()
             miniReward = payMini(min(40, miniScore / 2))
+        } else if (mini == 3) {
+            if (miniScore > prefs.getInt("bestHide", 0)) prefs.edit().putInt("bestHide", miniScore).apply()
+            miniReward = payMini(miniScore * 5)
         } else {
             val best = prefs.getInt("bestMemory", 999)
             if (mmMoves < best) prefs.edit().putInt("bestMemory", mmMoves).apply()
@@ -4696,6 +5445,7 @@ class GameView(context: Context) : View(context) {
 
     private fun updateMini(dt: Float) {
         if (mini == 0 || miniOver) return
+        if (mini == 3) { updateHide(dt); return }
         if (mini == 1) {
             miniT -= dt
             if (miniT <= 0f) { endMini(); return }
@@ -4760,6 +5510,9 @@ class GameView(context: Context) : View(context) {
             return
         }
         list.add(Button("mg_quit", RectF(w - 98f * dp, 16f * dp, w - 14f * dp, 52f * dp), "QUIT") { mini = 0 })
+        if (mini == 3) for (i in 0 until 9) {
+            list.add(Button("hs$i", hideRect(i, w, h), "", STYLE_GHOST, custom = { c, rr -> drawHideCell(c, rr, i) }) { tapBush(i) })
+        }
         if (mini == 2) {
             val gw = min(w - 32f * dp, 380f * dp)
             val cell = gw / 4
@@ -4792,7 +5545,7 @@ class GameView(context: Context) : View(context) {
         fill.shader = LinearGradient(0f, 0f, 0f, h, Color.rgb(50, 32, 92), Color.rgb(24, 16, 44), Shader.TileMode.CLAMP)
         c.drawRect(0f, 0f, w, h, fill); fill.shader = null
         text.textAlign = Paint.Align.LEFT; text.textSize = 22f * dp
-        c.drawText(if (mini == 1) "Spore Catch" else "Memory Match", 18f * dp, 42f * dp, text)
+        c.drawText(when (mini) { 1 -> "Spore Catch"; 3 -> "Hide & Seek"; else -> "Memory Match" }, 18f * dp, 42f * dp, text)
         text.textAlign = Paint.Align.CENTER
         if (mini == 1) {
             // timer bar + score
@@ -4817,6 +5570,13 @@ class GameView(context: Context) : View(context) {
             drawShroom(c, catchSpecies, catchX, cy, 80f * dp, 0, sin(t * 6f), false, false, who = catcher)
             if (!miniOver) { text.textSize = 13f * dp; text.color = TEXT_DIM
                 c.drawText("Drag to catch golden spores ✦ · avoid the stinky green ones!", w / 2, h - 30f * dp, text); text.color = Color.WHITE }
+        } else if (mini == 3) {
+            fill.color = Color.rgb(78, 140, 104)
+            c.drawRect(0f, topBar + 70f * dp, w, h, fill)
+            text.textSize = 14f * dp; text.color = TEXT_DIM
+            c.drawText("Round ${min(hsRound, 3)}/3 · taps left: $hsTaps · found: $miniScore", w / 2, topBar + 50f * dp, text)
+            if (!miniOver) c.drawText("Watch for rustling bushes, then tap to peek!", w / 2, h - 30f * dp, text)
+            text.color = Color.WHITE
         } else {
             text.textSize = 14f * dp; text.color = TEXT_DIM
             c.drawText("Find the matching mushrooms · moves: $mmMoves", w / 2, topBar + 50f * dp, text); text.color = Color.WHITE
@@ -4825,9 +5585,9 @@ class GameView(context: Context) : View(context) {
             fill.color = Color.argb(170, 10, 6, 24); c.drawRect(0f, 0f, w, h, fill)
             panel(c, RectF(28f * dp, h * 0.3f, w - 28f * dp, h * 0.6f + 70f * dp), 24f * dp, PANEL_LIGHT)
             text.textSize = 28f * dp
-            c.drawText(if (mini == 1) "Score: $miniScore" else "Done in $mmMoves moves!", w / 2, h * 0.38f, text)
+            c.drawText(when (mini) { 1 -> "Score: $miniScore"; 3 -> "Found $miniScore of 9!"; else -> "Done in $mmMoves moves!" }, w / 2, h * 0.38f, text)
             text.textSize = 15f * dp; text.color = TEXT_DIM
-            val best = if (mini == 1) "Best: ${prefs.getInt("bestCatch", 0)}" else "Best: ${prefs.getInt("bestMemory", 0)} moves"
+            val best = when (mini) { 1 -> "Best: ${prefs.getInt("bestCatch", 0)}"; 3 -> "Best: ${prefs.getInt("bestHide", 0)} found"; else -> "Best: ${prefs.getInt("bestMemory", 0)} moves" }
             c.drawText(best, w / 2, h * 0.38f + 28f * dp, text)
             text.textSize = 20f * dp; text.color = DUST
             c.drawText(if (miniReward > 0) "+$miniReward ✦" else "Daily mini-game dust limit reached", w / 2, h * 0.5f, text)
@@ -4838,8 +5598,20 @@ class GameView(context: Context) : View(context) {
 
     private fun drawGamesTab(c: Canvas, w: Float, top: Float) {
         val pad = 16f * dp
+        val r3 = RectF(pad, top + 2 * 158f * dp, w - pad, top + 2 * 158f * dp + 148f * dp)
+        panel(c, r3, 20f * dp)
+        text.textAlign = Paint.Align.LEFT; text.textSize = 19f * dp
+        c.drawText("Hide & Seek", r3.left + 120f * dp, r3.top + 34f * dp, text)
+        text.textSize = 12f * dp; text.color = TEXT_DIM
+        for ((k, l) in wrap("Your mushrooms hide in the bushes. Watch for rustling leaves and find them!", r3.width() - 140f * dp).withIndex())
+            c.drawText(l, r3.left + 120f * dp, r3.top + 54f * dp + k * 16f * dp, text)
+        text.color = DUST
+        c.drawText("Best: ${prefs.getInt("bestHide", 0)} / 9 found", r3.left + 120f * dp, r3.top + 96f * dp, text)
+        text.color = Color.WHITE; text.textAlign = Paint.Align.CENTER
+        drawBush(c, r3.left + 60f * dp, r3.top + 110f * dp, 46f * dp, sin(t * 9f) * (if ((t % 3f) < 0.6f) 1f else 0f))
+        drawShroom(c, 1, r3.left + 78f * dp, r3.top + 92f * dp - abs(sin(t * 1.5f)) * 10f * dp, 26f * dp, 0, 0f, false, false)
         for (g in 0..1) {
-            val r = RectF(pad, top + g * 190f * dp, w - pad, top + g * 190f * dp + 176f * dp)
+            val r = RectF(pad, top + g * 158f * dp, w - pad, top + g * 158f * dp + 148f * dp)
             panel(c, r, 20f * dp)
             text.textAlign = Paint.Align.LEFT
             text.textSize = 19f * dp
@@ -4865,7 +5637,7 @@ class GameView(context: Context) : View(context) {
             }
         }
         text.textSize = 11f * dp; text.color = TEXT_DIM
-        c.drawText("Mini-games pay up to 150 ✦ a day", w / 2, top + 392f * dp, text)
+        c.drawText("Mini-games pay up to 150 ✦ a day", w / 2, top + 3 * 158f * dp + 10f * dp, text)
         text.color = Color.WHITE
     }
 
@@ -5335,7 +6107,7 @@ class GameView(context: Context) : View(context) {
             val m = sqrt(e.values[0] * e.values[0] + e.values[1] * e.values[1] + e.values[2] * e.values[2])
             if (abs(m - 9.81f) > 13f && t - lastShake > 2.5f && tab == Tab.GARDEN && popup == null) {
                 lastShake = t
-                for (s in lab.home()) {
+                for (s in local()) {
                     express(s, E_DIZZY, 2.5f); s.jiggle = 1f
                     if (s.sleeping) { s.act = 0; s.sleeping = false }
                 }
@@ -5358,7 +6130,7 @@ class GameView(context: Context) : View(context) {
 
     /** Everyone waves hello when you come back to the garden. */
     private fun waveHello() {
-        for (s in lab.home()) if (!s.sleeping) s.waveT = 1.5f + Random.nextFloat() * 0.8f
+        for (s in local()) if (!s.sleeping) s.waveT = 1.5f + Random.nextFloat() * 0.8f
     }
 
     // ---------- Little idle animations ----------
@@ -5386,6 +6158,96 @@ class GameView(context: Context) : View(context) {
             s.idleAnimT = when (s.idleAnim) { 1 -> 1.4f; 2 -> 1.2f; 3 -> 1.0f; else -> 1.6f }
             if (s.idleAnim == 1 && Random.nextFloat() < 0.5f) sound.play(Fx.YAWN, 0.35f, voicePitch(s))
         }
+    }
+
+    // ---------- Save backup ----------
+
+    private fun backupSave() {
+        val code = lab.exportCode()
+        try {
+            val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            cm.setPrimaryClip(android.content.ClipData.newPlainText("Shroomology backup", code))
+        } catch (_: Exception) {}
+        toast("Backup code copied! Send it to yourself to keep it safe 💾", MINT)
+        try {
+            val share = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(android.content.Intent.EXTRA_SUBJECT, "My Shroomology backup")
+                putExtra(android.content.Intent.EXTRA_TEXT, code)
+            }
+            context.startActivity(android.content.Intent.createChooser(share, "Save your backup code"))
+        } catch (_: Exception) {}
+    }
+
+    private fun restoreSave() {
+        val act = context as? android.app.Activity ?: return
+        val clip = try {
+            (context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).primaryClip?.getItemAt(0)?.text?.toString()
+        } catch (_: Exception) { null }
+        if (clip == null || !clip.trim().startsWith("SHROOM1:")) {
+            toast("Copy your backup code first, then tap RESTORE", ACCENT)
+            return
+        }
+        android.app.AlertDialog.Builder(act)
+            .setTitle("Restore backup?")
+            .setMessage("This replaces your current lab with the one from your backup code.")
+            .setPositiveButton("Restore") { _, _ ->
+                if (lab.importCode(clip)) act.recreate() else toast("That backup code didn't work", ACCENT)
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    // ---------- Home-screen widget ----------
+
+    /** The shroom shown on the widget: the one you picked, or your closest friend. */
+    private fun widgetShroom(): Shroom? {
+        val id = prefs.getLong("widgetShroom", -1L)
+        return lab.garden.firstOrNull { it.id == id } ?: lab.garden.maxByOrNull { it.bond + it.xp * 0.01f }
+    }
+
+    /** Draws the widget's two animation frames and tells the widget to refresh. */
+    fun updateWidget() {
+        try {
+            val s = widgetShroom()
+            val dir = context.filesDir
+            if (s == null) {
+                java.io.File(dir, "widget0.png").delete(); java.io.File(dir, "widget1.png").delete()
+            } else {
+                for (k in 0..1) {
+                    val bmp = renderWidgetFrame(s, if (k == 0) -1f else 1f)
+                    java.io.FileOutputStream(java.io.File(dir, "widget$k.png")).use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+                }
+                val moodText = when {
+                    s.away() -> "is out exploring 🧭"
+                    s.hunger < 25f -> "is hungry! 🍂"
+                    s.happy < 30f -> "misses you 💭"
+                    s.mood() == 0 -> "is happy 😊"
+                    else -> "says hi! 👋"
+                }
+                context.getSharedPreferences("tinylab_widget", Context.MODE_PRIVATE).edit()
+                    .putString("name", s.name).putString("mood", moodText).putLong("id", s.id).apply()
+            }
+            ShroomWidget.refresh(context)
+        } catch (_: Exception) {}
+    }
+
+    internal fun renderWidgetFrame(s: Shroom, bob: Float): android.graphics.Bitmap {
+        val px = 360
+        val bmp = android.graphics.Bitmap.createBitmap(px, px, android.graphics.Bitmap.Config.ARGB_8888)
+        val c = Canvas(bmp)
+        val th = Data.THEMES[lab.theme]
+        val r = RectF(0f, 0f, px.toFloat(), px.toFloat())
+        fill.shader = LinearGradient(0f, 0f, 0f, px.toFloat(), th.skyTop, th.groundNear, Shader.TileMode.CLAMP)
+        c.drawRoundRect(r, px * 0.12f, px * 0.12f, fill); fill.shader = null
+        fill.color = Color.argb(70, 255, 255, 255)
+        for (k in 0 until 8) drawSparkle(c, px * ((k * 0.37f + 0.1f) % 1f), px * ((k * 0.23f + 0.08f) % 0.45f), px * 0.012f)
+        fill.color = th.groundFar
+        c.drawOval(px * 0.12f, px * 0.72f, px * 0.88f, px * 0.9f, fill)
+        val size = px * 0.46f * s.size
+        drawShroom(c, s.species, px / 2f, px * 0.81f, size, s.mood(), bob, false, false, shiny = s.shiny, who = s)
+        if (s.pet >= 0) drawPet(c, s.pet, px * 0.8f, px * 0.84f, size * 0.38f, if (bob > 0) 1f else 0f, -1f, false)
+        return bmp
     }
 
     // ---------- Settings ----------
@@ -5416,15 +6278,19 @@ class GameView(context: Context) : View(context) {
         val by = card.top + 64f * dp + toggles.size * rowH + 6f * dp
         list.add(Button("set_tut", RectF(card.left + pad, by, card.right - pad, by + 46f * dp), "▶  Replay tutorial") {
             settingsOpen = false
-            tab = Tab.GARDEN; selected = -1; feeding = false; styling = false; exploring = false; decorating = false
+            tab = Tab.GARDEN; selected = -1; feeding = false; styling = false; moreOpen = false; jobbing = false; exploring = false; decorating = false
             setTut(T_WELCOME)
         })
+        val half = (card.width() - pad * 2 - 8f * dp) / 2
+        val ky = by + 52f * dp
+        list.add(Button("set_backup", RectF(card.left + pad, ky, card.left + pad + half, ky + 44f * dp), "💾 BACK UP") { backupSave() })
+        list.add(Button("set_restore", RectF(card.right - pad - half, ky, card.right - pad, ky + 44f * dp), "📥 RESTORE") { restoreSave() })
         list.add(Button("set_close", RectF(card.left + pad, card.bottom - 62f * dp, card.right - pad, card.bottom - 16f * dp), "DONE", STYLE_PRIMARY) {
             settingsOpen = false
         })
     }
 
-    private fun settingsCard(w: Float, h: Float) = RectF(20f * dp, h * 0.12f, w - 20f * dp, h * 0.12f + 470f * dp)
+    private fun settingsCard(w: Float, h: Float) = RectF(20f * dp, h * 0.12f, w - 20f * dp, h * 0.12f + 522f * dp)
 
     private fun drawSettings(c: Canvas, w: Float, h: Float) {
         fill.color = Color.argb(200, 10, 6, 24)
@@ -5434,7 +6300,7 @@ class GameView(context: Context) : View(context) {
         text.textSize = 24f * dp
         c.drawText("Settings", w / 2, card.top + 42f * dp, text)
         // credits
-        val by = card.top + 64f * dp + 4 * 52f * dp + 62f * dp
+        val by = card.top + 64f * dp + 5 * 52f * dp + 62f * dp
         text.textSize = 13f * dp; text.color = TEXT_DIM
         c.drawText("Shroomology ${versionName()}", w / 2, by + 26f * dp, text)
         text.textSize = 15f * dp; text.color = ACCENT

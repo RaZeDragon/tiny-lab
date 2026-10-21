@@ -100,7 +100,8 @@ class ScreensTest {
         g.testTap("dt1"); g.testFrame(0.2f); save(g.testRender(), "dex_rare_bred")
         g.testTap("dt2"); g.testFrame(0.2f); g.testTap("dex58"); g.testFrame(0.2f); save(g.testRender(), "dex_event")
         g.testTap("nav4"); g.testFrame(0.2f); save(g.testRender(), "shop_ingredients")
-        g.testTap("s6"); g.testFrame(0.2f); save(g.testRender(), "shop_event")
+        g.testTap("s7"); g.testFrame(0.2f); save(g.testRender(), "shop_event")
+        g.testTap("s6"); g.testFrame(0.2f); save(g.testRender(), "shop_pets")
     }
 
     @Test fun everySpeciesAndIngredient() {
@@ -127,6 +128,83 @@ class ScreensTest {
             g.testDrawIngredient(ic, i, (i % 6) * (W / 6f) + W / 12f, (i / 6) * 90 * dp + 36 * dp, 16 * dp)
         }
         save(ib, "all_ingredients")
+    }
+
+    /** A lived-in garden: a family, best friends, pets, a band, bedtime, and the cave. */
+    @Test fun newGardenFeatures() {
+        val g = ready(1)
+        val lab = g.testLab()
+        lab.garden.clear()
+        for (p in Data.PETS.indices) lab.petOwned[p] = 1
+        val mom = lab.newShroom(1, 200f, false).apply { name = "Mossy"; gx = 0.3f; gz = 0.4f; family[0] = "Pip|3"; family[1] = "Dot|5" }
+        val dad = lab.newShroom(2, 200f, false).apply { name = "Fizz"; gx = 0.7f; gz = 0.45f; family[0] = "Bean|7" }
+        lab.garden.add(mom); lab.garden.add(dad)
+        val kid = lab.newShroom(13, 60f, false, mom, dad).apply { gx = 0.5f; gz = 0.7f; pet = 0 }
+        lab.garden.add(kid)
+        mom.pet = 2; dad.pet = 4
+        mom.bestie = dad.id; dad.bestie = mom.id
+        val glow1 = lab.newShroom(6, 200f, false).apply { area = 1; gx = 0.35f; gz = 0.5f; pet = 5 }
+        val glow2 = lab.newShroom(31, 200f, false).apply { area = 1; gx = 0.65f; gz = 0.6f; pet = 6 }
+        lab.garden.add(glow1); lab.garden.add(glow2)
+        lab.upgrades[Data.UP_CAVE] = 1
+        g.testFrame(1.0f)
+        save(g.testRender(), "garden_friends_pets")
+
+        g.testSelect(kid.id); g.testFrame(0.4f)
+        assertTrue(g.testTap("more")); g.testFrame(0.2f); save(g.testRender(), "panel_more")
+        assertTrue(g.testTap("family")); g.testFrame(0.3f); save(g.testRender(), "family_tree")
+        assertTrue(g.testTap("fam_close"))
+        g.testSelect(mom.id); g.testFrame(0.3f)
+        assertTrue(g.testTap("style")); g.testFrame(0.2f); save(g.testRender(), "panel_style_pets")
+        g.testTap("sdone")
+        assertTrue(g.testTap("more")); assertTrue(g.testTap("job")); g.testFrame(0.2f); save(g.testRender(), "panel_jobs")
+        assertTrue(g.testTap("job1"))
+        assertEquals(Data.JOB_STIR, mom.job)
+        g.testTap("jcancel"); g.testSelect(-1)
+        g.testFrame(0.3f)
+
+        assertTrue(g.testTap("jam"))
+        g.testFrame(8f)
+        save(g.testRender(), "garden_jam")
+        g.testFrame(12f)
+
+        g.testBedtime(); g.testFrame(1f)
+        save(g.testRender(), "garden_bedtime")
+
+        assertTrue(g.testTap("area")); g.testFrame(1.5f)
+        save(g.testRender(), "cave")
+
+        save(g.testUpdateWidgetFrame(mom), "widget_frame")
+    }
+
+    @Test fun journalAndHideAndSeek() {
+        val g = ready(1)
+        val lab = g.testLab()
+        for ((a, b) in listOf(0 to 1, 2 to 5, 3 to 0, 9 to 10, 11 to 4, 6 to 7, 1 to 1)) lab.noteBrew(a, b, Data.brew(a, b))
+        lab.fizzles[34] = 2; lab.fizzles[35] = 1
+        lab.garden.add(lab.newShroom(1, 100f, false)); lab.garden.add(lab.newShroom(2, 100f, false))
+        g.testTap("nav3"); g.testFrame(0.3f); save(g.testRender(), "journal_today_quest")
+        g.testTap("j5"); g.testFrame(0.3f); save(g.testRender(), "journal_notes")
+        g.testTap("j4"); g.testFrame(0.3f); save(g.testRender(), "journal_games")
+        assertTrue(g.testTap("play2")); g.testFrame(1.5f)
+        save(g.testRender(), "hide_and_seek")
+        for (i in 0..4) g.testTap("hs$i")
+        g.testFrame(0.3f); save(g.testRender(), "hide_and_seek_peek")
+    }
+
+    @Test fun settingsWithBackup() {
+        val g = ready(0)
+        assertTrue(g.testTap("gear")); g.testFrame(0.3f)
+        save(g.testRender(), "settings")
+        val lab = g.testLab()
+        lab.garden.add(lab.newShroom(4, 50f, false).apply { name = "Backup" })
+        val code = lab.exportCode()
+        assertTrue(code.startsWith("SHROOM1:"))
+        val other = LabState(RuntimeEnvironment.getApplication())
+        assertTrue(other.importCode(code))
+        val back = LabState(RuntimeEnvironment.getApplication())
+        assertTrue(back.garden.any { it.name == "Backup" })
+        assertTrue(!other.importCode("nope"))
     }
 
     // ---------------------------------------------------------------- rules
