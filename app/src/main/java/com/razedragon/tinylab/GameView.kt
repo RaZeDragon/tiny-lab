@@ -1301,7 +1301,7 @@ class GameView(context: Context) : View(context) {
                 1 -> drawFood(c, i, pad + 20f * dp, cy, 14f * dp)
                 2 -> { c.save(); c.clipRect(pad, y + 3f * dp, pad + 44f * dp, y + rowH - 3f * dp)
                     drawDecor(c, i, pad + 22f * dp, cy + 20f * dp, 0.5f); c.restore() }
-                4 -> drawAccessoryIcon(c, i, pad + 20f * dp, cy + 4f * dp, 19f * dp)
+                4 -> drawAccessoryIcon(c, i, pad + 20f * dp, cy + 6f * dp, 30f * dp)
                 7 -> drawGiftBox(c, pad + 20f * dp, cy + 14f * dp, 30f * dp, Data.PACKS[i].color)
                 6 -> { c.save(); c.clipRect(pad - 4f * dp, y + 3f * dp, pad + 44f * dp, y + rowH - 3f * dp)
                     drawPet(c, i, pad + 20f * dp, cy + 12f * dp, 28f * dp, t * 6f, 1f, false); c.restore() }
