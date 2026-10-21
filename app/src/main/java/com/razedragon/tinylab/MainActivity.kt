@@ -13,6 +13,11 @@ class MainActivity : Activity() {
         volumeControlStream = AudioManager.STREAM_MUSIC
         game = GameView(this)
         setContentView(game)
+        // Android 13+ asks before an app can show notifications
+        if (android.os.Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 1)
+        }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {

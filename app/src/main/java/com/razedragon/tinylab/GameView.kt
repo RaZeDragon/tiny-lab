@@ -30,7 +30,7 @@ import kotlin.random.Random
  */
 class GameView(context: Context) : View(context) {
 
-    private enum class Tab { GARDEN, LAB, DEX, SHOP }
+    private enum class Tab { GARDEN, LAB, DEX, JOURNAL, SHOP }
 
     private class Button(
         val id: String, val rect: RectF, val label: String, val style: Int = STYLE_NORMAL,
@@ -137,6 +137,10 @@ class GameView(context: Context) : View(context) {
     private var dragX = 0f
     private var dragY = 0f
     private var shopTab = 0
+    private var journalTab = 0
+    private var contestPick = -1L
+    private var photoMode = false
+    private var capturing = false
 
     // Settings: 0 = all sound, 1 = no music, 2 = muted
     private var soundMode = prefs.getInt("soundMode", 0)
@@ -163,6 +167,7 @@ class GameView(context: Context) : View(context) {
         keepScreenOn = false
         applySoundMode()
         lab.tick()
+        lab.visit()
     }
 
     private fun applySoundMode() {
@@ -183,11 +188,14 @@ class GameView(context: Context) : View(context) {
     fun onAppPause() {
         lab.tick(); lab.save()
         sound.onAppPause()
+        try { scheduleReminders() } catch (_: Exception) {}
     }
 
     fun onAppResume() {
         lab.tick()
+        lab.visit()
         sound.onAppResume()
+        try { Notifier.cancelAll(context) } catch (_: Exception) {}
     }
 
     fun onAppDestroy() {
@@ -198,6 +206,7 @@ class GameView(context: Context) : View(context) {
     fun onBack(): Boolean {
         when {
             popup != null -> popup = null
+            photoMode -> photoMode = false
             feeding -> feeding = false
             styling -> styling = false
             exploring -> exploring = false
@@ -424,6 +433,13 @@ class GameView(context: Context) : View(context) {
             return list
         }
 
+        if (photoMode) {
+            val bw = (w - 48f * dp) / 2
+            list.add(Button("snap", RectF(16f * dp, navTop + 14f * dp, 16f * dp + bw, navTop + 62f * dp), "📷 SAVE & SHARE", STYLE_PRIMARY) { takePhoto() })
+            list.add(Button("unsnap", RectF(32f * dp + bw, navTop + 14f * dp, w - 16f * dp, navTop + 62f * dp), "CLOSE") { photoMode = false })
+            return list
+        }
+
         // Bottom navigation
         val tabs = Tab.values()
         val tw = w / tabs.size
@@ -448,6 +464,7 @@ class GameView(context: Context) : View(context) {
             Tab.LAB -> labButtons(list, w, h)
             Tab.DEX -> dexButtons(list, w, h)
             Tab.SHOP -> shopButtons(list, w, h)
+            Tab.JOURNAL -> journalButtons(list, w, h)
         }
         return list
     }
@@ -461,6 +478,12 @@ class GameView(context: Context) : View(context) {
             selected = -1; feeding = false; styling = false; exploring = false; confirmRelease = false
         })
         if (decorating) { decorButtons(list, w); return }
+        if (selected < 0) {
+            list.add(Button("photo", RectF(w - 58f * dp, topBar + 54f * dp, w - 14f * dp, topBar + 88f * dp), "📷") {
+                photoMode = true; selected = -1; feeding = false; styling = false; exploring = false
+                toast("Photo mode: tap SAVE & SHARE")
+            })
+        }
         val away = lab.garden.filter { it.away() }
         if (away.isNotEmpty() && selected < 0) {
             list.add(Button("away", RectF(14f * dp, topBar + 54f * dp, 134f * dp, topBar + 84f * dp), "🧭 ${away.size} exploring") {
@@ -834,7 +857,7 @@ class GameView(context: Context) : View(context) {
                     } else if (b == null && tab == Tab.GARDEN && decorating && y < panelTop()) {
                         val d = placedAt(x, y)
                         if (d >= 0) { dragKind = 5; dragPlaced = d }
-                    } else if (b == null && tab == Tab.GARDEN && !decorating && !(selected >= 0 && y >= panelTop())) {
+                    } else if (b == null && tab == Tab.GARDEN && !decorating && !photoMode && !(selected >= 0 && y >= panelTop())) {
                         val s = shroomAt(x, y)
                         if (s != null) { dragKind = 3; dragShroom = s.id }
                     }
@@ -881,7 +904,7 @@ class GameView(context: Context) : View(context) {
                     if (b != null) {
                         sound.play(Fx.CLICK, 0.6f)
                         b.action()
-                    } else if (id == null && popup == null && tab == Tab.GARDEN) {
+                    } else if (id == null && popup == null && tab == Tab.GARDEN && !photoMode) {
                         tapGarden(x, y)
                     }
                 }
@@ -1090,11 +1113,23 @@ class GameView(context: Context) : View(context) {
         fill.color = Color.argb(30, 120, 200, 255)
         c.drawCircle(w * 0.1f, h * 0.35f, w * 0.45f, fill)
 
+        if (photoMode) {
+            drawGarden(c, w, h)
+            drawParticles(c)
+            drawPhotoFrame(c, w)
+            if (!capturing) {
+                fill.color = Color.rgb(20, 14, 38); c.drawRect(0f, navTop, w, h, fill)
+                for (b in buttons) drawButton(c, b)
+                drawToast(c, w, h)
+            }
+            return
+        }
         when (tab) {
             Tab.GARDEN -> drawGarden(c, w, h)
             Tab.LAB -> drawLab(c, w, h)
             Tab.DEX -> drawDex(c, w, h)
             Tab.SHOP -> drawShop(c, w, h)
+            Tab.JOURNAL -> drawJournal(c, w, h)
         }
 
         drawTopBar(c, w)
@@ -1156,7 +1191,7 @@ class GameView(context: Context) : View(context) {
         text.textAlign = Paint.Align.LEFT
         text.textSize = 24f * dp
         text.color = Color.WHITE
-        val title = when (tab) { Tab.GARDEN -> "GARDEN"; Tab.LAB -> "LAB"; Tab.DEX -> "SHROOMDEX"; Tab.SHOP -> "SHOP" }
+        val title = when (tab) { Tab.GARDEN -> "GARDEN"; Tab.LAB -> "LAB"; Tab.DEX -> "SHROOMDEX"; Tab.SHOP -> "SHOP"; Tab.JOURNAL -> "JOURNAL" }
         c.drawText(title, 18f * dp, 44f * dp, text)
         text.textAlign = Paint.Align.RIGHT
         text.textSize = 20f * dp
@@ -1583,7 +1618,7 @@ class GameView(context: Context) : View(context) {
             text.color = Color.WHITE
         }
 
-        if (selected < 0 && !decorating) {
+        if (selected < 0 && !decorating && !photoMode) {
             text.textSize = 12f * dp; text.color = Color.argb(200, 255, 255, 255)
             val awayN = lab.garden.count { it.away() }
             c.drawText("${lab.garden.size} / ${lab.gardenSize()} mushrooms" + (if (awayN > 0) " · $awayN exploring" else " · drag them to move"), w / 2, groundBottom() + 44f * dp, text)
@@ -1649,6 +1684,7 @@ class GameView(context: Context) : View(context) {
         drawAmbient(c, w)
         drawWeatherLabel(c, w)
 
+        if (photoMode) return
         if (decorating) drawDecorTray(c, w)
         else shroom(selected)?.let { drawInfoPanel(c, w, it) }
     }
@@ -2363,7 +2399,7 @@ class GameView(context: Context) : View(context) {
         for ((k, line) in lines.withIndex()) c.drawText(line, w / 2, r.top + 24f * dp + k * 19f * dp, text)
         // arrow down to the LAB tab
         if (lab.tutorial == 0 && tab != Tab.LAB) {
-            val ax = w / 8f * 3f
+            val ax = w * 0.3f
             val ay = navTop - 16f * dp + sin(t * 5f) * 6f * dp
             fill.color = ACCENT
             path.reset(); path.moveTo(ax - 14f * dp, ay - 16f * dp); path.lineTo(ax + 14f * dp, ay - 16f * dp); path.lineTo(ax, ay); path.close()
@@ -2498,6 +2534,16 @@ class GameView(context: Context) : View(context) {
                 c.drawRoundRect(cx - 12f * dp, cy - 11f * dp, cx + 12f * dp, cy + 11f * dp, 3f * dp, 3f * dp, stroke)
                 c.drawLine(cx, cy - 11f * dp, cx, cy + 11f * dp, stroke)
             }
+            Tab.JOURNAL -> {   // a star badge
+                path.reset()
+                for (k in 0 until 10) {
+                    val a = -Math.PI / 2 + k * Math.PI / 5
+                    val rr = if (k % 2 == 0) 12f * dp else 5f * dp
+                    val px = cx + (cos(a) * rr).toFloat(); val py = cy + (sin(a) * rr).toFloat()
+                    if (k == 0) path.moveTo(px, py) else path.lineTo(px, py)
+                }
+                path.close(); c.drawPath(path, stroke)
+            }
             Tab.SHOP -> {
                 c.drawRoundRect(cx - 11f * dp, cy - 5f * dp, cx + 11f * dp, cy + 11f * dp, 4f * dp, 4f * dp, stroke)
                 c.drawArc(cx - 6f * dp, cy - 13f * dp, cx + 6f * dp, cy - 1f * dp, 180f, 180f, false, stroke)
@@ -2505,9 +2551,13 @@ class GameView(context: Context) : View(context) {
         }
         text.textSize = 11f * dp
         text.color = col
-        c.drawText(when (tb) { Tab.GARDEN -> "GARDEN"; Tab.LAB -> "LAB"; Tab.DEX -> "SHROOMDEX"; Tab.SHOP -> "SHOP" },
+        c.drawText(when (tb) { Tab.GARDEN -> "GARDEN"; Tab.LAB -> "LAB"; Tab.DEX -> "DEX"; Tab.SHOP -> "SHOP"; Tab.JOURNAL -> "JOURNAL" },
             cx, r.top + 60f * dp, text)
         text.color = Color.WHITE
+        if (tb == Tab.JOURNAL && journalAlert()) {
+            fill.color = ACCENT
+            c.drawCircle(cx + 14f * dp, cy - 12f * dp, 5f * dp + sin(t * 5f) * 1f * dp, fill)
+        }
     }
 
     private fun drawSpeaker(c: Canvas, r: RectF) {
@@ -2837,6 +2887,286 @@ class GameView(context: Context) : View(context) {
             }
         }
         c.restore()
+    }
+
+    // ---------- Journal: daily gift, Professor Spore, contest, awards ----------
+
+    private val professor by lazy {
+        Shroom(1001L, 36, xp = 900f, name = "Prof. Spore").apply { wear[1] = 9 }
+    }
+
+    private fun journalAlert() = lab.giftReady() || lab.requests.any { lab.requestProgress(it).let { p -> p.first >= p.second } } ||
+        System.currentTimeMillis() >= lab.nextContest && lab.home().isNotEmpty()
+
+    private fun journalButtons(list: ArrayList<Button>, w: Float, h: Float) {
+        val pad = 16f * dp
+        val tabs = arrayOf("TODAY", "CONTEST", "AWARDS")
+        val tw = (w - pad * 2) / 3
+        val ty = topBar + 6f * dp
+        for ((k, nm) in tabs.withIndex()) {
+            list.add(Button("j$k", RectF(pad + k * tw + 2f * dp, ty, pad + (k + 1) * tw - 2f * dp, ty + 40f * dp), nm,
+                if (journalTab == k) STYLE_TAB_ON else STYLE_NORMAL) { journalTab = k })
+        }
+        val top = ty + 54f * dp
+        when (journalTab) {
+            0 -> {
+                val ready = lab.giftReady()
+                list.add(Button("gift", RectF(pad + 10f * dp, top + 78f * dp, w - pad - 10f * dp, top + 116f * dp),
+                    if (ready) "CLAIM: ${lab.giftText(lab.giftIndex())}" else "Come back tomorrow!", STYLE_PRIMARY, ready) {
+                    if (!lab.giftReady()) return@Button
+                    val got = lab.claimGift()
+                    sound.play(Fx.DISCOVER); buzz(40)
+                    burst(w / 2, top + 60f * dp, DUST, 40, P_SPARK)
+                    toast("Daily gift: $got", DUST)
+                    markDirty()
+                })
+                val ry = top + 176f * dp
+                for ((i, r) in lab.requests.withIndex()) {
+                    val (cur, goal) = lab.requestProgress(r)
+                    if (cur >= goal) {
+                        val y = ry + i * 74f * dp
+                        list.add(Button("req$i", RectF(w - pad - 96f * dp, y + 14f * dp, w - pad - 10f * dp, y + 50f * dp), "CLAIM", STYLE_PRIMARY) {
+                            val got = lab.claimRequest(i)
+                            sound.play(Fx.COIN); buzz(30)
+                            toast("Professor Spore: \"Splendid!\"  +$got ✦", DUST)
+                            markDirty()
+                        })
+                    }
+                }
+                val notify = prefs.getBoolean("notify", true)
+                list.add(Button("notify", RectF(pad, navTop - 52f * dp, w - pad, navTop - 12f * dp),
+                    "🔔 Reminders: ${if (notify) "ON" else "OFF"}") {
+                    prefs.edit().putBoolean("notify", !notify).apply()
+                    toast(if (!notify) "I'll remind you when mushrooms get hungry or come home" else "Reminders off")
+                })
+            }
+            1 -> {
+                val now = System.currentTimeMillis()
+                if (now >= lab.nextContest) {
+                    val cands = lab.home().filter { it.stage() >= 1 }
+                    val cols = 4
+                    val cw = (w - pad * 2) / cols
+                    val gy = top + 96f * dp
+                    val ch = min(110f * dp, (navTop - 70f * dp - gy) / 3)
+                    for ((i, s) in cands.take(12).withIndex()) {
+                        val r = RectF(pad + (i % cols) * cw + 3f * dp, gy + (i / cols) * ch + 3f * dp,
+                            pad + (i % cols + 1) * cw - 3f * dp, gy + (i / cols + 1) * ch - 3f * dp)
+                        list.add(Button("cand${s.id}", r, "", if (contestPick == s.id) STYLE_PICKED else STYLE_CARD, custom = { c, rr ->
+                            drawShroom(c, s.species, rr.centerX(), rr.top + rr.height() * 0.66f, rr.width() * 0.42f, s.mood(), 0f, false, false, shiny = s.shiny, who = s)
+                            text.textSize = 10f * dp
+                            c.drawText(s.name, rr.centerX(), rr.top + rr.height() * 0.82f, text)
+                            text.color = DUST
+                            c.drawText("${lab.contestScore(s)} pts", rr.centerX(), rr.bottom - 5f * dp, text)
+                            text.color = Color.WHITE
+                        }) { contestPick = s.id })
+                    }
+                    val pick = shroom(contestPick)
+                    list.add(Button("enter", RectF(pad, navTop - 58f * dp, w - pad, navTop - 12f * dp),
+                        if (pick != null) "ENTER ${pick.name.uppercase()}" else "PICK A MUSHROOM", STYLE_PRIMARY, pick != null && !pick.away()) {
+                        val s = shroom(contestPick) ?: return@Button
+                        val place = lab.runContest(s)
+                        contestPick = -1
+                        sound.play(if (place == 1) Fx.DISCOVER else Fx.GROW); buzz(60)
+                        burst(w / 2, h * 0.3f, if (place == 1) DUST else MINT, 50, P_SPARK)
+                        toast(arrayOf("🥇 ${s.name} won the contest!", "🥈 ${s.name} came 2nd!", "🥉 ${s.name} came 3rd!", "${s.name} came 4th. Next time!")[place - 1], DUST)
+                        markDirty()
+                    })
+                }
+            }
+        }
+    }
+
+    private fun drawJournal(c: Canvas, w: Float, h: Float) {
+        val pad = 16f * dp
+        val top = topBar + 60f * dp
+        when (journalTab) {
+            0 -> {
+                // daily gift
+                val card = RectF(pad, top, w - pad, top + 124f * dp)
+                fill.color = PANEL; c.drawRoundRect(card, 18f * dp, 18f * dp, fill)
+                text.textAlign = Paint.Align.LEFT; text.textSize = 15f * dp
+                c.drawText("Daily gift", card.left + 14f * dp, card.top + 24f * dp, text)
+                text.textAlign = Paint.Align.RIGHT; text.textSize = 12f * dp; text.color = DUST
+                c.drawText("${lab.streak}-day streak 🔥", card.right - 14f * dp, card.top + 24f * dp, text)
+                text.color = Color.WHITE; text.textAlign = Paint.Align.CENTER
+                val bw = (card.width() - 28f * dp) / 7
+                for (d in 0 until 7) {
+                    val bx = card.left + 14f * dp + d * bw
+                    val r = RectF(bx + 2f * dp, card.top + 34f * dp, bx + bw - 2f * dp, card.top + 68f * dp)
+                    val today = d == lab.giftIndex()
+                    val done = d < lab.giftIndex() || (today && !lab.giftReady())
+                    fill.color = when { today && lab.giftReady() -> ACCENT; done -> Color.rgb(60, 110, 90); else -> PANEL_LIGHT }
+                    c.drawRoundRect(r, 8f * dp, 8f * dp, fill)
+                    text.textSize = 11f * dp
+                    c.drawText(if (done) "✓" else "${d + 1}", r.centerX(), r.centerY() + 4f * dp, text)
+                }
+                // Professor Spore
+                val py = top + 140f * dp
+                drawShroom(c, professor.species, pad + 22f * dp, py + 22f * dp, 34f * dp, 0, sin(t * 2f), (t % 4f) < 0.12f, false, who = professor)
+                text.textAlign = Paint.Align.LEFT; text.textSize = 15f * dp
+                c.drawText("Professor Spore's requests", pad + 50f * dp, py + 10f * dp, text)
+                text.textSize = 11f * dp; text.color = TEXT_DIM
+                c.drawText("\"Help my research and I'll pay you in spore dust!\"", pad + 50f * dp, py + 26f * dp, text)
+                text.color = Color.WHITE; text.textAlign = Paint.Align.CENTER
+                val ry = top + 170f * dp
+                for ((i, r) in lab.requests.withIndex()) {
+                    val y = ry + i * 74f * dp
+                    val rc = RectF(pad, y, w - pad, y + 66f * dp)
+                    fill.color = PANEL; c.drawRoundRect(rc, 16f * dp, 16f * dp, fill)
+                    val (cur, goal) = lab.requestProgress(r)
+                    text.textAlign = Paint.Align.LEFT; text.textSize = 14f * dp
+                    c.drawText(lab.requestText(r), rc.left + 14f * dp, rc.top + 24f * dp, text)
+                    text.textSize = 11f * dp; text.color = DUST
+                    c.drawText("Reward: ${r.reward} ✦", rc.left + 14f * dp, rc.top + 56f * dp, text)
+                    text.color = Color.WHITE; text.textAlign = Paint.Align.CENTER
+                    if (cur < goal) {
+                        val bx = rc.left + 14f * dp; val bw2 = rc.width() - 120f * dp
+                        fill.color = Color.argb(50, 255, 255, 255)
+                        c.drawRoundRect(bx, rc.top + 34f * dp, bx + bw2, rc.top + 42f * dp, 4f * dp, 4f * dp, fill)
+                        fill.color = MINT
+                        c.drawRoundRect(bx, rc.top + 34f * dp, bx + bw2 * (cur.toFloat() / goal).coerceIn(0.03f, 1f), rc.top + 42f * dp, 4f * dp, 4f * dp, fill)
+                        text.textSize = 12f * dp; text.color = TEXT_DIM
+                        c.drawText("$cur / $goal", rc.right - 50f * dp, rc.top + 42f * dp, text)
+                        text.color = Color.WHITE
+                    }
+                }
+            }
+            1 -> {
+                val now = System.currentTimeMillis()
+                text.textSize = 18f * dp
+                c.drawText("🏅 Beauty Contest", w / 2, top + 22f * dp, text)
+                text.textSize = 11f * dp; text.color = TEXT_DIM
+                c.drawText("Judged on happiness, growth, rarity, shine, outfits and your garden's decorations", w / 2, top + 42f * dp, text)
+                text.color = Color.WHITE
+                if (now < lab.nextContest) {
+                    text.textSize = 13f * dp; text.color = MINT
+                    c.drawText("Next contest in ${timeLeft(lab.nextContest - now)}", w / 2, top + 66f * dp, text)
+                    text.color = Color.WHITE
+                    val res = lab.lastContest
+                    for ((i, e) in res.withIndex()) {
+                        val y = top + 90f * dp + i * 92f * dp
+                        val rc = RectF(pad, y, w - pad, y + 84f * dp)
+                        fill.color = if (e.mine) PANEL_LIGHT else PANEL
+                        c.drawRoundRect(rc, 16f * dp, 16f * dp, fill)
+                        val mine = if (e.mine) lab.garden.firstOrNull { it.name == e.name } else null
+                        drawShroom(c, mine?.species ?: e.species, rc.left + 70f * dp, rc.bottom - 12f * dp, 52f * dp, 0, sin(t * 2f + i), false, false,
+                            shiny = mine?.shiny ?: false, who = mine)
+                        text.textAlign = Paint.Align.LEFT; text.textSize = 22f * dp
+                        c.drawText(arrayOf("🥇", "🥈", "🥉", "4th")[i], rc.left + 12f * dp, rc.top + 32f * dp, text)
+                        text.textSize = 15f * dp
+                        c.drawText(e.name + if (e.mine) " (you)" else "", rc.left + 120f * dp, rc.top + 36f * dp, text)
+                        text.textSize = 13f * dp; text.color = DUST
+                        c.drawText("${e.score} points", rc.left + 120f * dp, rc.top + 58f * dp, text)
+                        text.color = Color.WHITE; text.textAlign = Paint.Align.CENTER
+                    }
+                    if (res.isEmpty()) {
+                        text.textSize = 14f * dp; text.color = TEXT_DIM
+                        c.drawText("Come back soon!", w / 2, h * 0.45f, text); text.color = Color.WHITE
+                    }
+                } else {
+                    text.textSize = 13f * dp; text.color = MINT
+                    c.drawText("Pick your contestant (prizes: 120 / 60 / 30 / 10 ✦)", w / 2, top + 66f * dp, text)
+                    text.color = Color.WHITE
+                    if (lab.home().none { it.stage() >= 1 }) {
+                        text.textSize = 14f * dp; text.color = TEXT_DIM
+                        c.drawText("Raise a mushroom to Young to enter", w / 2, h * 0.45f, text); text.color = Color.WHITE
+                    }
+                }
+            }
+            else -> {
+                text.textSize = 14f * dp; text.color = TEXT_DIM
+                c.drawText("${lab.achieved.count { it }} of ${Data.ACHIEVEMENTS.size} earned", w / 2, top + 6f * dp, text)
+                text.color = Color.WHITE
+                val rowH = min(42f * dp, (navTop - top - 20f * dp) / Data.ACHIEVEMENTS.size)
+                for ((i, a) in Data.ACHIEVEMENTS.withIndex()) {
+                    val y = top + 16f * dp + i * rowH
+                    val got = lab.achieved[i]
+                    fill.color = if (got) DUST else Color.rgb(60, 48, 100)
+                    c.drawCircle(pad + 12f * dp, y + rowH / 2, 9f * dp, fill)
+                    if (got) { text.textSize = 11f * dp; text.color = BG; c.drawText("✓", pad + 12f * dp, y + rowH / 2 + 4f * dp, text) }
+                    text.textAlign = Paint.Align.LEFT
+                    text.textSize = 13f * dp; text.color = if (got) Color.WHITE else Color.argb(200, 255, 255, 255)
+                    c.drawText(a.name, pad + 30f * dp, y + rowH / 2 - 1f * dp, text)
+                    text.textSize = 10.5f * dp; text.color = TEXT_DIM
+                    c.drawText(a.desc, pad + 30f * dp, y + rowH / 2 + 12f * dp, text)
+                    text.textAlign = Paint.Align.RIGHT; text.textSize = 12f * dp
+                    text.color = if (got) MINT else DUST
+                    c.drawText(if (got) "done" else "+${a.reward} ✦", w - pad, y + rowH / 2 + 4f * dp, text)
+                    text.color = Color.WHITE; text.textAlign = Paint.Align.CENTER
+                }
+            }
+        }
+    }
+
+    // ---------- Reminders ----------
+
+    private fun scheduleReminders() {
+        Notifier.cancelAll(context)
+        if (!prefs.getBoolean("notify", true)) return
+        val now = System.currentTimeMillis()
+        // 1: the first mushroom to get hungry
+        lab.home().filter { it.hunger > 25f }.minByOrNull { (it.hunger - 25f) / (if (it.trait == 3) 1.3f else 1f) }?.let { s ->
+            val hrs = (s.hunger - 25f) / (9f * (if (s.trait == 3) 1.3f else 1f))
+            val at = now + (hrs * 3600_000f).toLong()
+            if (at - now > 10 * 60_000L && lab.upgrades[Data.UP_FEEDER] == 0)
+                Notifier.schedule(context, 1, at, "${s.name} is getting hungry!", "Your ${Data.SPECIES[s.species].name} would love a snack. 🍄")
+        }
+        // 2: the next expedition to come home
+        lab.garden.filter { it.away() }.minByOrNull { it.awayUntil }?.let { s ->
+            Notifier.schedule(context, 2, s.awayUntil, "${s.name} is back!",
+                "${s.name} returned from ${Data.ZONES[s.awayZone].name} with loot. Come see what it found!")
+        }
+        // 3: tomorrow's daily gift
+        val tomorrow = java.util.Calendar.getInstance().apply {
+            add(java.util.Calendar.DAY_OF_YEAR, 1); set(java.util.Calendar.HOUR_OF_DAY, 10); set(java.util.Calendar.MINUTE, 0)
+        }
+        Notifier.schedule(context, 3, tomorrow.timeInMillis, "Your daily gift is ready 🎁", "Keep your streak going in Shroomology!")
+    }
+
+    // ---------- Photo mode ----------
+
+    private fun takePhoto() {
+        if (Build.VERSION.SDK_INT < 29) { toast("Photo mode needs Android 10 or newer"); return }
+        val bmp = android.graphics.Bitmap.createBitmap(width, navTop.toInt(), android.graphics.Bitmap.Config.ARGB_8888)
+        capturing = true
+        render(Canvas(bmp))
+        capturing = false
+        try {
+            val resolver = context.contentResolver
+            val values = android.content.ContentValues().apply {
+                put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, "Shroomology_${System.currentTimeMillis()}.png")
+                put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/png")
+                put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, android.os.Environment.DIRECTORY_PICTURES + "/Shroomology")
+            }
+            val uri = resolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values) ?: throw Exception()
+            resolver.openOutputStream(uri)?.use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+            flashT = 0.35f
+            sound.play(Fx.PET)
+            toast("Saved to Pictures/Shroomology", MINT)
+            val share = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                type = "image/png"
+                putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            context.startActivity(android.content.Intent.createChooser(share, "Share your garden"))
+        } catch (_: Exception) {
+            toast("Couldn't save the photo", ACCENT)
+        }
+    }
+
+    private fun drawPhotoFrame(c: Canvas, w: Float) {
+        val hgt = navTop
+        stroke.color = Color.argb(230, 255, 255, 255); stroke.strokeWidth = 6f * dp
+        c.drawRoundRect(10f * dp, 10f * dp, w - 10f * dp, hgt - 10f * dp, 24f * dp, 24f * dp, stroke)
+        fill.color = Color.argb(150, 20, 14, 40)
+        c.drawRoundRect(22f * dp, hgt - 64f * dp, w * 0.62f, hgt - 22f * dp, 14f * dp, 14f * dp, fill)
+        text.textAlign = Paint.Align.LEFT
+        text.textSize = 17f * dp; text.color = Color.WHITE
+        c.drawText("🍄 Shroomology", 34f * dp, hgt - 42f * dp, text)
+        text.textSize = 11f * dp; text.color = TEXT_DIM
+        val date = java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.getDefault()).format(java.util.Date())
+        c.drawText("${lab.discoveredCount()} species discovered · $date", 34f * dp, hgt - 28f * dp, text)
+        text.color = Color.WHITE; text.textAlign = Paint.Align.CENTER
     }
 
     // ---------- Art: accessories ----------
