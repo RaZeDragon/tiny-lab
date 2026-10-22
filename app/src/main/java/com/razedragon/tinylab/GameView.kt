@@ -3403,7 +3403,6 @@ class GameView(context: Context) : View(context) {
             if (first.sex != s.sex && s.stage() >= 2 && s.restUntil <= now) {   // a match!
                 fill.color = Color.rgb(255, 100, 150)
                 drawHeart(c, r.left + 13f * dp, r.top + 13f * dp, 6f * dp * (1f + 0.12f * sin(t * 6f)))
-                if (first.bestie == s.id) { text.textSize = 9f * dp; text.color = DUST; c.drawText("bestie +10%", r.centerX(), r.top + 14f * dp, text); text.color = Color.WHITE }
             } else if (first.sex == s.sex) {
                 fill.color = Color.argb(140, 20, 14, 38); c.drawRoundRect(r, 14f * dp, 14f * dp, fill)
             }
@@ -3418,7 +3417,10 @@ class GameView(context: Context) : View(context) {
             else -> "ready"
         }
         if (status == "ready") text.color = MINT
-        c.drawText(status, r.centerX(), r.top + r.height() * 0.94f, text)
+        val first = picks.firstOrNull()?.let { shroom(it) }
+        val bestieMatch = picks.size == 1 && first != null && first !== s && first.sex != s.sex && first.bestie == s.id && status == "ready"
+        if (bestieMatch) text.color = DUST
+        c.drawText(if (bestieMatch) "bestie +10%" else status, r.centerX(), r.top + r.height() * 0.94f, text)
         text.color = Color.WHITE
     }
 
