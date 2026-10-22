@@ -1375,7 +1375,7 @@ class GameView(context: Context) : View(context) {
         if (shopTab == 8) {
             val ev = eventNow()
             text.textSize = 12f * dp; text.color = DUST
-            c.drawText("${Data.EVENT_ICONS[ev]} ${Data.EVENTS[ev]} until ${Data.EVENT_ENDS[ev]} · event ingredients fade after", w / 2, navTop - 4f * dp, text)
+            c.drawText("${Data.EVENT_ICONS[ev]} ${Data.EVENTS[ev]} until ${Data.EVENT_ENDS[ev]} · its ingredients fade when it ends", w / 2, navTop - 6f * dp, text)
             text.color = Color.WHITE
         }
     }
