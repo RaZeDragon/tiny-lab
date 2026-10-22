@@ -3980,14 +3980,68 @@ class GameView(context: Context) : View(context) {
         }
 
         val stemH = when (sp.shape) { 1 -> s * 0.16f; 4 -> s * 0.36f; else -> s * 0.5f }
-        val stemW = s * 0.42f
+        val isDome = sp.shape !in 1..4
+        val stemW = if (isDome) s * 0.5f else s * 0.44f
         val capBottom = baseY - stemH + s * 0.08f
         var capTop: Float
+        // Storybook style: soft shading, chunky shapes and a darker outline in each part's own color
+        val lineW = max(1.2f * dp, s * 0.028f)
+        fun outline(col: Int) = Color.rgb((Color.red(col) * 0.42f).toInt(), (Color.green(col) * 0.3f).toInt(), (Color.blue(col) * 0.28f).toInt())
+        fun ink(col: Int) { if (silhouette) return; stroke.color = outline(col); stroke.strokeWidth = lineW; stroke.strokeJoin = Paint.Join.ROUND; stroke.strokeCap = Paint.Cap.ROUND }
 
-        // little feet
-        if (!silhouette) {
-            fill.color = shade(stemC, -0.25f)
-            val fw = stemW * 0.32f; val fh = s * 0.07f
+        // little arms, tucked behind the body so they peek out at the sides
+        if (!silhouette && !sprout) {
+            val ballR = s * 0.44f
+            val armY = if (sp.shape == 1) baseY - ballR * 0.8f else baseY - stemH * 0.36f
+            val armX = if (sp.shape == 1) ballR * 0.9f else stemW * 0.5f
+            val waving = who != null && who.waveT > 0f && !sleeping
+            for (side in intArrayOf(-1, 1)) {
+                if (waving && side > 0) continue
+                val swing = when {
+                    held || (who?.airborne() == true) -> -70f + 25f * sin(t * 14f + side)     // flailing
+                    moving -> 18f * sin(phase + if (side < 0) 0f else 3.14f)
+                    else -> 6f * sin(t * 1.6f + side)
+                }
+                c.save()
+                c.rotate(side * (28f - swing), cx + side * armX, armY)
+                val r = RectF(cx + side * armX - s * 0.02f - (if (side < 0) s * 0.12f else 0f), armY - s * 0.045f,
+                    cx + side * armX + s * 0.02f + (if (side > 0) s * 0.12f else 0f), armY + s * 0.055f)
+                fill.color = shade(stemC, 0.04f); c.drawRoundRect(r, s * 0.05f, s * 0.05f, fill)
+                ink(stemC); c.drawRoundRect(r, s * 0.05f, s * 0.05f, stroke)
+                c.restore()
+            }
+        }
+
+        // a chubby, pear-shaped stem with a soft glow in the middle
+        fun drawStem() {
+            val top = capBottom - s * 0.03f
+            val tw = stemW * 0.4f; val bw = stemW * 0.56f
+            val h = baseY - top
+            val sp2 = Path()
+            sp2.moveTo(cx - tw, top)
+            sp2.cubicTo(cx - tw * 1.02f, top + h * 0.45f, cx - bw * 1.12f, baseY - h * 0.28f, cx - bw * 0.92f, baseY - s * 0.03f)
+            sp2.quadTo(cx, baseY + s * 0.035f, cx + bw * 0.92f, baseY - s * 0.03f)
+            sp2.cubicTo(cx + bw * 1.12f, baseY - h * 0.28f, cx + tw * 1.02f, top + h * 0.45f, cx + tw, top)
+            sp2.quadTo(cx, top - s * 0.035f, cx - tw, top)
+            sp2.close()
+            if (silhouette) fill.color = dark
+            else fill.shader = RadialGradient(cx - stemW * 0.06f, baseY - h * 0.5f, stemW * 0.75f,
+                intArrayOf(shade(stemC, 0.3f), stemC, shade(stemC, -0.16f)), floatArrayOf(0f, 0.6f, 1f), Shader.TileMode.CLAMP)
+            c.drawPath(sp2, fill); fill.shader = null
+            if (!silhouette) {
+                // a few soft folds near the bottom
+                stroke.color = Color.argb(45, Color.red(outline(stemC)), Color.green(outline(stemC)), Color.blue(outline(stemC)))
+                stroke.strokeWidth = max(1f * dp, s * 0.012f)
+                c.drawArc(cx - bw * 0.7f, baseY - h * 0.42f, cx - bw * 0.1f, baseY + h * 0.1f, 200f, 50f, false, stroke)
+                c.drawArc(cx + bw * 0.1f, baseY - h * 0.42f, cx + bw * 0.7f, baseY + h * 0.1f, 290f, 50f, false, stroke)
+                ink(stemC); c.drawPath(sp2, stroke)
+            }
+        }
+
+        // round little paws with toe lines
+        fun drawFeet() {
+            if (silhouette) return
+            val fw = s * 0.115f; val fh = s * 0.065f
             for (side in intArrayOf(-1, 1)) {
                 val kick = when {
                     held -> abs(sin(t * 9f + side)) * s * 0.08f
@@ -3995,31 +4049,34 @@ class GameView(context: Context) : View(context) {
                     else -> 0f
                 }
                 val fx = cx + side * stemW * 0.3f
-                c.drawOval(fx - fw, baseY - fh - kick + (if (held) s * 0.05f else 0f), fx + fw, baseY + fh * 0.5f - kick + (if (held) s * 0.05f else 0f), fill)
+                val dy = -kick + (if (held) s * 0.05f else 0f)
+                val r = RectF(fx - fw, baseY - fh * 1.3f + dy, fx + fw, baseY + fh * 0.7f + dy)
+                fill.shader = LinearGradient(0f, r.top, 0f, r.bottom, shade(stemC, 0.18f), shade(stemC, -0.1f), Shader.TileMode.CLAMP)
+                c.drawOval(r, fill); fill.shader = null
+                ink(stemC); c.drawOval(r, stroke)
+                stroke.strokeWidth = lineW * 0.7f
+                for (k in intArrayOf(-1, 1)) c.drawLine(fx + k * fw * 0.32f, r.bottom - fh * 0.25f, fx + k * fw * 0.32f, r.bottom - fh * 0.75f, stroke)
             }
         }
 
-        // stem with side lighting
-        if (silhouette) fill.color = dark
-        else fill.shader = LinearGradient(cx - stemW / 2, 0f, cx + stemW / 2, 0f,
-            intArrayOf(shade(stemC, -0.08f), shade(stemC, 0.2f), shade(stemC, -0.32f)),
-            floatArrayOf(0f, 0.35f, 1f), Shader.TileMode.CLAMP)
-        c.drawRoundRect(cx - stemW / 2, baseY - stemH - s * 0.04f, cx + stemW / 2, baseY, stemW * 0.4f, stemW * 0.4f, fill)
-        fill.shader = null
+        if (!isDome) drawStem()
 
-        // cap shader: light comes from the upper left
+        // cap shader: light from the upper left, gentler than before
         fun capShader(x0: Float, y0: Float, r: Float) {
             if (silhouette) { fill.color = dark; return }
             fill.shader = RadialGradient(x0, y0, r,
-                intArrayOf(shade(capC, 0.5f), capC, shade(capC, -0.4f)),
-                floatArrayOf(0f, 0.45f, 1f), Shader.TileMode.CLAMP)
+                intArrayOf(shade(capC, 0.32f), capC, shade(capC, -0.28f)),
+                floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP)
         }
+        // raised spots: a darker rim at the bottom and a shine on top
         fun spot(x: Float, y: Float, r0: Float, squash: Float) {
             val r = r0 * spotMul
-            fill.color = spotC
+            fill.color = shade(spotC, -0.12f)
             c.drawOval(x - r * squash, y - r, x + r * squash, y + r, fill)
-            fill.color = Color.argb(90, 255, 255, 255)
-            c.drawCircle(x - r * 0.3f * squash, y - r * 0.35f, r * 0.3f, fill)
+            fill.color = spotC
+            c.drawOval(x - r * squash * 0.9f, y - r, x + r * squash * 0.9f, y + r * 0.78f, fill)
+            fill.color = Color.argb(150, 255, 255, 255)
+            c.drawOval(x - r * 0.55f * squash, y - r * 0.72f, x - r * 0.05f * squash, y - r * 0.32f, fill)
         }
 
         path.reset()
@@ -4035,6 +4092,11 @@ class GameView(context: Context) : View(context) {
                     for ((px, py) in arrayOf(-0.45f to -0.5f, 0.2f to -0.72f, 0.5f to -0.22f)) {
                         spot(cx + px * r, cy + (py + 0.45f) * r - r * 0.4f, r * 0.12f, 1f - abs(px) * 0.6f)
                     }
+                }
+                if (!silhouette) {
+                    fill.color = Color.argb(110, 255, 255, 255)
+                    c.drawOval(cx - r * 0.62f, cy - r * 0.72f, cx - r * 0.18f, cy - r * 0.42f, fill)
+                    ink(capC); c.drawCircle(cx, cy, r, stroke)
                 }
             }
             2 -> { // morel cone
@@ -4057,54 +4119,82 @@ class GameView(context: Context) : View(context) {
                         c.drawOval(px - s * 0.05f * (1f - abs(k) * 0.35f), yy - s * 0.035f, px + s * 0.05f * (1f - abs(k) * 0.35f), yy + s * 0.035f, fill)
                     }
                 }
+                if (!silhouette) { ink(capC); c.drawPath(path, stroke) }
             }
             3 -> { // funnel / chanterelle
                 capTop = capBottom - s * 0.4f
-                path.moveTo(cx - stemW * 0.5f, capBottom)
+                path.moveTo(cx - stemW * 0.42f, capBottom)
                 path.lineTo(cx - s * 0.6f, capTop + s * 0.06f)
                 path.quadTo(cx - s * 0.3f, capTop - s * 0.1f, cx, capTop)
                 path.quadTo(cx + s * 0.3f, capTop - s * 0.1f, cx + s * 0.6f, capTop + s * 0.06f)
-                path.lineTo(cx + stemW * 0.5f, capBottom)
+                path.lineTo(cx + stemW * 0.42f, capBottom)
                 path.close()
                 if (silhouette) fill.color = dark
                 else fill.shader = LinearGradient(cx - s * 0.6f, capTop, cx + s * 0.6f, capBottom,
-                    intArrayOf(shade(capC, 0.35f), capC, shade(capC, -0.4f)), floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP)
+                    intArrayOf(shade(capC, 0.3f), capC, shade(capC, -0.3f)), floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP)
                 c.drawPath(path, fill)
                 fill.shader = null
                 if (!silhouette) {
+                    // gill ridges running down the funnel
+                    stroke.color = Color.argb(70, Color.red(outline(capC)), Color.green(outline(capC)), Color.blue(outline(capC)))
+                    stroke.strokeWidth = max(1f * dp, s * 0.012f)
+                    for (k in -3..3) c.drawLine(cx + k * s * 0.07f, capTop + s * 0.12f, cx + k * stemW * 0.09f, capBottom - s * 0.02f, stroke)
+                    ink(capC); c.drawPath(path, stroke)
                     // the hollow top of the funnel
                     fill.shader = RadialGradient(cx + s * 0.1f, capTop + s * 0.06f, s * 0.6f,
                         shade(if (spotC != 0) spotC else capC, -0.3f), shade(capC, 0.25f), Shader.TileMode.CLAMP)
-                    c.drawOval(cx - s * 0.56f, capTop - s * 0.04f, cx + s * 0.56f, capTop + s * 0.13f, fill)
+                    val top = RectF(cx - s * 0.56f, capTop - s * 0.04f, cx + s * 0.56f, capTop + s * 0.13f)
+                    c.drawOval(top, fill)
                     fill.shader = null
+                    ink(capC); c.drawOval(top, stroke)
                 }
             }
             4 -> { // tall horn
                 capTop = capBottom - s * 0.9f
                 capShader(cx - s * 0.1f, capTop + s * 0.25f, s * 0.6f)
-                c.drawRoundRect(cx - s * 0.25f, capTop, cx + s * 0.25f, capBottom + s * 0.03f, s * 0.25f, s * 0.25f, fill)
+                val hr = RectF(cx - s * 0.25f, capTop, cx + s * 0.25f, capBottom + s * 0.03f)
+                c.drawRoundRect(hr, s * 0.25f, s * 0.25f, fill)
                 fill.shader = null
                 if (spotC != 0 && !silhouette) {
                     stroke.color = shade(spotC, -0.1f); stroke.strokeWidth = s * 0.04f
                     for (k in 1..3) c.drawArc(cx - s * 0.22f, capTop + k * s * 0.2f - s * 0.04f, cx + s * 0.22f,
                         capTop + k * s * 0.2f + s * 0.06f, 20f, 140f, false, stroke)
                 }
-            }
-            else -> { // dome
-                val cw = s * 1.1f; val ch = s * 0.6f
-                capTop = capBottom - ch
-                // darker underside peeking out below the rim (gives the cap thickness)
                 if (!silhouette) {
-                    fill.color = shade(stemC, -0.4f)
-                    c.drawOval(cx - cw * 0.44f, capBottom - ch * 0.1f, cx + cw * 0.44f, capBottom + ch * 0.26f, fill)
+                    fill.color = Color.argb(100, 255, 255, 255)
+                    c.drawRoundRect(cx - s * 0.17f, capTop + s * 0.08f, cx - s * 0.08f, capTop + s * 0.4f, s * 0.05f, s * 0.05f, fill)
+                    ink(capC); c.drawRoundRect(hr, s * 0.25f, s * 0.25f, stroke)
                 }
-                path.moveTo(cx - cw / 2, capBottom)
-                path.cubicTo(cx - cw / 2, capBottom - ch * 1.3f, cx + cw / 2, capBottom - ch * 1.3f, cx + cw / 2, capBottom)
-                path.quadTo(cx, capBottom + ch * 0.14f, cx - cw / 2, capBottom)
+            }
+            else -> { // dome, with a rolled rim and gills underneath
+                val cw = s * 1.14f; val ch = s * 0.62f
+                capTop = capBottom - ch
+                val edgeY = capBottom + ch * 0.02f
+                path.moveTo(cx - cw / 2, edgeY)
+                path.cubicTo(cx - cw / 2 - s * 0.01f, capBottom - ch * 1.32f, cx + cw / 2 + s * 0.01f, capBottom - ch * 1.32f, cx + cw / 2, edgeY)
+                path.quadTo(cx + cw / 2 + s * 0.01f, capBottom + ch * 0.3f, cx, capBottom + ch * 0.32f)
+                path.quadTo(cx - cw / 2 - s * 0.01f, capBottom + ch * 0.3f, cx - cw / 2, edgeY)
                 path.close()
                 capShader(cx - cw * 0.2f, capBottom - ch * 0.85f, cw * 0.85f)
                 c.drawPath(path, fill)
                 fill.shader = null
+                if (!silhouette) {
+                    // gills: a cream oval tucked inside the rim, with fine ridges
+                    val gillC = shade(stemC, -0.1f)
+                    val gr = RectF(cx - cw * 0.42f, capBottom - ch * 0.04f, cx + cw * 0.42f, capBottom + ch * 0.25f)
+                    fill.shader = LinearGradient(0f, gr.top, 0f, gr.bottom, shade(gillC, -0.15f), shade(gillC, 0.08f), Shader.TileMode.CLAMP)
+                    c.drawOval(gr, fill); fill.shader = null
+                    stroke.color = Color.argb(80, Color.red(outline(stemC)), Color.green(outline(stemC)), Color.blue(outline(stemC)))
+                    stroke.strokeWidth = max(1f * dp, s * 0.011f)
+                    for (k in -6..6) {
+                        if (k == 0) continue
+                        val f = k / 6f
+                        c.drawLine(cx + f * cw * 0.12f, gr.top + gr.height() * 0.25f, cx + f * cw * 0.38f, gr.top + gr.height() * (0.55f + 0.3f * (1f - abs(f))), stroke)
+                    }
+                    // the cap's rolled lip around the gills
+                    stroke.color = shade(capC, -0.18f); stroke.strokeWidth = s * 0.03f
+                    c.drawArc(gr.left, gr.top, gr.right, gr.bottom, 10f, 160f, false, stroke)
+                }
                 if (spotC != 0 && !silhouette) {
                     val dots = arrayListOf(Triple(-0.28f, -0.5f, 0.085f), Triple(0.1f, -0.8f, 0.07f),
                             Triple(0.34f, -0.34f, 0.06f), Triple(-0.04f, -0.32f, 0.05f))
@@ -4112,13 +4202,17 @@ class GameView(context: Context) : View(context) {
                     for ((px, py, pr) in dots) spot(cx + px * cw, capBottom + py * ch, s * pr, 1f - abs(px) * 1.1f)
                 }
                 if (!silhouette) {
-                    fill.color = Color.argb(90, 255, 255, 255)
-                    c.drawOval(cx - cw * 0.34f, capBottom - ch * 0.88f, cx - cw * 0.1f, capBottom - ch * 0.62f, fill)
-                    stroke.color = Color.argb(60, 255, 255, 255); stroke.strokeWidth = s * 0.025f
-                    c.drawArc(cx - cw / 2 + s * 0.02f, capBottom - ch * 0.98f, cx + cw / 2 - s * 0.02f, capBottom + ch * 0.05f, -60f, 50f, false, stroke)
+                    fill.color = Color.argb(100, 255, 255, 255)
+                    c.drawOval(cx - cw * 0.34f, capBottom - ch * 0.9f, cx - cw * 0.12f, capBottom - ch * 0.66f, fill)
+                    stroke.color = Color.argb(70, 255, 255, 255); stroke.strokeWidth = s * 0.025f
+                    c.drawArc(cx - cw / 2 + s * 0.03f, capBottom - ch * 0.98f, cx + cw / 2 - s * 0.03f, capBottom + ch * 0.05f, -60f, 50f, false, stroke)
+                    ink(capC); c.drawPath(path, stroke)
                 }
+                drawStem()
             }
         }
+        drawFeet()
+        stroke.strokeJoin = Paint.Join.MITER
 
         if (sp.deco != 0 && !silhouette) drawCapDeco(c, sp.deco, sp.shape, cx, capTop, capBottom, baseY, s, capC)
 
@@ -4255,8 +4349,10 @@ class GameView(context: Context) : View(context) {
             if (who != null && who.waveT > 0f && !sleeping) {
                 c.save()
                 c.rotate(-50f + 35f * sin(t * 16f), cx + stemW * 0.45f, faceY + s * 0.08f)
-                fill.color = shade(stemC, -0.08f)
-                c.drawRoundRect(cx + stemW * 0.42f, faceY + s * 0.04f, cx + stemW * 0.42f + s * 0.2f, faceY + s * 0.12f, s * 0.04f, s * 0.04f, fill)
+                val ar = RectF(cx + stemW * 0.42f, faceY + s * 0.04f, cx + stemW * 0.42f + s * 0.16f, faceY + s * 0.14f)
+                fill.color = shade(stemC, 0.04f); c.drawRoundRect(ar, s * 0.05f, s * 0.05f, fill)
+                stroke.color = Color.rgb((Color.red(stemC) * 0.42f).toInt(), (Color.green(stemC) * 0.3f).toInt(), (Color.blue(stemC) * 0.28f).toInt())
+                stroke.strokeWidth = max(1.2f * dp, s * 0.028f); c.drawRoundRect(ar, s * 0.05f, s * 0.05f, stroke)
                 c.restore()
             }
 
