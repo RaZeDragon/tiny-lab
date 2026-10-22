@@ -3417,8 +3417,8 @@ class GameView(context: Context) : View(context) {
             else -> "ready"
         }
         if (status == "ready") text.color = MINT
-        val first = picks.firstOrNull()?.let { shroom(it) }
-        val bestieMatch = picks.size == 1 && first != null && first !== s && first.sex != s.sex && first.bestie == s.id && status == "ready"
+        val mate = picks.firstOrNull()?.let { shroom(it) }
+        val bestieMatch = picks.size == 1 && mate != null && mate !== s && mate.sex != s.sex && mate.bestie == s.id && status == "ready"
         if (bestieMatch) text.color = DUST
         c.drawText(if (bestieMatch) "bestie +10%" else status, r.centerX(), r.top + r.height() * 0.94f, text)
         text.color = Color.WHITE
