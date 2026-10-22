@@ -4099,7 +4099,7 @@ class GameView(context: Context) : View(context) {
             if (who != null) {
                 for (slot in intArrayOf(2, 1, 0)) {
                     val a = who.wear[slot]
-                    if (a >= 0) drawAccessory(c, a, if (slot == 1) fx else cx, capTop, faceY, capBottom, s, ex)
+                    if (a >= 0) drawAccessory(c, a, if (slot == 1) fx else cx, capTop, faceY, capBottom, s, ex, chinY = max(capBottom, faceY + s * 0.11f))
                 }
             }
         }
@@ -5253,8 +5253,21 @@ class GameView(context: Context) : View(context) {
     private var previewAnim = 0f
     private var previewFromOffer = false
 
-    private fun previewCard(w: Float, h: Float) = RectF(16f * dp, h * 0.08f, w - 16f * dp, navTop - 8f * dp)
+    /** Packs need room for their contents; single items just need the picture, a note and the buttons. */
+    private fun previewCard(w: Float, h: Float): RectF {
+        if (previewKind == 7) return RectF(16f * dp, h * 0.08f, w - 16f * dp, navTop - 8f * dp)
+        val sceneH = (w - 56f * dp) * 0.92f
+        val ch = 64f * dp + sceneH + 44f * dp + 70f * dp
+        val top = max(h * 0.06f, (h - ch) / 2 - 20f * dp)
+        return RectF(16f * dp, top, w - 16f * dp, top + ch)
+    }
     private fun previewScene(w: Float, h: Float): RectF { val c = previewCard(w, h); return RectF(c.left + 12f * dp, c.top + 64f * dp, c.right - 12f * dp, c.top + 64f * dp + (c.width() - 24f * dp) * 0.92f) }
+
+    /** What the buy button says: the price, or how much more dust you need. */
+    private fun previewPrice(): Int = when (previewKind) {
+        2 -> Data.DECOR[previewIdx].cost; 3 -> Data.THEMES[previewIdx].cost
+        4 -> Data.ACCESSORIES[previewIdx].cost; 6 -> Data.PETS[previewIdx].cost; else -> 0
+    }
 
     /** The shop's own buy button for this item, so previews buy exactly the same way. */
     private fun shopBuyButton(kind: Int, i: Int): Button? {
@@ -5274,7 +5287,10 @@ class GameView(context: Context) : View(context) {
         val buy = shopBuyButton(previewKind, previewIdx)
         val forSale = !(previewKind == 2 && Data.DECOR[previewIdx].special > 0) && !(previewKind == 4 && Data.ACCESSORIES[previewIdx].special > 0)
         if (buy != null && forSale) {
-            l.add(Button("pv_buy", RectF(card.left + 12f * dp, y, card.left + 12f * dp + half, y + 46f * dp), buy.label, if (buy.enabled) STYLE_PRIMARY else STYLE_NORMAL, buy.enabled) {
+            val price = previewPrice()
+            val ownedTheme = previewKind == 3 && (lab.themesOwned shr previewIdx) and 1 == 1
+            val label = if (!buy.enabled && !ownedTheme && price > lab.dust && previewKind != 7) "Need ${price - lab.dust} more ✦" else buy.label
+            l.add(Button("pv_buy", RectF(card.left + 12f * dp, y, card.left + 12f * dp + half, y + 46f * dp), label, if (buy.enabled) STYLE_PRIMARY else STYLE_NORMAL, buy.enabled) {
                 buy.action()
                 if (previewKind != 3) { previewKind = -1; if (previewFromOffer) { previewFromOffer = false } }
             })
@@ -5285,11 +5301,14 @@ class GameView(context: Context) : View(context) {
     }
 
     /** A mini garden drawn into r: a theme, some decorations, and a shroom dressed up with a pet. */
-    private fun drawMiniScene(c: Canvas, r: RectF, theme: Int, decor: List<Int>, wear: IntArray, pet: Int, species: Int, bigDecor: Boolean = false) {
+    private fun drawMiniScene(c: Canvas, r: RectF, theme: Int, decor: List<Int>, wear: IntArray, pet: Int, species: Int, bigDecor: Boolean = false, zoom: Float = 1f) {
         val w = width.toFloat(); val h = height.toFloat()
         val savedTheme = lab.theme; val savedArea = area; val savedCam = camX
         lab.theme = theme; area = 0; camX = 0.5f
-        val src = RectF(0f, h * 0.06f, w, h * 0.66f)
+        // zoom in around the shroom so small things like hats are easy to see
+        val sw = w / zoom; val sh = sw * r.height() / r.width()
+        val scy = if (zoom > 1f) h * 0.4f else h * 0.36f
+        val src = RectF(w / 2 - sw / 2, scy - sh / 2, w / 2 + sw / 2, scy + sh / 2)
         val sc = max(r.width() / src.width(), r.height() / src.height())
         c.save()
         c.clipRect(r)
@@ -5347,12 +5366,12 @@ class GameView(context: Context) : View(context) {
             3 -> { val th = Data.THEMES[previewIdx]; title = th.name; sub = "Garden theme · new sky, ground and weather"
                 drawMiniScene(c, scene, previewIdx, listOf(1, 7), noWear, -1, sp) }
             2 -> { val d = Data.DECOR[previewIdx]; title = d.name; sub = if (d.glow) "Decoration · glows at night" else if (previewIdx in 11..15) "Toy · your shrooms play with it" else if (previewIdx == Data.COZY_BED) "Decoration · one shroom at a time naps here" else "Decoration"
-                drawMiniScene(c, scene, lab.theme, listOf(previewIdx), noWear, -1, sp, bigDecor = true) }
+                drawMiniScene(c, scene, lab.theme, listOf(previewIdx), noWear, -1, sp, bigDecor = true, zoom = 1.35f) }
             4 -> { val a = Data.ACCESSORIES[previewIdx]; title = a.name; sub = "Worn on the " + arrayOf("cap", "face", "stem")[a.slot]
                 val wr = intArrayOf(-1, -1, -1); wr[a.slot] = previewIdx
-                drawMiniScene(c, scene, lab.theme, emptyList(), wr, -1, sp) }
+                drawMiniScene(c, scene, lab.theme, emptyList(), wr, -1, sp, zoom = 2.1f) }
             6 -> { val pt = Data.PETS[previewIdx]; title = pt.name; sub = "Pet · " + pt.desc
-                drawMiniScene(c, scene, lab.theme, emptyList(), noWear, previewIdx, sp) }
+                drawMiniScene(c, scene, lab.theme, emptyList(), noWear, previewIdx, sp, zoom = 1.7f) }
             else -> {
                 val pk = Data.PACKS[previewIdx]; title = pk.name; sub = pk.price
                 val b = pk.bundle
@@ -7915,7 +7934,7 @@ class GameView(context: Context) : View(context) {
      * Draws a worn item. capTop = top of the cap, faceY = eye line, neckY = where cap meets stem,
      * ex = half the distance between the eyes.
      */
-    private fun drawAccessory(c: Canvas, a: Int, cx: Float, capTop: Float, faceY: Float, neckY: Float, s: Float, ex: Float) {
+    private fun drawAccessory(c: Canvas, a: Int, cx: Float, capTop: Float, faceY: Float, neckY: Float, s: Float, ex: Float, chinY: Float = neckY) {
         val col = Data.ACCESSORIES[a].color
         fill.color = col
         stroke.color = col
@@ -7997,14 +8016,18 @@ class GameView(context: Context) : View(context) {
                 }
                 c.drawLine(cx - ex + r, faceY, cx + ex - r, faceY, stroke)
             }
-            11 -> { // scarf
-                c.drawRoundRect(cx - s * 0.24f, neckY - s * 0.02f, cx + s * 0.24f, neckY + s * 0.09f, s * 0.05f, s * 0.05f, fill)
-                c.drawRoundRect(cx + s * 0.08f, neckY + s * 0.04f, cx + s * 0.17f, neckY + s * 0.26f, s * 0.04f, s * 0.04f, fill)
+            11 -> { // scarf: wraps the stem just under the mouth
+                val ny = chinY
+                c.drawRoundRect(cx - s * 0.24f, ny - s * 0.02f, cx + s * 0.24f, ny + s * 0.08f, s * 0.05f, s * 0.05f, fill)
+                fill.color = shade(col, -0.18f)
+                c.drawRoundRect(cx + s * 0.08f, ny + s * 0.04f, cx + s * 0.17f, ny + s * 0.17f, s * 0.04f, s * 0.04f, fill)
+                fill.color = col
+                c.drawRoundRect(cx - s * 0.24f, ny - s * 0.02f, cx + s * 0.24f, ny + s * 0.03f, s * 0.04f, s * 0.04f, fill)
                 stroke.color = Color.WHITE; stroke.strokeWidth = s * 0.015f
-                c.drawLine(cx + s * 0.09f, neckY + s * 0.2f, cx + s * 0.16f, neckY + s * 0.2f, stroke)
+                c.drawLine(cx + s * 0.09f, ny + s * 0.13f, cx + s * 0.16f, ny + s * 0.13f, stroke)
             }
             12 -> { // bow tie
-                val by = neckY + s * 0.06f
+                val by = chinY + s * 0.03f
                 path.moveTo(cx, by); path.lineTo(cx - s * 0.12f, by - s * 0.06f); path.lineTo(cx - s * 0.12f, by + s * 0.06f); path.close()
                 path.moveTo(cx, by); path.lineTo(cx + s * 0.12f, by - s * 0.06f); path.lineTo(cx + s * 0.12f, by + s * 0.06f); path.close()
                 c.drawPath(path, fill)

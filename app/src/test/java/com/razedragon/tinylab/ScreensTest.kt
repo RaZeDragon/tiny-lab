@@ -293,6 +293,14 @@ class ScreensTest {
         assertEquals(1, lab.accOwned[6])
         g.testTap("s6"); assertTrue(g.testTap("prev_6_3")); g.testFrame(0.5f); save(g.testRender(), "preview_pet")
         g.testTap("pv_close")
+        g.testTap("s4"); g.testShopScroll(9999f); g.testFrame(0.1f)
+        assertTrue(g.testTap("prev_4_11")); g.testFrame(0.5f); save(g.testRender(), "preview_scarf")
+        g.testTap("pv_close")
+        assertTrue(g.testTap("prev_4_12")); g.testFrame(0.5f); save(g.testRender(), "preview_bowtie")
+        g.testTap("pv_close")
+        lab.dust = 5
+        assertTrue(g.testTap("prev_4_11")); g.testFrame(0.5f); save(g.testRender(), "preview_need_more")
+        g.testTap("pv_close")
         reset()
     }
 
