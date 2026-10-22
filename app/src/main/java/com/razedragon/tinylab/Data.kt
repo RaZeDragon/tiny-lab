@@ -49,6 +49,11 @@ class Job(val name: String, val icon: String, val desc: String)
 /** One step of an event quest. type: 0 discover a species, 1 place a decoration, 2 feed a food N times */
 class QuestStep(val text: String, val type: Int, val target: Int, val count: Int = 1)
 class Quest(val title: String, val intro: String, val steps: Array<QuestStep>, val pet: Int, val outro: String)
+/** One line in an event story scene. who: 0 = the visitor, 1 = Professor Spore, 2 = narrator.
+ *  emote: 0 none, 1 tear, 2 hearts, 3 surprise "!", 4 shiver. A line with [choices] waits for the player to pick;
+ *  the matching entry in [replies] is what the visitor says back. */
+class Line(val who: Int, val text: String, val emote: Int = 0,
+           val choices: Array<String>? = null, val replies: Array<String>? = null)
 
 /** Things you feed your mushrooms. */
 class Food(val name: String, val color: Int, val cost: Int, val hunger: Int, val xp: Int, val happy: Int, val event: Int = 0, val cooked: Boolean = false)
@@ -709,6 +714,102 @@ object Data {
                 QuestStep("Place a Flower Arch for the entrance", 1, 22),
                 QuestStep("Party snacks: feed Strawberries 3 times", 2, 7, 3)),
             6, "What a party! The bunny hopped right into your heart."),
+    )
+
+    // ---------- Event story scenes: chapter n plays when the quest reaches step n (3 = the ending) ----------
+    val VISITOR_NAMES = arrayOf("", "Little Ghost", "Penguin", "Bunny")
+    val SCENES: Array<Array<Array<Line>>> = arrayOf(
+        arrayOf(),
+        arrayOf(   // Shroomoween: The Lost Ghost
+            arrayOf(
+                Line(2, "A chilly breeze rustles the garden... something small and see-through is hiding behind a mushroom."),
+                Line(0, "Boo... hoo... Oh! S-sorry, did I scare you? I'm not very good at scaring.", 1),
+                Line(1, "Goodness, a little ghost! What are you doing in our garden?", 3),
+                Line(0, "I floated away from the Hollow and now I can't find my way home. It's so dark and lonely out there...", 1,
+                    choices = arrayOf("We'll help you get home!", "You can stay with us for now."),
+                    replies = arrayOf("Really? You'd do that for a little ghost like me?", "Stay? With friends? Oh... that sounds nice.")),
+                Line(1, "First things first: a Ghost Puff would keep you company. Ecto Goo plus almost anything should do it!"),
+                Line(0, "A Ghost Puff... a friend who's cold and squishy like me? I'd love that!", 2),
+            ),
+            arrayOf(
+                Line(0, "A Ghost Puff! It's so squishy and cold. Just like me!", 2),
+                Line(0, "But the path home is pitch black. I'm scared of the dark... which is silly for a ghost, I know.", 4),
+                Line(1, "Nothing silly about it! A Jack-o'-lantern will light the way. Find one in the Shop's EVENT tab, then place it with DECORATE."),
+            ),
+            arrayOf(
+                Line(0, "Ooh, it's glowing! I can almost see the Hollow from here!", 3),
+                Line(0, "I'm just... a teeny bit too hungry to float that far.", 1),
+                Line(1, "Then let's have a party! Feed your mushrooms Candy Corn three times and we'll all share."),
+            ),
+            arrayOf(
+                Line(0, "That was the best party ever! And look, I can see my way home now...", 2),
+                Line(0, "...but home is so quiet. Your garden is warm and full of friends.", 1),
+                Line(0, "Could I stay here with you? Pretty please?", 2,
+                    choices = arrayOf("Of course you can!", "We'd be so happy!"),
+                    replies = arrayOf("Yay! I'll be the best little ghost ever!", "Boo-hoo... happy tears this time!")),
+                Line(1, "Welcome to the family, little one. Everyone belongs in our garden.", 2),
+                Line(2, "Ghostie joined your garden! Bring it along from any mushroom's STYLE menu. +250 ✦"),
+            ),
+        ),
+        arrayOf(   // Frosty Festival: Snowflake Delivery
+            arrayOf(
+                Line(2, "Tiny footprints in the frost lead to a shivering little bird with a very empty sack."),
+                Line(0, "B-b-brrr... e-excuse me! Have you seen any snowflakes? I dropped the whole bag!", 4),
+                Line(1, "A penguin, so far from the ice! Are you all right?", 3),
+                Line(0, "I deliver snowflakes for the Frosty Festival. No snowflakes means no snow... and no festival!", 1,
+                    choices = arrayOf("We'll find them together!", "Let's warm you up first."),
+                    replies = arrayOf("You will? You're the best!", "Hehe... my flippers are a little numb.")),
+                Line(1, "A Snowglobe Puff can keep snowflakes safe. Try Peppermint with something cold, shiny or from the moon."),
+            ),
+            arrayOf(
+                Line(0, "It's full of tiny snowflakes! Now I just need a place to drop them from.", 2),
+                Line(1, "Every delivery needs a landmark. A Snowman from the Shop's EVENT tab would be perfect. Place it with DECORATE!"),
+            ),
+            arrayOf(
+                Line(0, "What a handsome snowman! I can see the whole sky from up here.", 3),
+                Line(0, "But my b-beak is frozen solid...", 4),
+                Line(1, "Hot Cocoa fixes everything. Feed your mushrooms Hot Cocoa three times and warm up together."),
+            ),
+            arrayOf(
+                Line(2, "Snowflakes drift down over the whole garden. The festival is saved!"),
+                Line(0, "Every single snowflake delivered! I couldn't have done it without you.", 2),
+                Line(0, "The other penguins went home... but I really like it here. Could I stay?", 1,
+                    choices = arrayOf("Stay as long as you like!", "Only if you bring the snow!"),
+                    replies = arrayOf("Hooray! I'll keep your garden frosty and fun!", "Deal! Snow days every day!")),
+                Line(1, "Wrap up warm, friend. You're home now.", 2),
+                Line(2, "Penguin joined your garden! Bring it along from any mushroom's STYLE menu. +250 ✦"),
+            ),
+        ),
+        arrayOf(   // Spring Bloom: The Bloom Party
+            arrayOf(
+                Line(2, "Something fluffy pops out of a hole by the veggie patch, rubbing its eyes."),
+                Line(0, "*yawn* Oh! Hello! I just woke up from my winter nap!", 3),
+                Line(1, "Good morning, little bunny! Welcome to the garden."),
+                Line(0, "Spring is here and I want to throw the biggest party ever! But I don't really know anyone...", 1,
+                    choices = arrayOf("We'll help you plan it!", "We LOVE parties!"),
+                    replies = arrayOf("You will? Then we're already friends!", "Me too! Let's make it the best one!")),
+                Line(1, "Every party needs decorations. A Blossom Cap would be perfect! Try Clover or Rainbow Drop with something flowery."),
+            ),
+            arrayOf(
+                Line(0, "So pretty! The petals smell like sunshine!", 2),
+                Line(0, "Now the guests need a way in...", 1),
+                Line(1, "A Flower Arch makes a grand entrance. You'll find one in the Shop's EVENT tab. Place it with DECORATE!"),
+            ),
+            arrayOf(
+                Line(0, "Ooh, fancy! The guests are going to love it!", 3),
+                Line(0, "Last thing... what's a party without snacks?", 1),
+                Line(1, "Strawberries, of course! Feed your mushrooms Strawberries three times."),
+            ),
+            arrayOf(
+                Line(2, "Music, petals and giggles fill the garden. What a party!"),
+                Line(0, "Best. Party. EVER!", 2),
+                Line(0, "I made so many new friends today... could I stay and be one of them?", 1,
+                    choices = arrayOf("You already are!", "Hop right in!"),
+                    replies = arrayOf("*happy hops* Best spring ever!", "Hop hop hooray!")),
+                Line(1, "Welcome home, little one.", 2),
+                Line(2, "Bunny joined your garden! Bring it along from any mushroom's STYLE menu. +250 ✦"),
+            ),
+        ),
     )
 
     // ---------- Sticker book ----------

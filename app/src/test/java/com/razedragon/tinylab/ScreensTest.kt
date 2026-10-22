@@ -431,6 +431,36 @@ class ScreensTest {
         reset()
     }
 
+    @Test fun eventStoryScenes() {
+        reset()
+        val g = ready(1)
+        val lab = g.testLab(); lab.garden.clear()
+        lab.garden.add(lab.newShroom(1, 600f, false).apply { gx = 0.5f; gz = 0.6f })
+        g.testScenesSeen(false)
+        g.testFrame(1.5f)
+        assertTrue(g.testSceneOn())
+        save(g.testRender(), "scene_ghost_1")
+        // tap through to the choice
+        var guard = 0
+        while (!g.testButtonIds().contains("scene_choice0") && guard++ < 20) { g.testTap("scene_tap"); g.testTap("scene_tap"); g.testFrame(0.1f) }
+        g.testFrame(3f); save(g.testRender(), "scene_ghost_choice")
+        assertTrue(g.testTap("scene_choice1")); g.testFrame(2f); save(g.testRender(), "scene_ghost_reply")
+        guard = 0
+        while (g.testSceneOn() && guard++ < 30) { g.testTap("scene_tap"); g.testFrame(0.1f) }
+        assertTrue(!g.testSceneOn())
+        g.testCam(0.5f); g.testFrame(0.5f); save(g.testRender(), "scene_garden_visitor")
+        assertTrue(g.testTap("visitor")); assertTrue(g.testSceneOn())
+        assertTrue(g.testTap("scene_skip")); assertTrue(!g.testSceneOn())
+        // the Frosty Festival ending
+        val g2 = ready(2)
+        val l2 = g2.testLab(); l2.garden.clear(); l2.garden.add(l2.newShroom(1, 600f, false))
+        l2.questNow(); l2.questStep[2] = 3
+        g2.testScenesSeen(false)
+        g2.testFrame(1.5f); assertTrue(g2.testSceneOn()); g2.testFrame(3f)
+        save(g2.testRender(), "scene_penguin_end")
+        reset()
+    }
+
     @Test fun merchantStickersCodes() {
         reset(); Data.forceMerchant = true
         val g = ready(0)

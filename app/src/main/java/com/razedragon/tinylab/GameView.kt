@@ -586,6 +586,7 @@ class GameView(context: Context) : View(context) {
         if (splashT > 0f) return ArrayList()
         if (mini > 0) return ArrayList<Button>().also { miniButtons(it, w, h) }
         if (settingsOpen) return ArrayList<Button>().also { settingsButtons(it, w, h) }
+        if (sceneOn()) return ArrayList<Button>().also { sceneButtons(it, w, h) }
         if (lab.pendingOffline > 0 && tutStep < 0 && mini == 0) return ArrayList<Button>().also { l -> welcomeButtons(l, w, h) }
         if (helpTab != null) return ArrayList<Button>().also { l ->
             val r = helpCard(w, h)
@@ -716,7 +717,33 @@ class GameView(context: Context) : View(context) {
     }
     private fun panelBottom() = navTop - 6f * dp + panelSlide()
 
+    /** While an event quest is going, its visitor hangs around the garden; tap it to hear the story again. */
+    private fun visitorSpot(): Pair<Float, Float>? {
+        val ev = eventNow(); if (ev == 0 || area != 0) return null
+        val st = lab.questNow(); if (st < 0 || st >= 3) return null
+        return toScreen(0.32f, 0.12f)
+    }
+
+    private fun drawVisitor(c: Canvas) {
+        val (x, y) = visitorSpot() ?: return
+        val ev = eventNow()
+        val hover = if (ev == 1) sin(t * 2.2f) * 6f * dp - 16f * dp else 0f
+        groundShadow(c, x, y, 16f * dp, 70)
+        drawPet(c, Data.QUESTS[ev].pet, x, y + hover, 36f * dp, t * 6f, if (sin(t * 0.4f) > 0) 1f else -1f, false)
+        // a little speech bubble says "talk to me"
+        val by = y + hover - 52f * dp + sin(t * 3f) * 2f * dp
+        fill.color = Color.WHITE; c.drawRoundRect(x - 13f * dp, by - 10f * dp, x + 13f * dp, by + 9f * dp, 9f * dp, 9f * dp, fill)
+        path.reset(); path.moveTo(x - 4f * dp, by + 8f * dp); path.lineTo(x, by + 14f * dp); path.lineTo(x + 4f * dp, by + 8f * dp); path.close(); c.drawPath(path, fill)
+        fill.color = Data.EVENT_COLORS[ev]; for (k in -1..1) c.drawCircle(x + k * 6f * dp, by, 2.2f * dp, fill)
+    }
+
     private fun gardenButtons(list: ArrayList<Button>, w: Float, h: Float) {
+        visitorSpot()?.let { (x, y) ->
+            if (!decorating && !photoMode && selected < 0 && x > 0f && x < w)
+                list.add(Button("visitor", RectF(x - 34f * dp, y - 76f * dp, x + 34f * dp, y + 10f * dp), "", STYLE_GHOST, custom = { _, _ -> }) {
+                    startScene(eventNow(), lab.questNow())
+                })
+        }
         if (lab.caveOpen() && !decorating) {
             list.add(Button("area", RectF(112f * dp, 16f * dp, 196f * dp, 50f * dp), if (area == 0) "⛰ Cave" else "🌿 Meadow") {
                 area = 1 - area; selected = -1; feeding = false; styling = false; moreOpen = false; jobbing = false; exploring = false
@@ -1744,11 +1771,17 @@ class GameView(context: Context) : View(context) {
     }
     internal fun testTutStep() = tutStep
     internal var testFace: String? = null
+    internal fun testSceneOn() = sceneOn()
+    internal fun testSceneLine() = sceneIdx
     internal fun testCrossbreed(a: Long, b: Long) { tab = Tab.LAB; labMode = 1; picks.clear(); picks.add(a); picks.add(b) }
     internal fun testPoke(s: Shroom) = poke(s)
     internal fun testToss(s: Shroom) = toss(s, 0f, -900f * dp)
     internal fun testFaceOf(s: Shroom) = pickFace(s.sleeping, s.expr, s.idleAnim, false, s.mood(), s.held, s)
-    internal fun testSkipIntro() { splashT = 0f; holdSplash = false; tutStep = -1; prefs.edit().putInt("tutStep", -1).apply(); toasts.clear() }
+    internal fun testSkipIntro() { splashT = 0f; holdSplash = false; tutStep = -1; prefs.edit().putInt("tutStep", -1).apply(); toasts.clear(); testScenesSeen(true) }
+    internal fun testScenesSeen(seen: Boolean) {
+        val e = prefs.edit(); for (ev in 1..3) for (n in 0..3) e.putBoolean(sceneKey(ev, n), seen); e.apply()
+        if (seen) sceneChapter = -1
+    }
     internal fun testProfSay(msg: String) = professorSay(msg, 30f)
     internal fun testSelect(id: Long) { selected = id; panelAnim = 1f }
     internal fun testBedtime() = bedtime()
@@ -1783,6 +1816,7 @@ class GameView(context: Context) : View(context) {
 
     private fun update(dt: Float) {
         t += dt
+        if (sceneOn()) { sceneT += dt; sceneAge += dt }
         if (qaMode) { qaAcc += max(dt, realDt); if (qaAcc >= 0.5f) { qaAcc = 0f; qaReport() } }
         updateJam(dt)
         updateSeason(dt)
@@ -1795,10 +1829,11 @@ class GameView(context: Context) : View(context) {
         tickAcc += dt
         if (tickAcc >= 1f) {
             tickAcc = 0f; lab.tick(); markDirty()
-            lab.updateQuest()?.let { toast(it, DUST); sound.play(Fx.DISCOVER); buzz(40) }
+            lab.updateQuest()?.let { toast(if (tab == Tab.GARDEN) it else "${Data.EVENT_ICONS[eventNow()]} Quest updated! Visit the garden", DUST); sound.play(Fx.DISCOVER); buzz(40) }
             val newStickers = lab.checkStickers()
             if (newStickers.size > 2) toast("⭐ ${newStickers.size} new stickers! Journal → AWARDS → Sticker book", DUST)
             else for (i in newStickers) toast("⭐ New sticker: ${Data.STICKERS[i].icon} ${Data.STICKERS[i].name}!", DUST)
+            checkScenes()
             checkOffers()
             maybeShowHelp()
             if (merchantHere() && prefs.getInt("merchantDay", 0) != LabState.dayKey()) {
@@ -2003,6 +2038,7 @@ class GameView(context: Context) : View(context) {
         }
         if (lab.pendingOffline > 0 && tutStep < 0 && mini == 0) drawWelcome(c, w, h)
         else if (helpTab != null) drawHelp(c, w, h)
+        if (sceneOn()) drawScene(c, w, h)
         drawToast(c, w, h)
         if (splashT > 0f) drawSplash(c, w, h)
     }
@@ -2777,6 +2813,7 @@ class GameView(context: Context) : View(context) {
             }
         }
         drawBestieHearts(c)
+        if (area == 0 && !photoMode) drawVisitor(c)
         if (area == 0) {
             for (cr in critters) if (cr.type == 0) drawCritter(c, cr)
             drawNight(c, w)
@@ -4486,6 +4523,12 @@ class GameView(context: Context) : View(context) {
             x += tw
         }
         val top = ty + 54f * dp
+        if (journalTab == 0 && lab.questNow() >= 0) {
+            val qy = top + 176f * dp + lab.requests.size * 74f * dp + 4f * dp
+            list.add(Button("quest_story", RectF(16f * dp, qy, w - 16f * dp, qy + 92f * dp), "", STYLE_GHOST, custom = { _, _ -> }) {
+                startScene(eventNow(), lab.questNow())
+            })
+        }
         if (journalTab == 2) {
             if (stickerView) {
                 list.add(Button("st_prev", RectF(pad, navTop - 54f * dp, pad + 60f * dp, navTop - 12f * dp), "◀", STYLE_NORMAL, stickerPage > 0) { stickerPage-- })
@@ -5863,7 +5906,7 @@ class GameView(context: Context) : View(context) {
 
     /** Offers pop up at a calm moment in the garden, up to twice a day (fresh installs included, once the tutorial is done). */
     private fun checkOffers() {
-        if (tab != Tab.GARDEN || offerPack >= 0 || popup != null || tutStep >= 0 || settingsOpen || helpTab != null || lab.pendingOffline > 0 || qaMode) return
+        if (tab != Tab.GARDEN || offerPack >= 0 || popup != null || tutStep >= 0 || settingsOpen || helpTab != null || lab.pendingOffline > 0 || qaMode || sceneOn()) return
         if (mini > 0 || selected >= 0 || decorating || dragging || lab.garden.isEmpty()) return
         val now = System.currentTimeMillis()
         if (now - sessionStart < 45_000L || !offerDue(now)) return
@@ -6538,6 +6581,9 @@ class GameView(context: Context) : View(context) {
             drawPet(c, q.pet, r.right - 34f * dp, r.top + 58f * dp, 34f * dp, t * 6f, -1f, false)
             text.textAlign = Paint.Align.LEFT; text.textSize = 14f * dp
             c.drawText("${Data.EVENT_ICONS[ev]} ${q.title}" + if (step >= 3) "  ✓" else "  (${step + 1}/3)", r.left + 14f * dp, r.top + 22f * dp, text)
+            text.textAlign = Paint.Align.RIGHT; text.textSize = 11f * dp; text.color = Data.EVENT_COLORS[ev]
+            c.drawText("▶ story", r.right - 14f * dp, r.top + 22f * dp, text)
+            text.textAlign = Paint.Align.LEFT; text.textSize = 14f * dp; text.color = Color.WHITE
             text.textSize = 11.5f * dp; text.color = TEXT_DIM
             for ((k, l) in bodyLines.withIndex()) c.drawText(l, r.left + 14f * dp, r.top + 40f * dp + k * 15f * dp, text)
             if (step < 3) {
@@ -7275,6 +7321,175 @@ class GameView(context: Context) : View(context) {
     private fun eventNow() = Data.currentEvent()
 
     /** Shown once per event per year, with a free welcome gift. */
+    // ---------- Event story scenes ----------
+    private var sceneEv = 0
+    private var sceneChapter = -1
+    private val sceneLines = ArrayList<Line>()
+    private var sceneIdx = 0
+    private var sceneT = 0f          // time on the current line (typewriter)
+    private var sceneAge = 0f        // time since the scene opened (entrance)
+    private fun sceneOn() = sceneChapter >= 0
+    private fun sceneKey(ev: Int, n: Int) = "scene_${ev}_${lab.eventYear()}_$n"
+
+    private fun startScene(ev: Int, n: Int) {
+        val ch = Data.SCENES.getOrNull(ev)?.getOrNull(n) ?: return
+        sceneEv = ev; sceneChapter = n
+        sceneLines.clear(); sceneLines.addAll(ch)
+        sceneIdx = 0; sceneT = 0f; sceneAge = 0f
+        selected = -1; feeding = false; styling = false; moreOpen = false; decorating = false
+        prefs.edit().putBoolean(sceneKey(ev, n), true).apply()
+        sound.play(if (n == 3) Fx.DISCOVER else Fx.CHIRP, 0.6f, 1.1f)
+    }
+
+    /** Plays the next chapter of the event story once you're back in the garden. */
+    private fun checkScenes() {
+        if (sceneOn() || tab != Tab.GARDEN || tutStep >= 0 || popup != null || settingsOpen || mini > 0 || qaMode) return
+        if (helpTab != null || offerPack >= 0 || previewKind >= 0 || merchantOpen || familyFor >= 0 || cardFor >= 0 || lab.pendingOffline > 0) return
+        val ev = eventNow(); if (ev == 0) return
+        val st = lab.questNow(); if (st < 0) return
+        if (!prefs.getBoolean(sceneKey(ev, st), false)) startScene(ev, st)
+    }
+
+    private fun sceneLine() = sceneLines.getOrNull(sceneIdx)
+    private fun sceneTyped(): Boolean = sceneLine()?.let { sceneT * 42f >= it.text.length } ?: true
+
+    private fun sceneNext() {
+        if (!sceneTyped()) { sceneT = 999f; return }
+        val l = sceneLine() ?: run { sceneChapter = -1; return }
+        if (l.choices != null) return    // waits for a choice
+        sceneIdx++; sceneT = 0f
+        sound.play(Fx.POP, 0.35f, 1.3f)
+        if (sceneIdx >= sceneLines.size) { sceneChapter = -1; markDirty() }
+    }
+
+    private fun sceneBox(w: Float, h: Float): RectF {
+        val l = sceneLine()
+        text.textSize = 16f * dp
+        val lines = wrap(l?.text ?: "", w - 76f * dp).size
+        val choiceH = if (l?.choices != null && sceneTyped()) l.choices.size * 54f * dp + 6f * dp else 0f
+        val bh = max(132f * dp, 52f * dp + lines * 23f * dp + choiceH + 18f * dp)
+        return RectF(14f * dp, h - 22f * dp - bh, w - 14f * dp, h - 22f * dp)
+    }
+
+    private fun sceneButtons(list: ArrayList<Button>, w: Float, h: Float) {
+        list.add(Button("scene_tap", RectF(0f, 0f, w, h), "", STYLE_GHOST, custom = { _, _ -> }) { sceneNext() })
+        list.add(Button("scene_skip", RectF(w - 96f * dp, 14f * dp, w - 14f * dp, 48f * dp), "Skip", STYLE_NORMAL) {
+            sceneChapter = -1; markDirty()
+        })
+        val l = sceneLine() ?: return
+        val ch = l.choices ?: return
+        if (!sceneTyped()) return
+        val box = sceneBox(w, h)
+        var y = box.bottom - 18f * dp - ch.size * 54f * dp
+        for ((k, label) in ch.withIndex()) {
+            list.add(Button("scene_choice$k", RectF(box.left + 18f * dp, y, box.right - 18f * dp, y + 46f * dp), label, if (k == 0) STYLE_PRIMARY else STYLE_NORMAL) {
+                val reply = l.replies?.getOrNull(k)
+                sceneLines[sceneIdx] = Line(l.who, l.text, l.emote)   // the question is answered
+                if (reply != null) sceneLines.add(sceneIdx + 1, Line(0, reply, 2))
+                sceneIdx++; sceneT = 0f
+                sound.play(Fx.POP, 0.6f, 1.1f)
+            })
+            y += 54f * dp
+        }
+    }
+
+    private fun drawScene(c: Canvas, w: Float, h: Float) {
+        val ev = sceneEv
+        val evC = Data.EVENT_COLORS[ev]
+        val fade = min(1f, sceneAge / 0.4f)
+        // a moody backdrop in the event's colors
+        fill.color = Color.argb((215 * fade).toInt(), 12, 8, 26); c.drawRect(0f, 0f, w, h, fill)
+        fill.shader = RadialGradient(w * 0.6f, h * 0.42f, w * 0.85f,
+            Color.argb((110 * fade).toInt(), Color.red(evC), Color.green(evC), Color.blue(evC)), Color.argb(0, 0, 0, 0), Shader.TileMode.CLAMP)
+        c.drawRect(0f, 0f, w, h, fill); fill.shader = null
+        // drifting particles: wisps, snow or petals
+        for (k in 0 until 22) {
+            val p = ((t * 0.05f * (1 + k % 3)) + k * 0.137f) % 1f
+            val x = (k * 0.173f * w + sin(t * 0.8f + k) * 18f * dp) % w
+            when (ev) {
+                1 -> { val y = h * (1f - p); fill.color = Color.argb((140 * sin(p * 3.14f)).toInt().coerceAtLeast(0), 200, 255, 220); c.drawCircle(x, y, (2f + k % 3) * dp, fill) }
+                2 -> { val y = h * p; fill.color = Color.argb(220, 255, 255, 255); c.drawCircle(x, y, (1.5f + k % 3) * dp, fill) }
+                else -> { val y = h * p; c.save(); c.rotate(t * 80f + k * 40f, x, y); fill.color = if (k % 2 == 0) Color.rgb(255, 190, 215) else Color.WHITE
+                    c.drawOval(x - 5f * dp, y - 2.5f * dp, x + 5f * dp, y + 2.5f * dp, fill); c.restore() }
+            }
+        }
+        val q = Data.QUESTS[ev]
+        // chapter header
+        text.textSize = 13f * dp; text.color = Color.argb((230 * fade).toInt(), Color.red(evC), Color.green(evC), Color.blue(evC))
+        c.drawText("${Data.EVENT_ICONS[ev]}  ${q.title.uppercase()}  ·  ${if (sceneChapter == 3) "THE END" else "CHAPTER ${sceneChapter + 1}"}", w / 2, 36f * dp, text)
+        text.color = Color.WHITE
+
+        val l = sceneLine()
+        val speaker = l?.who ?: 2
+        val box = sceneBox(w, h)
+        val stageY = box.top - 26f * dp
+        // Professor Spore on the left
+        val profS = min(130f * dp, w * 0.3f)
+        val px = w * 0.25f
+        c.saveLayerAlpha(0f, 0f, w, h, if (speaker == 1) 255 else 150)
+        val pb = if (speaker == 1) abs(sin(t * 6f)) * 5f * dp else 0f
+        drawShroom(c, professor.species, px, stageY - pb, profS, 0, sin(t * 2f), (t % 4f) < 0.12f, false, facing = 1f, who = professor)
+        c.restore()
+        // the visitor floats in on the right
+        val vIn = min(1f, sceneAge / 0.9f)
+        val vx = w * 0.7f + (1f - easeOutBack(vIn)) * w * 0.4f
+        val hover = if (ev == 1) sin(t * 2.2f) * 10f * dp - 30f * dp else 0f
+        val vb = if (speaker == 0) abs(sin(t * 7f)) * 6f * dp else 0f
+        val vs = min(150f * dp, w * 0.36f)
+        val vy = stageY + hover - vb
+        c.saveLayerAlpha(0f, 0f, w, h, ((if (speaker == 0 || speaker == 2) 255 else 160) * vIn).toInt())
+        drawPet(c, q.pet, vx, vy, vs, t * 6f, -1f, false)
+        c.restore()
+        // emote over whoever is talking
+        if (l != null && l.emote > 0 && speaker != 2) {
+            val ex = if (speaker == 0) vx + vs * 0.42f else px + profS * 0.45f
+            val ey = if (speaker == 0) vy - vs * 1.05f else stageY - profS * 1.15f
+            when (l.emote) {
+                1 -> { val d = (t * 0.9f) % 1f; fill.color = Color.argb((230 * (1f - d)).toInt(), 140, 200, 255)
+                    path.reset(); val ty = ey + d * 26f * dp; path.moveTo(ex, ty - 9f * dp); path.quadTo(ex + 7f * dp, ty + 2f * dp, ex, ty + 6f * dp)
+                    path.quadTo(ex - 7f * dp, ty + 2f * dp, ex, ty - 9f * dp); c.drawPath(path, fill) }
+                2 -> { fill.color = Color.rgb(255, 110, 160); for (k in 0..2) { val ph = (t * 0.7f + k * 0.33f) % 1f
+                    drawHeart(c, ex + (k - 1) * 14f * dp + sin(t * 3f + k) * 4f * dp, ey - ph * 30f * dp, 7f * dp * (1f - ph * 0.4f)) } }
+                3 -> { fill.color = Color.WHITE; c.drawCircle(ex, ey, 15f * dp, fill)
+                    text.textSize = 20f * dp; text.color = ACCENT; c.drawText("!", ex, ey + 7f * dp, text); text.color = Color.WHITE }
+                4 -> { stroke.color = Color.argb(200, 180, 220, 255); stroke.strokeWidth = 2.5f * dp
+                    for (k in 0..2) { val o = sin(t * 30f + k) * 3f * dp; c.drawLine(ex - 10f * dp + k * 10f * dp + o, ey - 8f * dp, ex - 14f * dp + k * 10f * dp + o, ey + 8f * dp, stroke) } }
+            }
+        }
+        if (l == null) return
+        // the dialog box
+        fill.color = Color.rgb(38, 26, 70); c.drawRoundRect(box, 22f * dp, 22f * dp, fill)
+        panel(c, box, 22f * dp, PANEL_LIGHT)
+        stroke.color = if (speaker == 2) DUST else evC; stroke.strokeWidth = 2f * dp; c.drawRoundRect(box, 22f * dp, 22f * dp, stroke)
+        if (speaker != 2) {
+            val name = if (speaker == 0) Data.VISITOR_NAMES[ev] else "Professor Spore"
+            text.textSize = 13f * dp
+            val tw = text.measureText(name) + 28f * dp
+            val tag = RectF(box.left + 18f * dp, box.top - 15f * dp, box.left + 18f * dp + tw, box.top + 15f * dp)
+            fill.color = if (speaker == 0) evC else ACCENT; c.drawRoundRect(tag, 15f * dp, 15f * dp, fill)
+            text.color = BG; c.drawText(name, tag.centerX(), tag.centerY() + 4.5f * dp, text)
+        }
+        val shown = l.text.take((sceneT * 42f).toInt().coerceAtMost(l.text.length))
+        text.textSize = 16f * dp
+        text.color = if (speaker == 2) DUST else Color.WHITE
+        val full = wrap(l.text, w - 76f * dp)
+        var left = shown.length
+        text.textAlign = if (speaker == 2) Paint.Align.CENTER else Paint.Align.LEFT
+        for ((k, ln) in full.withIndex()) {   // reveal letter by letter, keeping the final line breaks
+            if (left <= 0) break
+            val part = ln.take(left)
+            c.drawText(part, if (speaker == 2) w / 2 else box.left + 22f * dp, box.top + 38f * dp + k * 23f * dp, text)
+            left -= ln.length + 1
+        }
+        text.textAlign = Paint.Align.CENTER
+        if (sceneTyped() && l.choices == null) {
+            text.textSize = 12f * dp; text.color = Color.argb((140 + 100 * sin(t * 5f)).toInt().coerceIn(0, 255), 255, 255, 255)
+            c.drawText(if (sceneIdx == sceneLines.size - 1) "tap to close" else "tap ▼", box.right - 50f * dp, box.bottom - 14f * dp, text)
+        }
+        text.color = Color.WHITE
+        for (b in buttons) if (b.id != "scene_tap") drawButton(c, b)
+    }
+
     private fun eventWelcome() {
         val ev = eventNow()
         if (ev == 0) return
@@ -8196,7 +8411,7 @@ class GameView(context: Context) : View(context) {
     private var helpTab: Tab? = null
 
     /** A full-screen window is open, so taps shouldn't reach the garden or lab behind it. */
-    private fun overlayOpen() = helpTab != null || (lab.pendingOffline > 0 && tutStep < 0) || offerPack >= 0 || previewKind >= 0 ||
+    private fun overlayOpen() = sceneOn() || helpTab != null || (lab.pendingOffline > 0 && tutStep < 0) || offerPack >= 0 || previewKind >= 0 ||
         merchantOpen || familyFor >= 0 || cardFor >= 0
     private val TAB_HELP = mapOf(
         Tab.GARDEN to listOf("Your mushrooms live here.", "Tap one to feed it, dress it up, give it a job or send it exploring. Hold to hug, rub to pet, drag to move.",
@@ -8212,7 +8427,7 @@ class GameView(context: Context) : View(context) {
     )
 
     private fun maybeShowHelp() {
-        if (tutStep >= 0 || popup != null || qaMode || offerPack >= 0 || lab.pendingOffline > 0) return
+        if (tutStep >= 0 || popup != null || qaMode || offerPack >= 0 || lab.pendingOffline > 0 || sceneOn()) return
         if (!prefs.getBoolean("help_" + tab.name, false)) { prefs.edit().putBoolean("help_" + tab.name, true).apply(); helpTab = tab }
     }
 

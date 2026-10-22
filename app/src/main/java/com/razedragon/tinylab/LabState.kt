@@ -378,7 +378,7 @@ class LabState(context: Context) {
 
     // ---------- Event quest ----------
 
-    private fun eventYear(): Int {
+    fun eventYear(): Int {
         val c = Calendar.getInstance()
         return if (c.get(Calendar.MONTH) == Calendar.JANUARY) c.get(Calendar.YEAR) - 1 else c.get(Calendar.YEAR)
     }
