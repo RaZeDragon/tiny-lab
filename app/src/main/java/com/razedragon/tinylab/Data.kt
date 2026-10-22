@@ -248,7 +248,7 @@ object Data {
         /* 34 */ Species("Storm Cap", Color.rgb(50, 70, 140), Color.rgb(210, 220, 240), Color.rgb(255, 230, 80), 0, 4, 3,
             "Water, fire and metal in one flask", glow = true),
         /* 35 */ Species("Rainbow Puff", Color.rgb(255, 190, 230), Color.rgb(255, 245, 250), Color.rgb(150, 230, 255), 1, 4, 4,
-            "Water, crystal and moondew together", glow = true),
+            "Water, crystal and moondew together", glow = true, deco = D_RAINBOW),
         /* 36 */ Species("Ancient Morel", Color.rgb(170, 130, 70), Color.rgb(230, 210, 170), Color.rgb(255, 210, 90), 2, 4, 3,
             "Earth, metal and gold together"),
         /* 37 */ Species("Lava Horn", Color.rgb(255, 90, 30), Color.rgb(120, 60, 50), Color.rgb(255, 220, 90), 4, 4, 2,
@@ -664,7 +664,7 @@ object Data {
         Upgrade("Dust Collector", "Collects spore dust for you", intArrayOf(800)),
         Upgrade("Rest Nook", "Shorter rest after crossbreeding", intArrayOf(300, 800)),
         Upgrade("Trail Boots", "Expeditions finish 25% faster", intArrayOf(650)),
-        Upgrade("Glow Cave", "A second garden: glowing shrooms grow 50% faster", intArrayOf(3000)),
+        Upgrade("Glow Cave", "A second garden with 5 more spots: glowing shrooms grow 50% faster", intArrayOf(3000)),
     )
 
     // ---------- Pets ----------
@@ -722,7 +722,7 @@ object Data {
         Sticker("🐌", "Pet Pal", "Bring a pet along", Color.rgb(170, 220, 130)),
         Sticker("🌱", "Green Thumb", "Harvest a plot", Color.rgb(120, 210, 120)),
         Sticker("🍰", "Little Chef", "Cook something in the Kitchen", Color.rgb(255, 200, 120)),
-        Sticker("🪲", "Good Customer", "Buy from the traveling merchant", Color.rgb(200, 160, 110)),
+        Sticker("🎒", "Good Customer", "Buy from the traveling merchant", Color.rgb(200, 160, 110)),
         Sticker("🎃", "Ghost Friend", "Finish the Shroomoween quest", Color.rgb(255, 150, 60)),
         Sticker("❄", "Snow Helper", "Finish the Frosty Festival quest", Color.rgb(170, 220, 255)),
         Sticker("🌸", "Party Host", "Finish the Spring Bloom quest", Color.rgb(255, 180, 210)),
@@ -745,7 +745,7 @@ object Data {
         Pack("spores_small", "Spore Pouch", "$0.99", "400 spore dust", Reward(dust = 400), false, Color.rgb(255, 214, 110)),
         Pack("spores_medium", "Spore Sack", "$2.99", "1,300 spore dust", Reward(dust = 1300), false, Color.rgb(255, 190, 90)),
         Pack("spores_large", "Spore Chest", "$4.99", "2,400 spore dust · best value", Reward(dust = 2400), false, Color.rgb(255, 160, 70)),
-        Pack("starter", "Starter Pack", "$1.99", "500 ✦, Sunny Day theme, Lantern, Flower Patch, Bench, Bow, Scarf + exclusive Star Fountain & Sprout Crown",
+        Pack("starter", "Starter Pack", "$1.99", "500 ✦, Sunny Day theme, Lantern, Flower Patch, Bench, Bow, Scarf, 3 Sugar Cubes + exclusive Star Fountain & Sprout Crown",
             Reward(dust = 500, themes = intArrayOf(1), decor = intArrayOf(0, 1, 7, STAR_FOUNTAIN), acc = intArrayOf(1, 11, SPROUT_CROWN), foods = intArrayOf(2, 2, 2)),
             true, Color.rgb(140, 220, 160)),
         Pack("event_boost", "Event Boost", "$2.99", "600 ✦, 10 of each event ingredient, the event theme, all event decor + exclusive Mini Dragon pet",

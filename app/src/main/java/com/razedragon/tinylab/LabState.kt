@@ -204,6 +204,8 @@ class LabState(context: Context) {
 
     init {
         load()
+        // no two of Professor Spore's requests ask for the same thing
+        for (i in requests.indices) if (requests.take(i).any { it.type == requests[i].type }) requests[i] = newRequest(i)
         while (requests.size < 3) requests.add(newRequest())
     }
 
@@ -211,7 +213,7 @@ class LabState(context: Context) {
     fun gardenSize() = 10 + 5 * upgrades[Data.UP_GARDEN]
     fun caveOpen() = upgrades[Data.UP_CAVE] > 0
     /** Total room for mushrooms: the meadow plus the cave. */
-    fun capacity() = gardenSize() + (if (caveOpen()) 6 else 0)
+    fun capacity() = gardenSize() + (if (caveOpen()) 5 else 0)   // always steps of 5
     fun petAvailable(p: Int) = petOwned[p] - garden.count { it.pet == p }
     fun jobHolder(job: Int) = garden.firstOrNull { it.job == job && !it.away() }
 
@@ -651,20 +653,25 @@ class LabState(context: Context) {
     /** Event ingredients fade away once their event is over. */
     fun expireEventIngredients() {
         val ev = Data.currentEvent()
-        val gone = ArrayList<String>()
+        val gone = LinkedHashSet<Int>()
         for (i in ingredients.indices) {
             val e = Data.INGREDIENTS[i].event
-            if (e != 0 && e != ev && ingredients[i] > 0) { ingredients[i] = 0; gone.add(Data.INGREDIENTS[i].name) }
+            if (e != 0 && e != ev && ingredients[i] > 0) { ingredients[i] = 0; gone.add(e) }
         }
         if (gone.isNotEmpty()) {
-            val msg = "${gone.joinToString(" and ")} faded away until next year"
+            val names = gone.map { Data.EVENTS[it] }
+            val list = if (names.size == 1) names[0] else names.dropLast(1).joinToString(", ") + " and " + names.last()
+            val msg = "Your $list ingredients faded away until next year"
             events.add(msg); addDiary(msg)
         }
     }
 
-    fun newRequest(): Request {
+    /** A new request whose kind differs from the others on the board (skipping slot [replacing]). */
+    fun newRequest(replacing: Int = -1): Request {
         val known = discovered.indices.filter { discovered[it] && Data.SPECIES[it].tier == 1 && !Data.offSeason(it) }
-        val type = if (known.isEmpty()) listOf(2, 3).random() else Random.nextInt(8)
+        val taken = requests.filterIndexed { k, _ -> k != replacing }.map { it.type }.toSet()
+        val pool = (if (known.isEmpty()) listOf(1, 2, 3, 6) else (0..7).toList())
+        val type = pool.filter { it !in taken }.ifEmpty { pool }.random()
         return when (type) {
             0 -> Request(0, 1, known.random(), 0, 70)
             1 -> Request(1, 1 + Random.nextInt(2), 0, stat(1), 95)
@@ -698,7 +705,7 @@ class LabState(context: Context) {
     fun claimRequest(i: Int): Int {
         val r = requests[i]
         dust += r.reward
-        requests[i] = newRequest()
+        requests[i] = newRequest(i)
         return r.reward
     }
 
