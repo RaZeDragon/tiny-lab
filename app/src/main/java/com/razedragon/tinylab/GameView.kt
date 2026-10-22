@@ -3861,7 +3861,7 @@ class GameView(context: Context) : View(context) {
 
     /** Draws the face art centred on the eye line. Returns false if the picture isn't available. */
     private fun drawFaceArt(c: Canvas, key: String, fx: Float, faceY: Float, s: Float, sleeping: Boolean): Boolean {
-        val k = 0.22f * s / 228f                 // the art's eyes are 228px apart; ours are 0.22 of the size
+        val k = 0.25f * s / 228f                 // the art's eyes are 228px apart; drawn a touch bigger than the old vector eyes
         val d = 512f * k
         val cy = faceY + 10f * k                 // the art's eye line sits 10px above its centre
         if (key == "dizzy") {
