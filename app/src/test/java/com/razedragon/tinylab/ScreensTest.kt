@@ -386,6 +386,25 @@ class ScreensTest {
         reset()
     }
 
+    @Test fun faceReactions() {
+        reset()
+        val g = ready(0)
+        val lab = g.testLab()
+        val a = lab.newShroom(1, 200f, false).apply { gx = 0.3f; gz = 0.5f }
+        val b = lab.newShroom(2, 200f, false).apply { gx = 0.7f; gz = 0.5f }
+        lab.garden.add(a); lab.garden.add(b)
+        for (sh in lab.garden) { sh.act = 0; sh.sleeping = false; sh.awakeUntil = Long.MAX_VALUE; sh.hunger = 90f; sh.happy = 90f }
+        g.testFrame(0.1f)
+        a.idleAnim = 0; a.expr = 0
+        assertTrue(g.testFaceOf(a) in setOf("happy", "calm", "blink"))
+        repeat(6) { g.testPoke(a) }
+        assertEquals("grumpy", g.testFaceOf(a))
+        g.testToss(b); assertEquals("giggle", g.testFaceOf(b))
+        g.testToss(b); assertEquals("shout", g.testFaceOf(b))
+        g.testFrame(0.15f); save(g.testRender(), "face_reactions")
+        reset()
+    }
+
     @Test fun merchantStickersCodes() {
         reset(); Data.forceMerchant = true
         val g = ready(0)

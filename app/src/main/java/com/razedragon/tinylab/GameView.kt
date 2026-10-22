@@ -113,6 +113,13 @@ class GameView(context: Context) : View(context) {
         private const val E_CHOMP = 5
         private const val E_GIGGLE = 6
         private const val E_BONK = 7
+        private const val E_GRUMPY = 8
+        private const val E_WINK = 9
+        private const val E_CURIOUS = 10
+        private const val E_NERVOUS = 11
+        private const val E_GRIN = 12
+        private const val E_SHOUT = 13
+        private const val E_STARE = 14
         private const val STIR_GOAL = (2 * Math.PI * 6).toFloat()   // six full circles = perfect brew
         private const val MAX_PLACED = 20
         private const val REST_MS = 20 * 60 * 1000L
@@ -480,7 +487,7 @@ class GameView(context: Context) : View(context) {
         burst(x, y - shroomSize(s) * 0.3f, food.color, 12, P_SPARK)
         s.jiggle = 0.8f
         addBond(s, 1f)
-        express(s, if (fav) E_HEART else E_BLISS, if (fav) 2.5f else 1.2f)
+        express(s, if (fav) E_HEART else E_CHOMP, if (fav) 2.5f else 1.2f)
         if (fav) {
             toast("Yum! That's its favorite food!", ACCENT)
             burst(x, y - shroomSize(s), ACCENT, 6, P_HEART)
@@ -1728,6 +1735,9 @@ class GameView(context: Context) : View(context) {
     }
     internal fun testTutStep() = tutStep
     internal var testFace: String? = null
+    internal fun testPoke(s: Shroom) = poke(s)
+    internal fun testToss(s: Shroom) = toss(s, 0f, -900f * dp)
+    internal fun testFaceOf(s: Shroom) = pickFace(s.sleeping, s.expr, s.idleAnim, false, s.mood(), s.held, s)
     internal fun testSkipIntro() { splashT = 0f; holdSplash = false; tutStep = -1; prefs.edit().putInt("tutStep", -1).apply(); toasts.clear() }
     internal fun testProfSay(msg: String) = professorSay(msg, 30f)
     internal fun testSelect(id: Long) { selected = id; panelAnim = 1f }
@@ -1784,6 +1794,7 @@ class GameView(context: Context) : View(context) {
             if (merchantHere() && prefs.getInt("merchantDay", 0) != LabState.dayKey()) {
                 prefs.edit().putInt("merchantDay", LabState.dayKey()).apply()
                 toast("🎒 A traveling merchant is visiting the garden today!", MINT)
+                for (sh in local()) if (!sh.sleeping) express(sh, E_CURIOUS, 3f)
             }
             updateWants(System.currentTimeMillis())
             updateAmbience()
@@ -2180,7 +2191,7 @@ class GameView(context: Context) : View(context) {
         val bfly = critters.firstOrNull { it.type == 0 && it.state == 0 && it.gx in 0.05f..(LabState.WORLD - 0.05f) && abs(it.gx - s.gx) < 0.5f }
         if (bfly != null && Random.nextFloat() < 0.15f) {
             s.tx = bfly.gx; s.tz = bfly.gz.coerceIn(0f, 1f)
-            express(s, E_SPARKLE, 2f)
+            express(s, E_CURIOUS, 2f)
             return
         }
         // jump in puddles on rainy days
@@ -3529,7 +3540,10 @@ class GameView(context: Context) : View(context) {
         }, w / 2, card.top + 40f * dp, text)
         text.color = Color.WHITE
         val pop = min(1f, since / 0.25f)
+        // a fizzled rare recipe gets a doubtful look, a perfect stir a wink, a shiny pure love
+        forcedFace = when { p.missed >= 0 -> "skeptical"; p.shiny -> "heart"; p.quality >= 1f -> "wink"; else -> "giggle" }
         drawShroom(c, p.species, w / 2, h * 0.52f, size * (0.8f + 0.2f * pop), 0, sin(t * 2.5f), (t % 3f) < 0.15f, false, shiny = p.shiny, who = shroom(p.shroomId))
+        forcedFace = null
         text.textSize = 26f * dp
         val baby = shroom(p.shroomId)
         c.drawText((if (p.shiny) "Shiny " else "") + sp.name, w / 2, h * 0.59f, text)
@@ -3822,6 +3836,9 @@ class GameView(context: Context) : View(context) {
      */
     // ---------- Faces: drawn art, one picture per feeling ----------
     private val faceBmps = HashMap<String, android.graphics.Bitmap?>()
+    private var forcedFace: String? = null                    // set around a single drawShroom call
+    private val pokeTimes = HashMap<Long, ArrayList<Float>>()   // recent pokes per mushroom
+    private val lastToss = HashMap<Long, Float>()
     private val facePaint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
 
     private fun faceBmp(k: String): android.graphics.Bitmap? {
@@ -3834,25 +3851,34 @@ class GameView(context: Context) : View(context) {
     /** Which face fits right now. Reactions come first, then how the mushroom is feeling. */
     private fun pickFace(sleeping: Boolean, ex: Int, ia: Int, blink: Boolean, mood: Int, held: Boolean, who: Shroom?): String {
         testFace?.let { return it }
+        forcedFace?.let { return it }
         val now = System.currentTimeMillis()
         return when {
             sleeping -> "sleep"
             ex == E_DIZZY -> "dizzy"
             ex == E_BONK -> "bonk"
             held -> "nervous"
-            who != null && who.airborne() -> "shout"
+            ex == E_SHOUT -> "shout"
+            ex == E_GRUMPY -> "grumpy"
+            ex == E_NERVOUS -> "nervous"
+            ex == E_CURIOUS -> "curious"
+            ex == E_STARE -> "skeptical"
+            ex == E_WINK -> "wink"
+            ex == E_GRIN -> "grin"
+            who != null && who.id == selected && confirmRelease -> "sad"      // "you're letting me go?"
             ex == E_HEART -> "heart"
             ex == E_CHOMP -> "chomp"
             ex == E_GIGGLE -> "giggle"
             ex == E_BLISS -> "bliss"
             ex == E_SPARKLE -> "wink"
             ia == 1 -> "sleep"                                   // a big yawn
-            who != null && (who.act == ACT_JAM || who.act == ACT_DANCE) -> "grin"
+            who != null && who.act in intArrayOf(ACT_JAM, ACT_DANCE, ACT_SWING, ACT_SLIDE, ACT_BOUNCE) -> "grin"
+            who != null && who.act == ACT_CAMPFIRE -> "bliss"
             ia == 4 -> "curious"                                 // looking around
             who != null && who.hunger < 10f -> "starving"
             mood == 2 -> "hungry"
             mood == 3 -> "sad"
-            who != null && who.awakeUntil - now > 100_000L -> "grumpy"   // just woken up at night
+            who != null && who.awakeUntil - now in 100_001L..120_000L -> "grumpy"   // the first 20s after being woken at night
             blink -> "blink"
             mood == 1 -> if (who?.trait == 3) "skeptical" else "okay"
             else -> if (who?.trait == 2) "calm" else "happy"
@@ -7343,6 +7369,15 @@ class GameView(context: Context) : View(context) {
         s.lastPoke = t
         if (!double && Random.nextFloat() < 0.5f) { s.thought = thoughtFor(s); s.thoughtT = 3.4f }
         s.jiggle = 1f
+        val pokes = pokeTimes.getOrPut(s.id) { ArrayList() }
+        pokes.add(t); pokes.removeAll { t - it > 2.5f }
+        if (pokes.size >= 6) {   // too much poking!
+            express(s, E_GRUMPY, 2.2f)
+            s.thought = listOf("Hey! That's enough poking!", "Okay, okay, I'm awake!", "Hmph.").random(); s.thoughtT = 2.5f
+            pokes.clear()
+            sound.play(Fx.DENIED, 0.35f, voicePitch(s))
+            return
+        }
         express(s, E_GIGGLE, 0.8f)
         sound.play(Fx.GIGGLE, 0.7f, voicePitch(s))
         addBond(s, 0.2f)
@@ -7392,7 +7427,10 @@ class GameView(context: Context) : View(context) {
         s.airH = 1f
         s.bounces = 0
         s.act = 0; s.pendingAct = 0; s.moving = false
-        express(s, E_GIGGLE, 2f)
+        val again = t - (lastToss[s.id] ?: -99f) < 6f
+        lastToss[s.id] = t
+        if (again) { express(s, E_SHOUT, 2f); s.thought = listOf("Not again!", "Waaah!", "Put me down!").random(); s.thoughtT = 2f }
+        else express(s, E_GIGGLE, 2f)
         sound.play(Fx.WHEE, 0.8f, voicePitch(s))
         if (s.want == 3) fulfillWant(s)
     }
