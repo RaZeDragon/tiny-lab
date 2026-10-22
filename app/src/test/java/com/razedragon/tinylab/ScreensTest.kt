@@ -340,6 +340,20 @@ class ScreensTest {
         g.testTutorial(6)
         g.testFrame(0.4f); save(g.testRender(), "tut_feed_button")
         assertTrue(g.testTap("feed")); g.testFrame(0.4f); save(g.testRender(), "tut_feed_food")
+        // after the first feed, the tour walks through every tab
+        lab.feeds += 1; g.testFrame(0.3f)
+        assertEquals(9, g.testTutStep()); save(g.testRender(), "tut_tour_garden")
+        val names = listOf("lab", "dex", "journal", "shop")
+        for ((k, nm) in names.withIndex()) {
+            assertTrue(g.testTap("tut_next")); g.testFrame(0.3f)
+            assertEquals(10 + 2 * k, g.testTutStep())
+            if (k == 0) save(g.testRender(), "tut_tour_go_lab")
+            assertTrue(g.testTap("nav${k + 1}")); g.testFrame(0.3f)
+            assertEquals(11 + 2 * k, g.testTutStep()); save(g.testRender(), "tut_tour_$nm")
+        }
+        assertTrue(g.testTap("tut_next")); g.testFrame(0.3f)
+        assertEquals(7, g.testTutStep()); save(g.testRender(), "tut_done")
+        assertTrue(g.testTap("tut_next")); assertEquals(-1, g.testTutStep())
         // tab guides
         val g2 = ready(0)
         for (tb in listOf("GARDEN", "LAB", "DEX", "JOURNAL", "SHOP")) { g2.testHelp(tb); g2.testFrame(0.2f); save(g2.testRender(), "help_" + tb.lowercase()); assertTrue(g2.testTap("help_ok")) }

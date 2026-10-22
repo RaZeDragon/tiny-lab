@@ -102,6 +102,8 @@ class GameView(context: Context) : View(context) {
         private const val T_REVEAL = 5
         private const val T_FEED = 6
         private const val T_DONE = 7
+        // After the first feed the tour visits every tab: 8 + 2k = "tap this tab", 9 + 2k = what it's for
+        private const val T_TOUR = 8
 
         // Face expressions
         private const val E_HEART = 1
@@ -621,7 +623,7 @@ class GameView(context: Context) : View(context) {
             })
             l.add(Button("c_close", RectF(r.right - bw, r.bottom + 14f * dp, r.right, r.bottom + 62f * dp), "CLOSE") { cardFor = -1 })
         }
-        if (tutStep == T_WELCOME || tutStep == T_DONE) return ArrayList<Button>().also { tutorialButtons(it, w, h) }
+        if (tutModal()) return ArrayList<Button>().also { tutorialButtons(it, w, h) }
         val list = buildButtonsInner(w, h)
         if (tutStep >= 0 && !photoMode) tutorialButtons(list, w, h)
         return list
@@ -1417,7 +1419,7 @@ class GameView(context: Context) : View(context) {
                 pointerDown = true; downT = t; petting = false; hugDone = false
                 revs = 0; lastDxSign = 0; lastMoveX = x; petAcc = 0f
                 prevX = x; prevY = y; prevT = System.nanoTime(); velX = 0f; velY = 0f
-                if (settingsOpen || tutStep == T_WELCOME || tutStep == T_DONE || overlayOpen()) {
+                if (settingsOpen || tutModal() || overlayOpen()) {
                     pressedId = buttons.lastOrNull { hits(it, x, y) }?.id
                     return true
                 }
@@ -1428,7 +1430,9 @@ class GameView(context: Context) : View(context) {
                     pressedId = null
                     return true
                 }
-                val b = buttons.lastOrNull { hits(it, x, y) }
+                // a mushroom standing in the veggie patch wins over the plot underneath it
+                val onShroom = tab == Tab.GARDEN && !decorating && shroomAt(x, y) != null
+                val b = buttons.lastOrNull { hits(it, x, y) && !(onShroom && it.id.startsWith("plot")) }
                 pressedId = b?.id
                 val id = b?.id ?: ""
                 if (popup == null && brewing <= 0f) {
@@ -1721,6 +1725,7 @@ class GameView(context: Context) : View(context) {
         buttons = buildButtons()
         return true
     }
+    internal fun testTutStep() = tutStep
     internal fun testSkipIntro() { splashT = 0f; holdSplash = false; tutStep = -1; prefs.edit().putInt("tutStep", -1).apply(); toasts.clear() }
     internal fun testProfSay(msg: String) = professorSay(msg, 30f)
     internal fun testSelect(id: Long) { selected = id; panelAnim = 1f }
@@ -5511,46 +5516,75 @@ class GameView(context: Context) : View(context) {
         c.drawText("★ = only from this pack", r.centerX(), r.bottom + 2f * dp, text); text.color = Color.WHITE
     }
 
-    // ---------- Pack offers: shown once, then a 30-minute button on the garden ----------
+    // ---------- Pack offers: a pop-up up to twice a day, then a 2-hour button on the garden ----------
 
     private var offerPack = -1
     private var sessionStart = System.currentTimeMillis()
-    private val OFFER_MS = 30 * 60_000L
+    private val OFFER_MS = 2 * 60 * 60_000L          // the side button stays this long
+    private val OFFERS_PER_DAY = 2
+    private val OFFER_GAP_MS = 5 * 60 * 60_000L      // at least this long between pop-ups
 
     private fun offerKey(pk: Pack) = "offer_" + pk.id + (if (pk.eventOnly) "_" + eventNow() + "_" + java.util.Calendar.getInstance().get(java.util.Calendar.YEAR) else "")
 
+    /** Has today's budget of pop-ups (2, a few hours apart) got room for one more? */
+    private fun offerDue(now: Long): Boolean {
+        val day = LabState.dayKey()
+        val count = if (prefs.getInt("offerDay", -1) == day) prefs.getInt("offerCount", 0) else 0
+        return count < OFFERS_PER_DAY && now - prefs.getLong("offerLast", 0L) > OFFER_GAP_MS
+    }
+
     private fun showOffer(i: Int) {
+        if (i < 0) return
         val pk = Data.PACKS[i]
         if (lab.packOwned(pk) || offerPack >= 0 || popup != null || tutStep >= 0 || qaMode) return
-        val key = offerKey(pk)
-        if (prefs.getBoolean(key + "_shown", false)) return
-        prefs.edit().putBoolean(key + "_shown", true).apply()
+        val now = System.currentTimeMillis()
+        if (!offerDue(now)) return
+        val day = LabState.dayKey()
+        val count = if (prefs.getInt("offerDay", -1) == day) prefs.getInt("offerCount", 0) else 0
+        prefs.edit().putInt("offerDay", day).putInt("offerCount", count + 1).putLong("offerLast", now).apply()
         offerPack = i
         sound.play(Fx.CHIRP, 0.6f, 1.2f)
     }
 
+    /** Closing the pop-up parks the offer as a button on the side of the garden for 2 hours. */
     private fun closeOffer() {
         val i = offerPack; offerPack = -1
         if (i < 0) return
-        val key = offerKey(Data.PACKS[i])
-        if (prefs.getLong(key + "_until", 0L) == 0L) prefs.edit().putLong(key + "_until", System.currentTimeMillis() + OFFER_MS).apply()
+        val key = offerKey(Data.PACKS[i]) + "_until"
+        val now = System.currentTimeMillis()
+        if (prefs.getLong(key, 0L) <= now) prefs.edit().putLong(key, now + OFFER_MS).apply()   // reopening from the side button keeps its timer
     }
 
-    /** Offers appear at friendly moments, each only once. */
-    private fun checkOffers() {
-        if (tab != Tab.GARDEN || offerPack >= 0 || popup != null || tutStep >= 0 || settingsOpen || helpTab != null || lab.pendingOffline > 0) return
-        val now = System.currentTimeMillis()
-        val starter = Data.PACKS.indexOfFirst { it.id == "starter" }
+    /** Which pack to remind about next: the event boost during an event, the starter pack until it's bought,
+     *  otherwise the spore packs take turns. */
+    private fun nextOffer(): Int {
+        val ev = eventNow()
         val boost = Data.PACKS.indexOfFirst { it.id == "event_boost" }
-        if (eventNow() > 0 && lab.brewed >= 2 && now - sessionStart > 60_000L) showOffer(boost)
-        if (offerPack < 0 && lab.brewed >= 3 && now - sessionStart > 120_000L) showOffer(starter)
+        val starter = Data.PACKS.indexOfFirst { it.id == "starter" }
+        val spores = Data.PACKS.indices.filter { !Data.PACKS[it].oneTime && !Data.PACKS[it].eventOnly }
+        val rot = prefs.getInt("offerRot", 0)
+        prefs.edit().putInt("offerRot", rot + 1).apply()
+        val pool = ArrayList<Int>()
+        if (ev > 0 && boost >= 0 && !lab.packOwned(Data.PACKS[boost])) pool.add(boost)
+        if (starter >= 0 && !lab.packOwned(Data.PACKS[starter])) pool.add(starter)
+        if (spores.isNotEmpty()) pool.add(spores[rot % spores.size])
+        return pool.getOrElse(rot % pool.size.coerceAtLeast(1)) { -1 }
+    }
+
+    /** Offers pop up at a calm moment in the garden, up to twice a day (fresh installs included, once the tutorial is done). */
+    private fun checkOffers() {
+        if (tab != Tab.GARDEN || offerPack >= 0 || popup != null || tutStep >= 0 || settingsOpen || helpTab != null || lab.pendingOffline > 0 || qaMode) return
+        if (mini > 0 || selected >= 0 || decorating || dragging || lab.garden.isEmpty()) return
+        val now = System.currentTimeMillis()
+        if (now - sessionStart < 45_000L || !offerDue(now)) return
+        showOffer(nextOffer())
     }
 
     /** Called whenever something costs more dust than you have. */
     private fun notEnoughDust() {
         toast("Not enough spore dust ✦", ACCENT)
         sound.play(Fx.DENIED)
-        if (lab.brewed >= 3) showOffer(Data.PACKS.indexOfFirst { it.id == "spores_medium" })
+        showOffer(Data.PACKS.indexOfFirst { it.id == "spores_medium" })
     }
 
     private fun offerCard(w: Float, h: Float) = RectF(24f * dp, h * 0.13f, w - 24f * dp, h * 0.13f + 510f * dp)
@@ -5567,7 +5601,7 @@ class GameView(context: Context) : View(context) {
         c.restore()
         drawGiftBox(c, w / 2, card.top + 160f * dp + sin(t * 3f) * 4f * dp, 90f * dp, pk.color)
         text.textSize = 13f * dp; text.color = DUST
-        c.drawText(if (pk.eventOnly) "${Data.EVENT_ICONS[eventNow()]} Limited event offer" else if (pk.oneTime) "✨ One-time offer" else "✨ Special offer", w / 2, card.top + 34f * dp, text)
+        c.drawText(if (pk.eventOnly) "${Data.EVENT_ICONS[eventNow()]} Limited event offer" else if (pk.oneTime) "✨ One per player" else "✨ Special offer", w / 2, card.top + 34f * dp, text)
         text.textSize = 26f * dp; text.color = Color.WHITE
         c.drawText(pk.name, w / 2, card.top + 210f * dp, text)
         text.textSize = 13f * dp; text.color = Color.argb(225, 255, 255, 255)
@@ -5590,7 +5624,8 @@ class GameView(context: Context) : View(context) {
                 stroke.color = pk.color; stroke.strokeWidth = 2f * dp; c.drawRoundRect(rr, 14f * dp, 14f * dp, stroke)
                 drawGiftBox(c, rr.centerX(), rr.top + 36f * dp + sin(t * 4f) * 2f * dp, 28f * dp, pk.color)
                 text.textSize = 10f * dp; text.color = DUST
-                c.drawText("%d:%02d".format(left / 60000, (left / 1000) % 60), rr.centerX(), rr.bottom - 6f * dp, text)
+                val sec = left / 1000
+                c.drawText(if (sec >= 3600) "%d:%02d:%02d".format(sec / 3600, (sec / 60) % 60, sec % 60) else "%d:%02d".format(sec / 60, sec % 60), rr.centerX(), rr.bottom - 6f * dp, text)
                 text.color = Color.WHITE
             }) { offerPack = i })
             y += 70f * dp
@@ -7786,9 +7821,22 @@ class GameView(context: Context) : View(context) {
             T_BREW -> if (brewing > 0f) setTut(T_STIR)
             T_STIR -> if (popup != null) setTut(T_REVEAL)
             T_REVEAL -> if (popup == null && tab == Tab.GARDEN && selected >= 0) setTut(T_FEED)
-            T_FEED -> if (lab.feeds > tutFeedBase) setTut(T_DONE)
+            T_FEED -> if (lab.feeds > tutFeedBase) {
+                selected = -1; feeding = false; styling = false; moreOpen = false
+                setTut(T_TOUR + 1)   // first stop of the tour: the garden itself
+            }
+            else -> {
+                val k = tourIdx()
+                if (k >= 0 && !tourInfo() && tab == TOUR[k]) setTut(tutStep + 1)
+            }
         }
     }
+
+    private val TOUR = arrayOf(Tab.GARDEN, Tab.LAB, Tab.DEX, Tab.JOURNAL, Tab.SHOP)
+    private fun tourIdx() = if (tutStep >= T_TOUR) ((tutStep - T_TOUR) / 2).coerceAtMost(TOUR.size - 1) else -1
+    private fun tourInfo() = tutStep >= T_TOUR && (tutStep - T_TOUR) % 2 == 1
+    /** Steps that wait on a NEXT button (everything else waits for the player to do something). */
+    private fun tutModal() = tutStep == T_WELCOME || tutStep == T_DONE || tourInfo()
 
     private fun tutText(): String = when (tutStep) {
         T_WELCOME -> "Welcome to Shroomology! 🍄 You're the new mushroom scientist. Let's grow your very first mushroom together."
@@ -7802,7 +7850,12 @@ class GameView(context: Context) : View(context) {
             feeding -> "Pick a food! The one with a ❤ is its favorite. Mushrooms grow when they're fed and happy."
             else -> "Tap FEED to give it a snack."
         }
-        else -> "You're a real Shroomologist now! Grown mushrooms make spore dust ✦, can crossbreed in the Lab and go exploring. Check the Journal ⭐ for daily gifts and requests."
+        T_DONE -> "You're a real Shroomologist now! Grown mushrooms make spore dust ✦, crossbreed and go exploring. Tap ? at the top of any screen to see these tips again."
+        else -> {
+            val k = tourIdx()
+            if (k < 0) "" else if (tourInfo()) (TAB_HELP[TOUR[k]] ?: emptyList()).joinToString(" ")
+            else "Now let's look around. Tap ${TOUR[k].name} down below."
+        }
     }
 
     /** Where the spotlight goes for the current step (null = no spotlight). */
@@ -7824,7 +7877,7 @@ class GameView(context: Context) : View(context) {
             feeding -> shroom(selected)?.let { btnSpot("food${Data.SPECIES[it.species].favFood}") }
             else -> btnSpot("feed")
         }
-        else -> null
+        else -> if (tourIdx() >= 0 && !tourInfo()) btnSpot("nav" + TOUR[tourIdx()].ordinal) else null
     }
 
     // ---------- A short guide for each tab ----------
@@ -7942,13 +7995,13 @@ class GameView(context: Context) : View(context) {
     private fun tutCardRect(w: Float, h: Float): RectF {
         text.textSize = 15f * dp
         val lines = wrap(tutText(), w - 120f * dp)
-        val hasNext = tutStep == T_WELCOME || tutStep == T_DONE
+        val hasNext = tutModal()
         val hasSkip = tutStep != T_DONE
         val ch = 44f * dp + lines.size * 21f * dp + (if (hasNext) 52f * dp else 0f) + (if (hasSkip) 30f * dp else 0f)
         val spot = tutSpot(w, h)
         val atTop = spot != null && spot.centerY() > h * 0.45f || tutStep == T_REVEAL
         val y = when {
-            tutStep == T_WELCOME || tutStep == T_DONE -> h * 0.3f
+            tutModal() -> max(topBar + 10f * dp, min(h * 0.3f, navTop - ch - 20f * dp))
             atTop -> topBar + 10f * dp
             else -> navTop - ch - 90f * dp
         }
@@ -7957,12 +8010,19 @@ class GameView(context: Context) : View(context) {
 
     private fun tutorialButtons(list: ArrayList<Button>, w: Float, h: Float) {
         val r = tutCardRect(w, h)
-        if (tutStep == T_WELCOME || tutStep == T_DONE) {
+        if (tutModal()) {
             val lift = if (tutStep != T_DONE) 30f * dp else 0f
             list.add(Button("tut_next", RectF(r.centerX() - 80f * dp, r.bottom - 52f * dp - lift, r.centerX() + 80f * dp, r.bottom - 12f * dp - lift),
                 if (tutStep == T_DONE) "LET'S GO!" else "NEXT", STYLE_PRIMARY) {
-                if (tutStep == T_DONE) setTut(-1)
-                else setTut(if (gardenFull()) T_FEED else T_GO_LAB)
+                val k = tourIdx()
+                when {
+                    tutStep == T_DONE -> setTut(-1)
+                    k >= 0 -> {   // finished explaining this tab: on to the next one, or done
+                        prefs.edit().putBoolean("help_" + TOUR[k].name, true).apply()
+                        if (k + 1 < TOUR.size) setTut(T_TOUR + 2 * (k + 1)) else { tab = Tab.GARDEN; setTut(T_DONE) }
+                    }
+                    else -> setTut(if (gardenFull()) T_FEED else T_GO_LAB)
+                }
             })
         }
         if (tutStep != T_DONE) {
@@ -7976,7 +8036,7 @@ class GameView(context: Context) : View(context) {
     private fun drawTutorial(c: Canvas, w: Float, h: Float) {
         if (tutStep < 0 || settingsOpen || photoMode) return
         val spot = tutSpot(w, h)
-        val blocking = tutStep == T_WELCOME || tutStep == T_DONE
+        val blocking = tutModal()
         // dim everything except the spotlight
         path.reset()
         path.fillType = Path.FillType.EVEN_ODD
