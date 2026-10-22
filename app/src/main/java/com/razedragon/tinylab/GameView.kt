@@ -7374,7 +7374,7 @@ class GameView(context: Context) : View(context) {
 
     private fun sceneButtons(list: ArrayList<Button>, w: Float, h: Float) {
         list.add(Button("scene_tap", RectF(0f, 0f, w, h), "", STYLE_GHOST, custom = { _, _ -> }) { sceneNext() })
-        list.add(Button("scene_skip", RectF(w - 96f * dp, 14f * dp, w - 14f * dp, 48f * dp), "Skip", STYLE_NORMAL) {
+        list.add(Button("scene_skip", RectF(w - 96f * dp, 18f * dp, w - 14f * dp, 52f * dp), "Skip", STYLE_NORMAL) {
             sceneChapter = -1; markDirty()
         })
         val l = sceneLine() ?: return
@@ -7399,7 +7399,7 @@ class GameView(context: Context) : View(context) {
         val evC = Data.EVENT_COLORS[ev]
         val fade = min(1f, sceneAge / 0.4f)
         // a moody backdrop in the event's colors
-        fill.color = Color.argb((215 * fade).toInt(), 12, 8, 26); c.drawRect(0f, 0f, w, h, fill)
+        fill.color = Color.argb((246 * fade).toInt(), 14, 9, 30); c.drawRect(0f, 0f, w, h, fill)
         fill.shader = RadialGradient(w * 0.6f, h * 0.42f, w * 0.85f,
             Color.argb((110 * fade).toInt(), Color.red(evC), Color.green(evC), Color.blue(evC)), Color.argb(0, 0, 0, 0), Shader.TileMode.CLAMP)
         c.drawRect(0f, 0f, w, h, fill); fill.shader = null
@@ -7417,13 +7417,18 @@ class GameView(context: Context) : View(context) {
         val q = Data.QUESTS[ev]
         // chapter header
         text.textSize = 13f * dp; text.color = Color.argb((230 * fade).toInt(), Color.red(evC), Color.green(evC), Color.blue(evC))
-        c.drawText("${Data.EVENT_ICONS[ev]}  ${q.title.uppercase()}  ·  ${if (sceneChapter == 3) "THE END" else "CHAPTER ${sceneChapter + 1}"}", w / 2, 36f * dp, text)
+        c.drawText(if (sceneChapter == 3) "THE END" else "CHAPTER ${sceneChapter + 1}", w / 2, 92f * dp, text)
+        text.textSize = 24f * dp; text.color = Color.argb((255 * fade).toInt(), 255, 255, 255)
+        c.drawText("${Data.EVENT_ICONS[ev]} ${q.title}", w / 2, 122f * dp, text)
         text.color = Color.WHITE
 
         val l = sceneLine()
         val speaker = l?.who ?: 2
         val box = sceneBox(w, h)
-        val stageY = box.top - 26f * dp
+        val stageY = min(h * 0.53f, box.top - 26f * dp)
+        // a soft spotlight on the ground where they stand
+        fill.shader = RadialGradient(w / 2, stageY, w * 0.5f, Color.argb((90 * fade).toInt(), Color.red(evC), Color.green(evC), Color.blue(evC)), Color.argb(0, 0, 0, 0), Shader.TileMode.CLAMP)
+        c.save(); c.scale(1f, 0.22f, w / 2, stageY); c.drawCircle(w / 2, stageY, w * 0.5f, fill); c.restore(); fill.shader = null
         // Professor Spore on the left
         val profS = min(130f * dp, w * 0.3f)
         val px = w * 0.25f
