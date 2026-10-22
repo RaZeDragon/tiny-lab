@@ -50,7 +50,7 @@ class Notifier : BroadcastReceiver() {
 
         fun cancelAll(context: Context) {
             val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-            for (id in 1..3) am.cancel(pending(context, id))
+            for (id in 1..4) am.cancel(pending(context, id))
         }
     }
 }

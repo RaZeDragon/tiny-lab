@@ -154,15 +154,15 @@ class ScreensTest {
         val lab = g.testLab()
         lab.garden.clear()
         for (p in Data.PETS.indices) lab.petOwned[p] = 1
-        val mom = lab.newShroom(1, 200f, false).apply { name = "Mossy"; gx = 0.3f; gz = 0.4f; family[0] = "Pip|3"; family[1] = "Dot|5" }
-        val dad = lab.newShroom(2, 200f, false).apply { name = "Fizz"; gx = 0.7f; gz = 0.45f; family[0] = "Bean|7" }
+        val mom = lab.newShroom(1, 600f, false).apply { name = "Mossy"; gx = 0.3f; gz = 0.4f; family[0] = "Pip|3"; family[1] = "Dot|5" }
+        val dad = lab.newShroom(2, 600f, false).apply { name = "Fizz"; gx = 0.7f; gz = 0.45f; family[0] = "Bean|7" }
         lab.garden.add(mom); lab.garden.add(dad)
         val kid = lab.newShroom(13, 60f, false, mom, dad).apply { gx = 0.5f; gz = 0.7f; pet = 0 }
         lab.garden.add(kid)
         mom.pet = 2; dad.pet = 4
         mom.bestie = dad.id; dad.bestie = mom.id
-        val glow1 = lab.newShroom(6, 200f, false).apply { area = 1; gx = 0.35f; gz = 0.5f; pet = 5 }
-        val glow2 = lab.newShroom(31, 200f, false).apply { area = 1; gx = 0.65f; gz = 0.6f; pet = 6 }
+        val glow1 = lab.newShroom(6, 600f, false).apply { area = 1; gx = 0.35f; gz = 0.5f; pet = 5 }
+        val glow2 = lab.newShroom(31, 600f, false).apply { area = 1; gx = 0.65f; gz = 0.6f; pet = 6 }
         lab.garden.add(glow1); lab.garden.add(glow2)
         lab.upgrades[Data.UP_CAVE] = 1
         g.testFrame(1.0f)
@@ -236,8 +236,8 @@ class ScreensTest {
             reset(); Data.forceSeason = season
             val g = ready(0)
             val lab = g.testLab(); lab.garden.clear()
-            val a = lab.newShroom(1, 200f, false).apply { gx = 0.3f; gz = 0.5f }
-            val b = lab.newShroom(30, 200f, false).apply { gx = 0.6f; gz = 0.6f }
+            val a = lab.newShroom(1, 600f, false).apply { gx = 0.3f; gz = 0.5f }
+            val b = lab.newShroom(30, 600f, false).apply { gx = 0.6f; gz = 0.6f }
             lab.garden.add(a); lab.garden.add(b)
             if (season == 3) g.testSnowman(0.7f, 0.4f)
             g.testThink(a)
@@ -247,7 +247,7 @@ class ScreensTest {
         reset(); LabState.forceRain = true
         val g = ready(0)
         val lab = g.testLab(); lab.garden.clear()
-        for (k in 0..2) lab.garden.add(lab.newShroom(listOf(1, 3, 42)[k], 200f, false).apply { gx = 0.2f + k * 0.3f; gz = 0.5f })
+        for (k in 0..2) lab.garden.add(lab.newShroom(listOf(1, 3, 42)[k], 600f, false).apply { gx = 0.2f + k * 0.3f; gz = 0.5f })
         g.testFrame(1f); save(g.testRender(), "rain_puddles")
         LabState.forceRain = false
         g.testBedtime(); g.testFrame(5f); save(g.testRender(), "dreams")
@@ -275,8 +275,8 @@ class ScreensTest {
         lab.garden.clear()
         lab.placed.clear()
         lab.placed.add(Placed(Data.COZY_BED, 0.25f, 0.4f)); lab.placed.add(Placed(Data.STAR_FOUNTAIN, 0.72f, 0.35f))
-        val s = lab.newShroom(2, 200f, false).apply { gx = 0.5f; gz = 0.7f; wear[0] = Data.ACORN_CAP; wear[1] = Data.MONOCLE; pet = Data.MINI_DRAGON }
-        val s2 = lab.newShroom(6, 200f, false).apply { gx = 0.3f; gz = 0.75f; wear[0] = Data.SPROUT_CROWN }
+        val s = lab.newShroom(2, 600f, false).apply { gx = 0.5f; gz = 0.7f; wear[0] = Data.ACORN_CAP; wear[1] = Data.MONOCLE; pet = Data.MINI_DRAGON }
+        val s2 = lab.newShroom(6, 600f, false).apply { gx = 0.3f; gz = 0.75f; wear[0] = Data.SPROUT_CROWN }
         lab.garden.add(s); lab.garden.add(s2)
         for (f in 8..12) lab.foods[f] = 1
         g.testTap("nav0"); g.testCam(0.5f); g.testFrame(1f); save(g.testRender(), "garden_new_items")
@@ -287,7 +287,7 @@ class ScreensTest {
         reset()
         val g = ready(0)
         val lab = g.testLab(); lab.garden.clear()
-        for (k in 0 until 8) lab.garden.add(lab.newShroom(listOf(1, 2, 3, 6, 13, 30, 42, 45)[k], 200f, false).apply { gx = 0.15f + k * 0.23f; gz = 0.2f + (k % 3) * 0.3f })
+        for (k in 0 until 8) lab.garden.add(lab.newShroom(listOf(1, 2, 3, 6, 13, 30, 42, 45)[k], 600f, false).apply { gx = 0.15f + k * 0.23f; gz = 0.2f + (k % 3) * 0.3f })
         g.testCam(0.5f); g.testFrame(2f); save(g.testRender(), "garden_left")
         g.testCam(1.5f); g.testFrame(0.5f); save(g.testRender(), "garden_right")
         assertTrue(g.testButtonIds().contains("pan_l"))
@@ -328,7 +328,7 @@ class ScreensTest {
         val lab = g.testLab()
         lab.dust = 739
         lab.garden.clear()
-        for (k in 0 until 5) lab.garden.add(lab.newShroom(listOf(1, 59, 30, 42, 6)[k], 200f, false).apply { gx = 0.2f + k * 0.15f; gz = 0.3f + (k % 2) * 0.3f })
+        for (k in 0 until 5) lab.garden.add(lab.newShroom(listOf(1, 59, 30, 42, 6)[k], 600f, false).apply { gx = 0.2f + k * 0.15f; gz = 0.3f + (k % 2) * 0.3f })
         g.testFrame(1f); save(g.testRender(), "audit_rain")
         g.testTap("nav4")
         for (k in 0..8) {
@@ -376,7 +376,7 @@ class ScreensTest {
         for (tb in listOf("GARDEN", "LAB", "DEX", "JOURNAL", "SHOP")) { g2.testHelp(tb); g2.testFrame(0.2f); save(g2.testRender(), "help_" + tb.lowercase()); assertTrue(g2.testTap("help_ok")) }
         // welcome back after time away: capped at 250
         val l2 = g2.testLab()
-        for (k in 0 until 6) l2.garden.add(l2.newShroom(listOf(1, 2, 3, 6, 13, 30)[k], 200f, false))
+        for (k in 0 until 6) l2.garden.add(l2.newShroom(listOf(1, 2, 3, 6, 13, 30)[k], 600f, false))
         l2.tick(System.currentTimeMillis() + 5 * 3_600_000L)
         assertEquals(LabState.OFFLINE_CAP, l2.pendingOffline)
         g2.testFrame(0.3f); save(g2.testRender(), "welcome_back")
@@ -390,8 +390,8 @@ class ScreensTest {
         reset()
         val g = ready(0)
         val lab = g.testLab()
-        val a = lab.newShroom(1, 200f, false).apply { gx = 0.3f; gz = 0.5f }
-        val b = lab.newShroom(2, 200f, false).apply { gx = 0.7f; gz = 0.5f }
+        val a = lab.newShroom(1, 600f, false).apply { gx = 0.3f; gz = 0.5f }
+        val b = lab.newShroom(2, 600f, false).apply { gx = 0.7f; gz = 0.5f }
         lab.garden.add(a); lab.garden.add(b)
         for (sh in lab.garden) { sh.act = 0; sh.sleeping = false; sh.awakeUntil = Long.MAX_VALUE; sh.hunger = 90f; sh.happy = 90f }
         g.testFrame(0.1f)
@@ -402,6 +402,32 @@ class ScreensTest {
         g.testToss(b); assertEquals("giggle", g.testFaceOf(b))
         g.testToss(b); assertEquals("shout", g.testFaceOf(b))
         g.testFrame(0.15f); save(g.testRender(), "face_reactions")
+        reset()
+    }
+
+    @Test fun boysGirlsAndElders() {
+        reset()
+        val g = ready(0)
+        val lab = g.testLab(); lab.garden.clear()
+        val grandpa = lab.newShroom(1, 3000f, false).apply { sex = 0; name = "Grandpa"; gx = 0.3f; gz = 0.45f }
+        val granny = lab.newShroom(3, 3000f, false).apply { sex = 1; name = "Granny"; gx = 0.7f; gz = 0.45f }
+        lab.garden.add(grandpa); lab.garden.add(granny)
+        for (sh in lab.garden) { sh.act = 0; sh.sleeping = false; sh.awakeUntil = Long.MAX_VALUE; sh.hunger = 90f; sh.happy = 90f }
+        g.testSelect(grandpa.id); g.testFrame(0.5f); save(g.testRender(), "elders_beard")
+        // crossbreeding: one boy and one girl
+        val boy = lab.newShroom(2, 600f, false).apply { sex = 0; name = "Fizz"; bestie = -1 }
+        val girl = lab.newShroom(13, 600f, false).apply { sex = 1; name = "Dot" }
+        val boy2 = lab.newShroom(6, 600f, false).apply { sex = 0; name = "Bean" }
+        lab.garden.add(boy); lab.garden.add(girl); lab.garden.add(boy2)
+        boy.bestie = girl.id; girl.bestie = boy.id
+        g.testSelect(-1)
+        g.testCrossbreed(boy.id, girl.id); g.testFrame(0.3f); save(g.testRender(), "crossbreed_pair")
+        // with only Fizz picked, picking another boy is refused
+        g.testCrossbreed(boy.id, girl.id)
+        assertTrue(g.testTap("pick${girl.id}"))   // unpick the girl
+        assertTrue(g.testTap("pick${boy2.id}"))
+        g.testFrame(0.3f); save(g.testRender(), "crossbreed_same_sex")
+        assertEquals(1, g.testButtonIds().count { it == "pick${boy2.id}" })
         reset()
     }
 

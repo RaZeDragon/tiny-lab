@@ -46,6 +46,7 @@ class Shroom(
     // Family: [parent1, parent2, grandparents x4] as "name|species" ("" = unknown)
     val family = Array(6) { "" }
     var bestie = -1L            // id of its best friend
+    var sex = Random.nextInt(2)  // 0 boy ♂, 1 girl ♀ (crossbreeding needs one of each)
     var pet = -1                // Data.PETS index following it around
     var job = 0                 // Data.JOB_*
     var area = 0                // 0 meadow, 1 glow cave
@@ -464,6 +465,8 @@ class LabState(context: Context) {
     // ---------- Time, weather ----------
 
     companion object {
+        /** Growth per hour for a content mushroom (happy ones get x1.4). Grown takes about a day. */
+        const val GROW_RATE = 15f
         /** The meadow is twice as wide as the screen; gx runs from 0 to WORLD. */
         const val WORLD = 2f
         /** Gaps longer than this count as time away. */
@@ -568,11 +571,11 @@ class LabState(context: Context) {
             val caveMul = if (s.area == 1 && glowing) 1.5f else 1f
             val bestieNear = s.bestie >= 0 && garden.any { it.id == s.bestie && !it.away() && it.area == s.area }
             val weather = if (s.area == 1) 1f else rainMul
-            if (growing) s.xp += 20f * moodMul * weather * caveMul * (if (tucked) 1.3f else 1f) * hours
+            if (growing) s.xp += GROW_RATE * moodMul * weather * caveMul * (if (tucked) 1.3f else 1f) * hours
             s.hunger = max(0f, s.hunger - 9f * hours * (if (s.trait == 3) 1.3f else 1f) * (if (tucked) 0.7f else 1f))
             s.happy = max(0f, s.happy - 5f * charm * hours * (if (s.trait == 5) 0.6f else 1f) *
                     (if (gardener) 0.7f else 1f) * (if (bestieNear) 0.75f else 1f) * (if (s.area == 1 && glowing) 0.7f else 1f))
-            val rate = floatArrayOf(2f, 6f, 12f, 20f)[s.stage()] * Data.TIER_MUL[s.tier()] *
+            val rate = floatArrayOf(2f, 6f, 12f, 28f)[s.stage()]   // Elders make the most * Data.TIER_MUL[s.tier()] *
                     (if (s.hunger <= 0f) 0.5f else 1f) * (if (s.shiny) 2f else 1f)
             if (offline) offlineMade += rate * hours
             else s.dust = min(s.dustCap(), s.dust + rate * hours)
@@ -860,7 +863,7 @@ class LabState(context: Context) {
                 put("rest", s.restUntil); put("pet", s.petAt)
                 put("gx", s.gx.toDouble()); put("gz", s.gz.toDouble()); put("sh", s.shiny)
                 put("nm", s.name); put("tr", s.trait); put("ti", s.tint.toDouble()); put("sz", s.size.toDouble())
-                put("sp2", s.spots); put("va", s.variant); put("wear", ints(s.wear))
+                put("sp2", s.spots); put("va", s.variant); put("sx", s.sex); put("wear", ints(s.wear))
                 put("az", s.awayZone); put("au", s.awayUntil)
                 put("bond", s.bond.toDouble()); put("par", s.parentId)
                 put("fam", JSONArray(s.family.toList())); put("bf", s.bestie); put("pt", s.pet); put("job", s.job); put("ar", s.area)
@@ -961,6 +964,7 @@ class LabState(context: Context) {
                         s.optDouble("ti", 0.0).toFloat(), s.optDouble("sz", 1.0).toFloat(),
                         s.optInt("sp2", 0), s.optInt("va", 0))
                     s.optJSONArray("wear")?.let { w -> for (k in 0..2) sh.wear[k] = w.optInt(k, -1) }
+                    sh.sex = s.optInt("sx", (sh.id % 2L).toInt())
                     sh.awayZone = s.optInt("az", -1).coerceIn(-1, Data.ZONES.size - 1)
                     sh.awayUntil = s.optLong("au", 0L)
                     sh.bond = s.optDouble("bond", 0.0).toFloat()

@@ -575,7 +575,7 @@ object Data {
     )
 
     val STAGE_NAMES = arrayOf("Sprout", "Young", "Grown", "Elder")
-    val STAGE_XP = intArrayOf(0, 40, 150, 500)
+    val STAGE_XP = intArrayOf(0, 120, 500, 2500)   // Young ~6 h, Grown ~1 day, Elder ~5 days for a happy mushroom
     val TIER_MUL = intArrayOf(0, 1, 2, 4, 3)
 
     // ---------- Personalities ----------

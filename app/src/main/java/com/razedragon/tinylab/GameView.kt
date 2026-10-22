@@ -382,7 +382,10 @@ class GameView(context: Context) : View(context) {
         if (labMode == 1 && picks.size == 2) {
             val hap = picks.mapNotNull { shroom(it)?.happy }.average().toFloat()
             ch += 0.10f * (hap / 100f).coerceIn(0f, 1f)
+            val a = shroom(picks[0]); val b = shroom(picks[1])
+            if (a != null && b != null && (a.bestie == b.id || b.bestie == a.id)) ch += 0.10f   // best friends breed best
         }
+        ch += min(0.15f, 0.03f * lab.home().count { it.stage() >= 3 })   // Elders share their wisdom
         return ch.coerceIn(0.05f, 0.95f)
     }
 
@@ -507,6 +510,7 @@ class GameView(context: Context) : View(context) {
             val idx = lab.garden.indexOf(s)
             if (idx >= 0) { val (x, y) = shroomPos(idx); burst(x, y - 30f * dp, MINT, 30, P_SPARK) }
             if (after == 2) toast("Grown mushrooms can crossbreed in the Lab!", DUST)
+            if (after == 3) toast("Elders make extra dust and boost rare brews by 3%!", DUST)
             if (after >= 2) lab.addDiary("${s.name} grew into ${if (after == 2) "a Grown" else "an Elder"} ${Data.SPECIES[s.species].name}.")
         }
     }
@@ -1089,6 +1093,11 @@ class GameView(context: Context) : View(context) {
                         s.stage() < 2 -> toast("Too young! Only Grown mushrooms can crossbreed")
                         s.restUntil > now -> toast("Resting for ${(s.restUntil - now) / 60000 + 1} more min")
                         picks.size >= 2 -> toast("Two mushrooms are already picked")
+                        picks.size == 1 && shroom(picks[0])?.sex == s.sex -> {
+                            val other = shroom(picks[0])!!
+                            sound.play(Fx.DENIED)
+                            toast("${other.name} is a ${sexWord(other.sex)}. Pick a ${sexWord(1 - other.sex)} to pair with", ACCENT)
+                        }
                         else -> { picks.add(s.id); sound.play(Fx.POP) }
                     }
                 })
@@ -1735,6 +1744,7 @@ class GameView(context: Context) : View(context) {
     }
     internal fun testTutStep() = tutStep
     internal var testFace: String? = null
+    internal fun testCrossbreed(a: Long, b: Long) { tab = Tab.LAB; labMode = 1; picks.clear(); picks.add(a); picks.add(b) }
     internal fun testPoke(s: Shroom) = poke(s)
     internal fun testToss(s: Shroom) = toss(s, 0f, -900f * dp)
     internal fun testFaceOf(s: Shroom) = pickFace(s.sleeping, s.expr, s.idleAnim, false, s.mood(), s.held, s)
@@ -2998,7 +3008,8 @@ class GameView(context: Context) : View(context) {
         text.textAlign = Paint.Align.LEFT
         text.textSize = 21f * dp
         c.drawText(s.name, pad, top + 30f * dp, text)
-        val nameW = text.measureText(s.name)
+        val nameW = text.measureText(s.name) + 20f * dp
+        drawSexIcon(c, pad + nameW - 8f * dp, top + 23f * dp, 6.5f * dp, s.sex)
         for (k in 0 until 5) {   // friendship hearts
             fill.color = if (k < s.hearts()) ACCENT else Color.argb(60, 255, 255, 255)
             drawHeart(c, w - pad - 8f * dp - (4 - k) * 17f * dp, top + 20f * dp, 5.5f * dp)
@@ -3300,7 +3311,7 @@ class GameView(context: Context) : View(context) {
         val hint = if (labMode == 0) {
             if (slotsFull()) (0 until slotCount()).joinToString(" + ") { Data.INGREDIENTS[slots[it]].name }
             else if (slotCount() == 3) "Drag three ingredients into the flask" else "Drag two ingredients into the flask"
-        } else "Pick two Grown mushrooms"
+        } else "Pick a Grown boy and a Grown girl"
         val target = specialTarget()
         if (target >= 0) drawChanceMeter(c, fx, fy + r + 30f * dp, target)
         else if (brewing <= 0f && labMode <= 1) c.drawText(hint, fx, fy + r + 44f * dp, text)
@@ -3356,7 +3367,10 @@ class GameView(context: Context) : View(context) {
             else { text.textSize = 22f * dp; text.color = TEXT_DIM; c.drawText("?", r.centerX(), r.centerY() + 8f * dp, text); text.color = Color.WHITE }
         } else {
             val s = picks.getOrNull(k)?.let { shroom(it) }
-            if (s != null) drawShroom(c, s.species, r.centerX(), r.centerY() + r.height() * 0.32f, r.width() * 0.5f, 0, 0f, false, false, shiny = s.shiny, who = s)
+            if (s != null) {
+                drawShroom(c, s.species, r.centerX(), r.centerY() + r.height() * 0.32f, r.width() * 0.5f, 0, 0f, false, false, shiny = s.shiny, who = s)
+                drawSexIcon(c, r.right - 6f * dp, r.top + 8f * dp, 7f * dp, s.sex)
+            }
             else { text.textSize = 22f * dp; text.color = TEXT_DIM; c.drawText("?", r.centerX(), r.centerY() + 8f * dp, text); text.color = Color.WHITE }
         }
     }
@@ -3383,6 +3397,17 @@ class GameView(context: Context) : View(context) {
 
     private fun drawPickCard(c: Canvas, r: RectF, s: Shroom, now: Long) {
         drawShroom(c, s.species, r.centerX(), r.top + r.height() * 0.62f, r.width() * 0.42f, s.mood(), 0f, false, false, shiny = s.shiny, who = s)
+        drawSexIcon(c, r.right - 13f * dp, r.top + 13f * dp, 6f * dp, s.sex)
+        val first = picks.firstOrNull()?.let { shroom(it) }
+        if (picks.size == 1 && first != null && first !== s) {
+            if (first.sex != s.sex && s.stage() >= 2 && s.restUntil <= now) {   // a match!
+                fill.color = Color.rgb(255, 100, 150)
+                drawHeart(c, r.left + 13f * dp, r.top + 13f * dp, 6f * dp * (1f + 0.12f * sin(t * 6f)))
+                if (first.bestie == s.id) { text.textSize = 9f * dp; text.color = DUST; c.drawText("bestie +10%", r.centerX(), r.top + 14f * dp, text); text.color = Color.WHITE }
+            } else if (first.sex == s.sex) {
+                fill.color = Color.argb(140, 20, 14, 38); c.drawRoundRect(r, 14f * dp, 14f * dp, fill)
+            }
+        }
         text.textSize = 10f * dp
         val name = Data.SPECIES[s.species].name.split(" ").first()
         c.drawText(name, r.centerX(), r.top + r.height() * 0.8f, text)
@@ -3834,6 +3859,60 @@ class GameView(context: Context) : View(context) {
      * mood: 0 happy, 1 okay, 2 hungry, 3 sad. bob: -1..1 idle squash-and-stretch.
      * facing / phase / moving animate walking; held makes it dangle with little feet kicking.
      */
+    /** A fluffy outlined beard for old gentlemen; the Professor also gets a big mustache and bushy brows. */
+    private fun drawBeard(c: Canvas, fx: Float, faceY: Float, baseY: Float, s: Float, professor: Boolean) {
+        val top = faceY + s * (if (professor) 0.1f else 0.135f)
+        val maxH = baseY - s * 0.02f - top
+        val sc = if (professor) 1.15f else 1f
+        val puffs = arrayOf(floatArrayOf(-0.13f, 0.02f, 0.06f), floatArrayOf(0f, 0.01f, 0.07f), floatArrayOf(0.13f, 0.02f, 0.06f),
+            floatArrayOf(-0.085f, 0.085f, 0.065f), floatArrayOf(0.085f, 0.085f, 0.065f), floatArrayOf(0f, 0.13f, 0.07f))
+        val squash = min(1f, maxH / (s * 0.2f * sc)).coerceAtLeast(0.5f)
+        val line = Color.rgb(125, 120, 145)
+        fill.color = line
+        for (p in puffs) c.drawCircle(fx + p[0] * s * sc, top + p[1] * s * sc * squash, p[2] * s * sc + max(1.2f * dp, s * 0.024f), fill)
+        fill.color = Color.rgb(250, 250, 253)
+        for (p in puffs) c.drawCircle(fx + p[0] * s * sc, top + p[1] * s * sc * squash, p[2] * s * sc, fill)
+        fill.color = Color.rgb(222, 222, 234)   // soft shading in the curls
+        c.drawCircle(fx - s * 0.06f * sc, top + s * 0.1f * sc * squash, s * 0.03f, fill)
+        c.drawCircle(fx + s * 0.07f * sc, top + s * 0.05f * sc * squash, s * 0.025f, fill)
+        if (professor) {
+            // handlebar mustache
+            stroke.color = line; stroke.strokeWidth = max(1.2f * dp, s * 0.024f)
+            for (side in intArrayOf(-1, 1)) {
+                val r = RectF(fx + (if (side < 0) -s * 0.17f else s * 0.005f), faceY + s * 0.06f, fx + (if (side < 0) -s * 0.005f else s * 0.17f), faceY + s * 0.12f)
+                fill.color = Color.rgb(250, 250, 253); c.drawOval(r, fill); c.drawOval(r, stroke)
+            }
+            // bushy brows
+            stroke.color = Color.rgb(240, 240, 248); stroke.strokeWidth = s * 0.035f; stroke.strokeCap = Paint.Cap.ROUND
+            for (side in intArrayOf(-1, 1)) c.drawLine(fx + side * s * 0.07f, faceY - s * 0.085f, fx + side * s * 0.17f, faceY - s * 0.1f, stroke)
+        }
+    }
+
+    // ---------- Boy / girl symbols ----------
+    private val BOY_C = Color.rgb(100, 175, 255)
+    private val GIRL_C = Color.rgb(255, 120, 185)
+    private fun sexWord(sex: Int) = if (sex == 0) "boy" else "girl"
+
+    /** ♂ or ♀ drawn as a little badge (vector, so it looks the same on every phone). */
+    private fun drawSexIcon(c: Canvas, x: Float, y: Float, r: Float, sex: Int) {
+        val col = if (sex == 0) BOY_C else GIRL_C
+        fill.color = Color.argb(200, 24, 16, 44); c.drawCircle(x, y, r * 1.55f, fill)
+        stroke.color = col; stroke.strokeWidth = r * 0.34f; stroke.strokeCap = Paint.Cap.ROUND
+        if (sex == 0) {
+            val cx = x - r * 0.18f; val cy = y + r * 0.18f
+            c.drawCircle(cx, cy, r * 0.55f, stroke)
+            val d = r * 0.39f
+            val tx = x + r * 0.72f; val ty = y - r * 0.72f
+            c.drawLine(cx + d, cy - d, tx, ty, stroke)
+            c.drawLine(tx, ty, tx - r * 0.5f, ty, stroke); c.drawLine(tx, ty, tx, ty + r * 0.5f, stroke)
+        } else {
+            val cy = y - r * 0.28f
+            c.drawCircle(x, cy, r * 0.55f, stroke)
+            c.drawLine(x, cy + r * 0.55f, x, y + r * 0.95f, stroke)
+            c.drawLine(x - r * 0.36f, y + r * 0.58f, x + r * 0.36f, y + r * 0.58f, stroke)
+        }
+    }
+
     // ---------- Faces: drawn art, one picture per feeling ----------
     private val faceBmps = HashMap<String, android.graphics.Bitmap?>()
     private var forcedFace: String? = null                    // set around a single drawShroom call
@@ -4363,10 +4442,8 @@ class GameView(context: Context) : View(context) {
                 fill.color = Color.rgb(110, 180, 100)
                 c.drawOval(cx - s * 0.3f, capTop + s * 0.12f, cx - s * 0.12f, capTop + s * 0.2f, fill)
                 c.drawOval(cx + s * 0.15f, capTop + s * 0.22f, cx + s * 0.3f, capTop + s * 0.29f, fill)
-                if (who.id % 2L == 1L) {
-                    fill.color = Color.rgb(245, 245, 250)
-                    for (k in -2..2) c.drawCircle(fx + k * s * 0.045f, faceY + s * 0.135f + (2 - abs(k)) * s * 0.025f, s * 0.045f, fill)
-                } else if (who.wear[1] < 0) {
+                if (who.sex == 0) drawBeard(c, fx, faceY, baseY, s, who.id == 1001L)
+                else if (who.wear[1] < 0) {
                     stroke.color = Color.rgb(120, 90, 50); stroke.strokeWidth = max(1f * dp, s * 0.015f)
                     c.drawCircle(fx - ex, faceY, er * 1.7f, stroke); c.drawCircle(fx + ex, faceY, er * 1.7f, stroke)
                     c.drawLine(fx - ex + er * 1.7f, faceY, fx + ex - er * 1.7f, faceY, stroke)
@@ -4385,7 +4462,7 @@ class GameView(context: Context) : View(context) {
     // ---------- Journal: daily gift, Professor Spore, contest, awards ----------
 
     private val professor by lazy {
-        Shroom(1001L, 36, xp = 900f, name = "Prof. Spore").apply { wear[1] = 9 }
+        Shroom(1001L, 36, xp = 3000f, name = "Prof. Spore").apply { wear[1] = 9; sex = 0 }
     }
 
     private fun journalAlert() = lab.giftReady() || lab.requests.any { lab.requestProgress(it).let { p -> p.first >= p.second } } ||
@@ -4644,6 +4721,19 @@ class GameView(context: Context) : View(context) {
         lab.garden.filter { it.away() }.minByOrNull { it.awayUntil }?.let { s ->
             Notifier.schedule(context, 2, s.awayUntil, "${s.name} is back!",
                 "${s.name} returned from ${Data.ZONES[s.awayZone].name} with loot. Come see what it found!")
+        }
+        // 4: the next mushroom to reach Grown or Elder
+        lab.home().filter { it.stage() in 1..2 && it.hunger > 0f }.map { s ->
+            val moodMul = when (s.mood()) { 0 -> 1.4f; 1 -> 1f; 2 -> 0.4f; else -> 0.6f }
+            val need = Data.STAGE_XP[s.stage() + 1] - s.xp
+            Pair(s, need / (LabState.GROW_RATE * moodMul))
+        }.minByOrNull { it.second }?.let { (s, hrs) ->
+            val at = now + (hrs * 3600_000f).toLong()
+            val next = s.stage() + 1
+            if (at - now > 10 * 60_000L)
+                Notifier.schedule(context, 4, at, "${s.name} is all grown up! 🍄",
+                    if (next == 2) "Your ${Data.SPECIES[s.species].name} is Grown and ready to crossbreed in the Lab."
+                    else "Your ${Data.SPECIES[s.species].name} became a wise Elder. Elders boost your rare brews!")
         }
         // 3: tomorrow's daily gift
         val tomorrow = java.util.Calendar.getInstance().apply {
@@ -5611,7 +5701,7 @@ class GameView(context: Context) : View(context) {
             } else {
                 val (sx, sy) = toScreen(shGx, shGz)
                 val size = 64f * dp * depth(shGz) * (if (bigDecor) 1f else 1.2f)
-                val who = Shroom(-7L, species).apply { xp = 200f; for (k in 0..2) this.wear[k] = wear[k]; expr = E_GIGGLE; exprT = 1f }
+                val who = Shroom(-7L, species).apply { xp = 600f; for (k in 0..2) this.wear[k] = wear[k]; expr = E_GIGGLE; exprT = 1f }
                 drawShroom(c, species, sx, sy, size, 0, sin(t * 2.5f), (t % 3f) < 0.12f, false, facing = -1f, who = who)
                 if (pet >= 0) {
                     if (pet == 1 || pet == 2 || pet == Data.MINI_DRAGON) {
@@ -6617,13 +6707,13 @@ class GameView(context: Context) : View(context) {
         val missed = !hsFound[i] && hsNext > 0f && hsHidden[i] >= 0
         if (missed) {   // the ones you missed pop their heads up so you can see where they were
             drawShroom(c, hsHidden[i], x + s * 0.15f, y - s * 0.6f, s * 0.55f, 0, 0f, false, false,
-                who = Shroom(-9L, hsHidden[i]).apply { expr = E_GIGGLE; exprT = 1f; xp = 200f })
+                who = Shroom(-9L, hsHidden[i]).apply { expr = E_GIGGLE; exprT = 1f; xp = 600f })
             text.textSize = 12f * dp; text.color = DUST; c.drawText("here!", x, r.top + 16f * dp, text); text.color = Color.WHITE
         }
         drawBush(c, x, y, s, if (hsRustle[i] > 0f) sin(t * 40f) else 0f)
         if (hsFound[i]) {   // found! it hops out in front of its bush
             drawShroom(c, hsHidden[i], x + s * 0.18f, y + s * 0.02f - abs(sin(t * 5f)) * s * 0.06f, s * 0.6f, 0, sin(t * 4f), false, false,
-                who = Shroom(-9L, hsHidden[i]).apply { expr = E_GIGGLE; exprT = 1f; xp = 200f })
+                who = Shroom(-9L, hsHidden[i]).apply { expr = E_GIGGLE; exprT = 1f; xp = 600f })
         }
         if (hsTapped[i] && hsHidden[i] < 0) { text.textSize = 13f * dp; text.color = TEXT_DIM; c.drawText("nobody", x, r.top + 16f * dp, text); text.color = Color.WHITE }
     }
@@ -6716,6 +6806,7 @@ class GameView(context: Context) : View(context) {
         // name & info
         text.textSize = 26f * dp; text.color = Color.WHITE
         c.drawText(s.name, r.centerX(), pw.bottom + 36f * dp, text)
+        drawSexIcon(c, r.centerX() + text.measureText(s.name) / 2 + 16f * dp, pw.bottom + 27f * dp, 7.5f * dp, s.sex)
         text.textSize = 14f * dp; text.color = Color.argb(230, 255, 255, 255)
         c.drawText((if (s.shiny) "✨ Shiny " else "") + sp.name, r.centerX(), pw.bottom + 58f * dp, text)
         val tags = ArrayList<String>()
@@ -7073,7 +7164,7 @@ class GameView(context: Context) : View(context) {
             fill.color = Color.rgb(78, 140, 104); c.drawRect(0f, cy, w, h, fill)
             val face = if (catchDizzy > 0f) E_BONK else E_GIGGLE
             professor.expr = 0
-            val catcher = Shroom(-5L, catchSpecies).apply { expr = face; exprT = 1f; xp = 200f }
+            val catcher = Shroom(-5L, catchSpecies).apply { expr = face; exprT = 1f; xp = 600f }
             drawShroom(c, catchSpecies, catchX, cy, 80f * dp, 0, sin(t * 6f), false, false, who = catcher)
             if (!miniOver) { text.textSize = 13f * dp; text.color = TEXT_DIM
                 c.drawText("Drag to catch golden spores ✦ · avoid the stinky green ones!", w / 2, h - 30f * dp, text); text.color = Color.WHITE }
