@@ -122,6 +122,23 @@ class ScreensTest {
         }
         save(bmp, "all_species")
 
+        // every face, on a capped mushroom and a puff
+        val faces = listOf("happy", "calm", "okay", "hungry", "starving", "sad", "sleep", "blink", "giggle", "bliss", "chomp",
+            "wink", "heart", "dizzy", "bonk", "nervous", "grin", "curious", "grumpy", "skeptical", "shout")
+        val fh = (120 * dp).toInt()
+        val fb = Bitmap.createBitmap(W, ((faces.size + cols - 1) / cols) * fh + 20, Bitmap.Config.ARGB_8888)
+        val fc = Canvas(fb); fc.drawColor(Color.rgb(40, 28, 72))
+        val lp = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textSize = 12 * dp; textAlign = android.graphics.Paint.Align.CENTER }
+        for ((k, f) in faces.withIndex()) {
+            val x = (k % cols) * cw + cw / 2f
+            val y = (k / cols) * fh + fh - 26 * dp
+            g.testFace = f
+            g.testDrawSpecies(fc, if (k % 2 == 0) 1 else 3, x, y, 70 * dp, false)
+            fc.drawText(f, x, y + 18 * dp, lp)
+        }
+        g.testFace = null
+        save(fb, "all_faces")
+
         val ib = Bitmap.createBitmap(W, 3 * (90 * dp).toInt(), Bitmap.Config.ARGB_8888)
         val ic = Canvas(ib)
         ic.drawColor(Color.rgb(40, 28, 72))

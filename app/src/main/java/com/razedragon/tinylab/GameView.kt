@@ -112,6 +112,7 @@ class GameView(context: Context) : View(context) {
         private const val E_DIZZY = 4
         private const val E_CHOMP = 5
         private const val E_GIGGLE = 6
+        private const val E_BONK = 7
         private const val STIR_GOAL = (2 * Math.PI * 6).toFloat()   // six full circles = perfect brew
         private const val MAX_PLACED = 20
         private const val REST_MS = 20 * 60 * 1000L
@@ -1726,6 +1727,7 @@ class GameView(context: Context) : View(context) {
         return true
     }
     internal fun testTutStep() = tutStep
+    internal var testFace: String? = null
     internal fun testSkipIntro() { splashT = 0f; holdSplash = false; tutStep = -1; prefs.edit().putInt("tutStep", -1).apply(); toasts.clear() }
     internal fun testProfSay(msg: String) = professorSay(msg, 30f)
     internal fun testSelect(id: Long) { selected = id; panelAnim = 1f }
@@ -3818,6 +3820,74 @@ class GameView(context: Context) : View(context) {
      * mood: 0 happy, 1 okay, 2 hungry, 3 sad. bob: -1..1 idle squash-and-stretch.
      * facing / phase / moving animate walking; held makes it dangle with little feet kicking.
      */
+    // ---------- Faces: drawn art, one picture per feeling ----------
+    private val faceBmps = HashMap<String, android.graphics.Bitmap?>()
+    private val facePaint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
+
+    private fun faceBmp(k: String): android.graphics.Bitmap? {
+        if (!faceBmps.containsKey(k)) faceBmps[k] = try {
+            context.assets.open("faces/$k.png").use { android.graphics.BitmapFactory.decodeStream(it) }
+        } catch (_: Exception) { null }
+        return faceBmps[k]
+    }
+
+    /** Which face fits right now. Reactions come first, then how the mushroom is feeling. */
+    private fun pickFace(sleeping: Boolean, ex: Int, ia: Int, blink: Boolean, mood: Int, held: Boolean, who: Shroom?): String {
+        testFace?.let { return it }
+        val now = System.currentTimeMillis()
+        return when {
+            sleeping -> "sleep"
+            ex == E_DIZZY -> "dizzy"
+            ex == E_BONK -> "bonk"
+            held -> "nervous"
+            who != null && who.airborne() -> "shout"
+            ex == E_HEART -> "heart"
+            ex == E_CHOMP -> "chomp"
+            ex == E_GIGGLE -> "giggle"
+            ex == E_BLISS -> "bliss"
+            ex == E_SPARKLE -> "wink"
+            ia == 1 -> "sleep"                                   // a big yawn
+            who != null && (who.act == ACT_JAM || who.act == ACT_DANCE) -> "grin"
+            ia == 4 -> "curious"                                 // looking around
+            who != null && who.hunger < 10f -> "starving"
+            mood == 2 -> "hungry"
+            mood == 3 -> "sad"
+            who != null && who.awakeUntil - now > 100_000L -> "grumpy"   // just woken up at night
+            blink -> "blink"
+            mood == 1 -> if (who?.trait == 3) "skeptical" else "okay"
+            else -> if (who?.trait == 2) "calm" else "happy"
+        }
+    }
+
+    /** Draws the face art centred on the eye line. Returns false if the picture isn't available. */
+    private fun drawFaceArt(c: Canvas, key: String, fx: Float, faceY: Float, s: Float, sleeping: Boolean): Boolean {
+        val k = 0.22f * s / 228f                 // the art's eyes are 228px apart; ours are 0.22 of the size
+        val d = 512f * k
+        val cy = faceY + 10f * k                 // the art's eye line sits 10px above its centre
+        if (key == "dizzy") {
+            val base = faceBmp("dizzy_base") ?: return false
+            val sw = faceBmp("swirl") ?: return false
+            c.drawBitmap(base, null, RectF(fx - d / 2, cy - d / 2, fx + d / 2, cy + d / 2), facePaint)
+            val e = 112f * k
+            for (side in intArrayOf(-1, 1)) {   // the two swirls spin in opposite directions
+                val ex = fx + (if (side < 0) -111f else 114f) * k
+                c.save()
+                if (side > 0) c.scale(-1f, 1f, ex, faceY)
+                c.rotate(t * 240f, ex, faceY)
+                c.drawBitmap(sw, null, RectF(ex - e / 2, faceY - e / 2, ex + e / 2, faceY + e / 2), facePaint)
+                c.restore()
+            }
+            return true
+        }
+        val b = faceBmp(key) ?: return false
+        c.drawBitmap(b, null, RectF(fx - d / 2, cy - d / 2, fx + d / 2, cy + d / 2), facePaint)
+        if (sleeping) {   // a little drool bubble
+            fill.color = Color.argb(170, 160, 210, 255)
+            c.drawCircle(fx + 26f * k, faceY + 100f * k, 14f * k * (1f + 0.5f * (0.5f + 0.5f * sin(t * 2f))), fill)
+        }
+        return true
+    }
+
     private fun drawShroom(c: Canvas, species: Int, cx: Float, baseY0: Float, size: Float, mood0: Int,
                            bob: Float, blink: Boolean, silhouette: Boolean,
                            facing: Float = 0f, phase: Float = 0f, moving: Boolean = false, held: Boolean = false,
@@ -4070,79 +4140,83 @@ class GameView(context: Context) : View(context) {
             val fx = cx + look
             val ex = s * 0.11f
             val er = s * 0.048f
-            fill.color = Color.rgb(50, 30, 60)
-            stroke.color = Color.rgb(50, 30, 60); stroke.strokeWidth = max(1.5f * dp, s * 0.025f)
-            val happyEyes = ex0 == E_BLISS || ex0 == E_GIGGLE || ia == 1
-            if (sleeping) {
-                c.drawArc(fx - ex - er, faceY - er, fx - ex + er, faceY + er, 20f, 140f, false, stroke)
-                c.drawArc(fx + ex - er, faceY - er, fx + ex + er, faceY + er, 20f, 140f, false, stroke)
-            } else if (ex0 == E_DIZZY) {
-                for (side in intArrayOf(-1, 1)) {
-                    val ox = fx + side * ex
-                    c.drawArc(ox - er * 1.3f, faceY - er * 1.3f, ox + er * 1.3f, faceY + er * 1.3f, t * 600f, 270f, false, stroke)
-                    c.drawArc(ox - er * 0.6f, faceY - er * 0.6f, ox + er * 0.6f, faceY + er * 0.6f, t * 600f + 180f, 270f, false, stroke)
+            val faceKey = pickFace(sleeping, ex0, ia, blink, mood, held, who)
+            val drawnFromArt = drawFaceArt(c, faceKey, fx, faceY, s, sleeping)
+            if (!drawnFromArt) {   // fallback: the hand-drawn vector face
+                fill.color = Color.rgb(50, 30, 60)
+                stroke.color = Color.rgb(50, 30, 60); stroke.strokeWidth = max(1.5f * dp, s * 0.025f)
+                val happyEyes = ex0 == E_BLISS || ex0 == E_GIGGLE || ia == 1
+                if (sleeping) {
+                    c.drawArc(fx - ex - er, faceY - er, fx - ex + er, faceY + er, 20f, 140f, false, stroke)
+                    c.drawArc(fx + ex - er, faceY - er, fx + ex + er, faceY + er, 20f, 140f, false, stroke)
+                } else if (ex0 == E_DIZZY) {
+                    for (side in intArrayOf(-1, 1)) {
+                        val ox = fx + side * ex
+                        c.drawArc(ox - er * 1.3f, faceY - er * 1.3f, ox + er * 1.3f, faceY + er * 1.3f, t * 600f, 270f, false, stroke)
+                        c.drawArc(ox - er * 0.6f, faceY - er * 0.6f, ox + er * 0.6f, faceY + er * 0.6f, t * 600f + 180f, 270f, false, stroke)
+                    }
+                } else if (ex0 == E_HEART) {
+                    fill.color = Color.rgb(255, 80, 120)
+                    val pulse = 1f + 0.15f * sin(t * 10f)
+                    drawHeart(c, fx - ex, faceY - er * 0.4f, er * 1.15f * pulse)
+                    drawHeart(c, fx + ex, faceY - er * 0.4f, er * 1.15f * pulse)
+                } else if (ex0 == E_SPARKLE) {
+                    fill.color = Color.rgb(255, 230, 120)
+                    drawSparkle(c, fx - ex, faceY, er * 0.9f); drawSparkle(c, fx + ex, faceY, er * 0.9f)
+                } else if (happyEyes) {
+                    c.drawArc(fx - ex - er, faceY - er * 0.4f, fx - ex + er, faceY + er * 1.4f, 200f, 140f, false, stroke)
+                    c.drawArc(fx + ex - er, faceY - er * 0.4f, fx + ex + er, faceY + er * 1.4f, 200f, 140f, false, stroke)
+                } else if (blink) {
+                    c.drawLine(fx - ex - er, faceY, fx - ex + er, faceY, stroke)
+                    c.drawLine(fx + ex - er, faceY, fx + ex + er, faceY, stroke)
+                } else {
+                    c.drawOval(fx - ex - er, faceY - er * 1.2f, fx - ex + er, faceY + er * 1.2f, fill)
+                    c.drawOval(fx + ex - er, faceY - er * 1.2f, fx + ex + er, faceY + er * 1.2f, fill)
+                    fill.color = Color.WHITE
+                    c.drawCircle(fx - ex + er * 0.35f, faceY - er * 0.45f, er * 0.38f, fill)
+                    c.drawCircle(fx + ex + er * 0.35f, faceY - er * 0.45f, er * 0.38f, fill)
                 }
-            } else if (ex0 == E_HEART) {
-                fill.color = Color.rgb(255, 80, 120)
-                val pulse = 1f + 0.15f * sin(t * 10f)
-                drawHeart(c, fx - ex, faceY - er * 0.4f, er * 1.15f * pulse)
-                drawHeart(c, fx + ex, faceY - er * 0.4f, er * 1.15f * pulse)
-            } else if (ex0 == E_SPARKLE) {
-                fill.color = Color.rgb(255, 230, 120)
-                drawSparkle(c, fx - ex, faceY, er * 0.9f); drawSparkle(c, fx + ex, faceY, er * 0.9f)
-            } else if (happyEyes) {
-                c.drawArc(fx - ex - er, faceY - er * 0.4f, fx - ex + er, faceY + er * 1.4f, 200f, 140f, false, stroke)
-                c.drawArc(fx + ex - er, faceY - er * 0.4f, fx + ex + er, faceY + er * 1.4f, 200f, 140f, false, stroke)
-            } else if (blink) {
-                c.drawLine(fx - ex - er, faceY, fx - ex + er, faceY, stroke)
-                c.drawLine(fx + ex - er, faceY, fx + ex + er, faceY, stroke)
-            } else {
-                c.drawOval(fx - ex - er, faceY - er * 1.2f, fx - ex + er, faceY + er * 1.2f, fill)
-                c.drawOval(fx + ex - er, faceY - er * 1.2f, fx + ex + er, faceY + er * 1.2f, fill)
-                fill.color = Color.WHITE
-                c.drawCircle(fx - ex + er * 0.35f, faceY - er * 0.45f, er * 0.38f, fill)
-                c.drawCircle(fx + ex + er * 0.35f, faceY - er * 0.45f, er * 0.38f, fill)
-            }
-            val blushy = ex0 == E_BLISS || ex0 == E_HEART || ex0 == E_GIGGLE
-            fill.color = Color.argb(if (blushy) 210 else 140, 255, 130, 160)
-            val bl = if (blushy) 1.35f else 1f
-            c.drawOval(fx - ex * 1.75f - s * 0.05f * bl, faceY + s * 0.035f, fx - ex * 1.75f + s * 0.05f * bl, faceY + s * 0.08f * bl, fill)
-            c.drawOval(fx + ex * 1.75f - s * 0.05f * bl, faceY + s * 0.035f, fx + ex * 1.75f + s * 0.05f * bl, faceY + s * 0.08f * bl, fill)
-            val my = faceY + s * 0.065f
-            val mw = s * 0.06f
-            val dark2 = Color.rgb(50, 30, 60)
-            if (sleeping) {
-                fill.color = dark2; c.drawCircle(fx, my + mw * 0.4f, mw * 0.3f, fill)
-                // a little drool bubble
-                fill.color = Color.argb(170, 160, 210, 255)
-                c.drawCircle(fx + mw * 0.9f, my + mw * 0.9f, mw * (0.25f + 0.2f * (0.5f + 0.5f * sin(t * 2f))), fill)
-            } else if (ex0 == E_CHOMP || ia == 1) {
-                fill.color = dark2
-                val open = if (ex0 == E_CHOMP) 1f + 0.3f * sin(t * 18f) else 0.8f + 0.4f * sin((1.4f - iaT) / 1.4f * 3.14f)
-                c.drawOval(fx - mw * 0.9f, my - mw * 0.2f, fx + mw * 0.9f, my + mw * 1.6f * open, fill)
-                fill.color = Color.rgb(255, 120, 150)
-                c.drawOval(fx - mw * 0.5f, my + mw * 0.7f * open, fx + mw * 0.5f, my + mw * 1.5f * open, fill)
-            } else if (ex0 == E_GIGGLE) {
-                fill.color = dark2
-                c.drawArc(fx - mw, my - mw * 0.7f, fx + mw, my + mw * 1.2f, 0f, 180f, true, fill)
-                fill.color = Color.rgb(255, 120, 150)
-                c.drawCircle(fx, my + mw * 0.75f, mw * 0.35f, fill)
-            } else if (ex0 == E_BLISS || ex0 == E_HEART) {
-                c.drawArc(fx - mw, my - mw * 0.8f, fx + mw, my + mw * 0.8f, 20f, 140f, false, stroke)
-            } else if (ex0 == E_DIZZY) {
-                path.reset(); path.moveTo(fx - mw, my + mw * 0.3f)
-                for (k in 1..4) path.lineTo(fx - mw + k * mw * 0.5f, my + mw * (if (k % 2 == 0) 0.3f else -0.1f))
-                c.drawPath(path, stroke)
-            }
-            else when (mood) {
-                0 -> c.drawArc(fx - mw, my - mw * 0.8f, fx + mw, my + mw * 0.8f, 20f, 140f, false, stroke)
-                2 -> { fill.color = Color.rgb(50, 30, 60); c.drawOval(fx - mw * 0.4f, my, fx + mw * 0.4f, my + mw * 0.9f, fill) }
-                3 -> c.drawArc(fx - mw, my + mw * 0.2f, fx + mw, my + mw * 1.6f, 200f, 140f, false, stroke)
-                else -> c.drawLine(fx - mw * 0.6f, my + mw * 0.3f, fx + mw * 0.6f, my + mw * 0.3f, stroke)
+                val blushy = ex0 == E_BLISS || ex0 == E_HEART || ex0 == E_GIGGLE
+                fill.color = Color.argb(if (blushy) 210 else 140, 255, 130, 160)
+                val bl = if (blushy) 1.35f else 1f
+                c.drawOval(fx - ex * 1.75f - s * 0.05f * bl, faceY + s * 0.035f, fx - ex * 1.75f + s * 0.05f * bl, faceY + s * 0.08f * bl, fill)
+                c.drawOval(fx + ex * 1.75f - s * 0.05f * bl, faceY + s * 0.035f, fx + ex * 1.75f + s * 0.05f * bl, faceY + s * 0.08f * bl, fill)
+                val my = faceY + s * 0.065f
+                val mw = s * 0.06f
+                val dark2 = Color.rgb(50, 30, 60)
+                if (sleeping) {
+                    fill.color = dark2; c.drawCircle(fx, my + mw * 0.4f, mw * 0.3f, fill)
+                    // a little drool bubble
+                    fill.color = Color.argb(170, 160, 210, 255)
+                    c.drawCircle(fx + mw * 0.9f, my + mw * 0.9f, mw * (0.25f + 0.2f * (0.5f + 0.5f * sin(t * 2f))), fill)
+                } else if (ex0 == E_CHOMP || ia == 1) {
+                    fill.color = dark2
+                    val open = if (ex0 == E_CHOMP) 1f + 0.3f * sin(t * 18f) else 0.8f + 0.4f * sin((1.4f - iaT) / 1.4f * 3.14f)
+                    c.drawOval(fx - mw * 0.9f, my - mw * 0.2f, fx + mw * 0.9f, my + mw * 1.6f * open, fill)
+                    fill.color = Color.rgb(255, 120, 150)
+                    c.drawOval(fx - mw * 0.5f, my + mw * 0.7f * open, fx + mw * 0.5f, my + mw * 1.5f * open, fill)
+                } else if (ex0 == E_GIGGLE) {
+                    fill.color = dark2
+                    c.drawArc(fx - mw, my - mw * 0.7f, fx + mw, my + mw * 1.2f, 0f, 180f, true, fill)
+                    fill.color = Color.rgb(255, 120, 150)
+                    c.drawCircle(fx, my + mw * 0.75f, mw * 0.35f, fill)
+                } else if (ex0 == E_BLISS || ex0 == E_HEART) {
+                    c.drawArc(fx - mw, my - mw * 0.8f, fx + mw, my + mw * 0.8f, 20f, 140f, false, stroke)
+                } else if (ex0 == E_DIZZY) {
+                    path.reset(); path.moveTo(fx - mw, my + mw * 0.3f)
+                    for (k in 1..4) path.lineTo(fx - mw + k * mw * 0.5f, my + mw * (if (k % 2 == 0) 0.3f else -0.1f))
+                    c.drawPath(path, stroke)
+                }
+                else when (mood) {
+                    0 -> c.drawArc(fx - mw, my - mw * 0.8f, fx + mw, my + mw * 0.8f, 20f, 140f, false, stroke)
+                    2 -> { fill.color = Color.rgb(50, 30, 60); c.drawOval(fx - mw * 0.4f, my, fx + mw * 0.4f, my + mw * 0.9f, fill) }
+                    3 -> c.drawArc(fx - mw, my + mw * 0.2f, fx + mw, my + mw * 1.6f, 200f, 140f, false, stroke)
+                    else -> c.drawLine(fx - mw * 0.6f, my + mw * 0.3f, fx + mw * 0.6f, my + mw * 0.3f, stroke)
+                }
             }
 
             // sweat drop when hungry
-            if (mood == 2 && !sleeping && !held) {
+            if (mood == 2 && !sleeping && !held && faceKey != "nervous") {
                 val dy = (t * 0.8f) % 1f
                 fill.color = Color.argb((220 * (1f - dy)).toInt(), 150, 210, 255)
                 val sx = cx + s * 0.36f; val sy = capTop + s * 0.3f + dy * s * 0.2f
@@ -4167,7 +4241,7 @@ class GameView(context: Context) : View(context) {
                 c.drawOval(cx + s * 0.15f, capTop + s * 0.22f, cx + s * 0.3f, capTop + s * 0.29f, fill)
                 if (who.id % 2L == 1L) {
                     fill.color = Color.rgb(245, 245, 250)
-                    for (k in -2..2) c.drawCircle(fx + k * s * 0.045f, my + s * 0.06f + (2 - abs(k)) * s * 0.025f, s * 0.045f, fill)
+                    for (k in -2..2) c.drawCircle(fx + k * s * 0.045f, faceY + s * 0.135f + (2 - abs(k)) * s * 0.025f, s * 0.045f, fill)
                 } else if (who.wear[1] < 0) {
                     stroke.color = Color.rgb(120, 90, 50); stroke.strokeWidth = max(1f * dp, s * 0.015f)
                     c.drawCircle(fx - ex, faceY, er * 1.7f, stroke); c.drawCircle(fx + ex, faceY, er * 1.7f, stroke)
@@ -6873,7 +6947,7 @@ class GameView(context: Context) : View(context) {
             }
             val cy = h * 0.8f
             fill.color = Color.rgb(78, 140, 104); c.drawRect(0f, cy, w, h, fill)
-            val face = if (catchDizzy > 0f) E_DIZZY else E_GIGGLE
+            val face = if (catchDizzy > 0f) E_BONK else E_GIGGLE
             professor.expr = 0
             val catcher = Shroom(-5L, catchSpecies).apply { expr = face; exprT = 1f; xp = 200f }
             drawShroom(c, catchSpecies, catchX, cy, 80f * dp, 0, sin(t * 6f), false, false, who = catcher)
