@@ -554,7 +554,7 @@ class LabState(context: Context) {
             if (!s.away() && s.area == 0 && Random.nextFloat() < hours * 0.05f) {
                 val sd = Random.nextInt(Data.SEEDS.size - (if (Random.nextFloat() < 0.8f) 2 else 0))
                 seeds[sd]++
-                events.add("${s.name} found a ${Data.SEEDS[sd].name}! Plant it in the veggie patch 🌱")
+                events.add("🌱 ${s.name} found a ${Data.SEEDS[sd].name}! Plant it in the veggie patch")
             }
             if (s.away()) {
                 // Out exploring: they forage for themselves and grow a little

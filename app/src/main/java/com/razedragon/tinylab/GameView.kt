@@ -7335,7 +7335,7 @@ class GameView(context: Context) : View(context) {
                 val flap = sin(t * 5f) * 0.15f
                 fill.color = Color.rgb(60, 40, 70)
                 for (side in intArrayOf(-1, 1)) {
-                    c.save(); c.rotate(side * (20f + flap * 60f), cx + side * s * 0.15f, neckY + s * 0.1f)
+                    c.save(); c.rotate(side * (if (iconMode) 38f else 20f + flap * 60f), cx + side * s * 0.15f, neckY + s * 0.1f)
                     path.reset(); path.moveTo(cx + side * s * 0.15f, neckY + s * 0.05f)
                     path.lineTo(cx + side * s * 0.55f, neckY - s * 0.15f)
                     path.lineTo(cx + side * s * 0.5f, neckY + s * 0.05f)
@@ -7343,6 +7343,14 @@ class GameView(context: Context) : View(context) {
                     path.lineTo(cx + side * s * 0.33f, neckY + s * 0.15f)
                     path.lineTo(cx + side * s * 0.22f, neckY + s * 0.12f); path.close()
                     c.drawPath(path, fill); c.restore()
+                }
+                if (iconMode) {   // a tiny bat body between the wings so the icon reads as wings
+                    c.drawCircle(cx, neckY + s * 0.06f, s * 0.13f, fill)
+                    path.reset(); path.moveTo(cx - s * 0.11f, neckY - s * 0.02f); path.lineTo(cx - s * 0.08f, neckY - s * 0.14f); path.lineTo(cx - s * 0.02f, neckY - s * 0.04f)
+                    path.moveTo(cx + s * 0.11f, neckY - s * 0.02f); path.lineTo(cx + s * 0.08f, neckY - s * 0.14f); path.lineTo(cx + s * 0.02f, neckY - s * 0.04f)
+                    c.drawPath(path, fill)
+                    fill.color = Color.rgb(255, 220, 120)
+                    c.drawCircle(cx - s * 0.045f, neckY + s * 0.04f, s * 0.025f, fill); c.drawCircle(cx + s * 0.045f, neckY + s * 0.04f, s * 0.025f, fill)
                 }
             }
             18 -> { // santa hat
