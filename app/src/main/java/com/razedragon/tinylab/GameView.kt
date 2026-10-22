@@ -7430,7 +7430,7 @@ class GameView(context: Context) : View(context) {
         fill.shader = RadialGradient(w / 2, stageY, w * 0.5f, Color.argb((90 * fade).toInt(), Color.red(evC), Color.green(evC), Color.blue(evC)), Color.argb(0, 0, 0, 0), Shader.TileMode.CLAMP)
         c.save(); c.scale(1f, 0.22f, w / 2, stageY); c.drawCircle(w / 2, stageY, w * 0.5f, fill); c.restore(); fill.shader = null
         // Professor Spore on the left
-        val profS = min(130f * dp, w * 0.3f)
+        val profS = min(165f * dp, w * 0.38f)
         val px = w * 0.25f
         c.saveLayerAlpha(0f, 0f, w, h, if (speaker == 1) 255 else 150)
         val pb = if (speaker == 1) abs(sin(t * 6f)) * 5f * dp else 0f
