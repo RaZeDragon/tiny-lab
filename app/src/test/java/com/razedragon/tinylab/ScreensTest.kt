@@ -438,7 +438,7 @@ class ScreensTest {
         lab.garden.add(lab.newShroom(1, 600f, false).apply { gx = 0.5f; gz = 0.6f })
         g.testScenesSeen(false)
         g.testFrame(1.5f)
-        assertTrue(g.testSceneOn())
+        assertTrue(g.testSceneWhy(), g.testSceneOn())
         save(g.testRender(), "scene_ghost_1")
         // tap through to the choice
         var guard = 0

@@ -1772,6 +1772,7 @@ class GameView(context: Context) : View(context) {
     internal fun testTutStep() = tutStep
     internal var testFace: String? = null
     internal fun testSceneOn() = sceneOn()
+    internal fun testSceneWhy() = "tab=$tab tut=$tutStep popup=${popup != null} set=$settingsOpen mini=$mini help=$helpTab offer=$offerPack prev=$previewKind merch=$merchantOpen fam=$familyFor card=$cardFor off=${lab.pendingOffline} ev=${eventNow()} q=${lab.questNow()} seen=${prefs.getBoolean(sceneKey(eventNow(), lab.questNow().coerceAtLeast(0)), false)}"
     internal fun testSceneLine() = sceneIdx
     internal fun testCrossbreed(a: Long, b: Long) { tab = Tab.LAB; labMode = 1; picks.clear(); picks.add(a); picks.add(b) }
     internal fun testPoke(s: Shroom) = poke(s)
@@ -7343,7 +7344,7 @@ class GameView(context: Context) : View(context) {
 
     /** Plays the next chapter of the event story once you're back in the garden. */
     private fun checkScenes() {
-        if (sceneOn() || tab != Tab.GARDEN || tutStep >= 0 || popup != null || settingsOpen || mini > 0 || qaMode) return
+        if (sceneOn() || tab != Tab.GARDEN || tutStep >= 0 || popup != null || settingsOpen || mini > 0) return
         if (helpTab != null || offerPack >= 0 || previewKind >= 0 || merchantOpen || familyFor >= 0 || cardFor >= 0 || lab.pendingOffline > 0) return
         val ev = eventNow(); if (ev == 0) return
         val st = lab.questNow(); if (st < 0) return
