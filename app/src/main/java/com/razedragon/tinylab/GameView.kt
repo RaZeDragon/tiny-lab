@@ -4015,33 +4015,35 @@ class GameView(context: Context) : View(context) {
         // a chubby, pear-shaped stem with a soft glow in the middle
         fun drawStem() {
             val top = capBottom - s * 0.03f
-            val tw = stemW * 0.4f; val bw = stemW * 0.56f
+            val tw = stemW * 0.38f; val bw = stemW * 0.55f
             val h = baseY - top
-            val sp2 = Path()
-            sp2.moveTo(cx - tw, top)
-            sp2.cubicTo(cx - tw * 1.02f, top + h * 0.45f, cx - bw * 1.12f, baseY - h * 0.28f, cx - bw * 0.92f, baseY - s * 0.03f)
-            sp2.quadTo(cx, baseY + s * 0.035f, cx + bw * 0.92f, baseY - s * 0.03f)
-            sp2.cubicTo(cx + bw * 1.12f, baseY - h * 0.28f, cx + tw * 1.02f, top + h * 0.45f, cx + tw, top)
-            sp2.quadTo(cx, top - s * 0.035f, cx - tw, top)
-            sp2.close()
+            val bot = baseY - s * 0.012f
+            // sides bulge into a soft belly, then tuck in at the feet
+            val side = Path()
+            side.moveTo(cx - tw, top)
+            side.cubicTo(cx - tw, top + h * 0.3f, cx - bw, baseY - h * 0.62f, cx - bw, baseY - h * 0.32f)
+            side.cubicTo(cx - bw, baseY - h * 0.06f, cx - bw * 0.75f, bot, cx, bot)
+            side.cubicTo(cx + bw * 0.75f, bot, cx + bw, baseY - h * 0.06f, cx + bw, baseY - h * 0.32f)
+            side.cubicTo(cx + bw, baseY - h * 0.62f, cx + tw, top + h * 0.3f, cx + tw, top)
+            val body = Path(side); body.quadTo(cx, top - s * 0.04f, cx - tw, top); body.close()
             if (silhouette) fill.color = dark
-            else fill.shader = RadialGradient(cx - stemW * 0.06f, baseY - h * 0.5f, stemW * 0.75f,
-                intArrayOf(shade(stemC, 0.3f), stemC, shade(stemC, -0.16f)), floatArrayOf(0f, 0.6f, 1f), Shader.TileMode.CLAMP)
-            c.drawPath(sp2, fill); fill.shader = null
+            else fill.shader = RadialGradient(cx - stemW * 0.06f, baseY - h * 0.45f, stemW * 0.8f,
+                intArrayOf(shade(stemC, 0.3f), stemC, shade(stemC, -0.14f)), floatArrayOf(0f, 0.6f, 1f), Shader.TileMode.CLAMP)
+            c.drawPath(body, fill); fill.shader = null
             if (!silhouette) {
-                // a few soft folds near the bottom
-                stroke.color = Color.argb(45, Color.red(outline(stemC)), Color.green(outline(stemC)), Color.blue(outline(stemC)))
+                stroke.color = Color.argb(40, Color.red(outline(stemC)), Color.green(outline(stemC)), Color.blue(outline(stemC)))
                 stroke.strokeWidth = max(1f * dp, s * 0.012f)
-                c.drawArc(cx - bw * 0.7f, baseY - h * 0.42f, cx - bw * 0.1f, baseY + h * 0.1f, 200f, 50f, false, stroke)
-                c.drawArc(cx + bw * 0.1f, baseY - h * 0.42f, cx + bw * 0.7f, baseY + h * 0.1f, 290f, 50f, false, stroke)
-                ink(stemC); c.drawPath(sp2, stroke)
+                c.drawArc(cx - bw * 0.75f, baseY - h * 0.5f, cx - bw * 0.15f, baseY + h * 0.05f, 195f, 55f, false, stroke)
+                c.drawArc(cx + bw * 0.15f, baseY - h * 0.5f, cx + bw * 0.75f, baseY + h * 0.05f, 290f, 55f, false, stroke)
+                // outline the sides only, so the top melts into the gills
+                ink(stemC); c.drawPath(side, stroke)
             }
         }
 
         // round little paws with toe lines
         fun drawFeet() {
             if (silhouette) return
-            val fw = s * 0.115f; val fh = s * 0.065f
+            val fw = s * 0.09f; val fh = s * 0.052f
             for (side in intArrayOf(-1, 1)) {
                 val kick = when {
                     held -> abs(sin(t * 9f + side)) * s * 0.08f
@@ -4050,7 +4052,7 @@ class GameView(context: Context) : View(context) {
                 }
                 val fx = cx + side * stemW * 0.3f
                 val dy = -kick + (if (held) s * 0.05f else 0f)
-                val r = RectF(fx - fw, baseY - fh * 1.3f + dy, fx + fw, baseY + fh * 0.7f + dy)
+                val r = RectF(fx - fw, baseY - fh * 0.8f + dy, fx + fw, baseY + fh * 1.0f + dy)
                 fill.shader = LinearGradient(0f, r.top, 0f, r.bottom, shade(stemC, 0.18f), shade(stemC, -0.1f), Shader.TileMode.CLAMP)
                 c.drawOval(r, fill); fill.shader = null
                 ink(stemC); c.drawOval(r, stroke)
