@@ -320,6 +320,33 @@ class ScreensTest {
         reset()
     }
 
+    @Test fun tutorialGuidesWelcomeBack() {
+        reset()
+        // first play: the feed step spotlights the real buttons
+        val g = launch(0)
+        g.testFrame(3.2f)
+        val lab = g.testLab()
+        val s = lab.newShroom(1, 10f, false).apply { gx = 0.5f; gz = 0.5f }
+        lab.garden.add(s); lab.brewed = 1
+        g.testSelect(s.id)
+        g.testTutorial(6)
+        g.testFrame(0.4f); save(g.testRender(), "tut_feed_button")
+        assertTrue(g.testTap("feed")); g.testFrame(0.4f); save(g.testRender(), "tut_feed_food")
+        // tab guides
+        val g2 = ready(0)
+        for (tb in listOf("GARDEN", "LAB", "DEX", "JOURNAL", "SHOP")) { g2.testHelp(tb); g2.testFrame(0.2f); save(g2.testRender(), "help_" + tb.lowercase()); assertTrue(g2.testTap("help_ok")) }
+        // welcome back after time away: capped at 250
+        val l2 = g2.testLab()
+        for (k in 0 until 6) l2.garden.add(l2.newShroom(listOf(1, 2, 3, 6, 13, 30)[k], 200f, false))
+        l2.tick(System.currentTimeMillis() + 5 * 3_600_000L)
+        assertEquals(LabState.OFFLINE_CAP, l2.pendingOffline)
+        g2.testFrame(0.3f); save(g2.testRender(), "welcome_back")
+        val before = l2.dust
+        assertTrue(g2.testTap("wb_claim"))
+        assertEquals(before + LabState.OFFLINE_CAP, l2.dust)
+        reset()
+    }
+
     @Test fun merchantStickersCodes() {
         reset(); Data.forceMerchant = true
         val g = ready(0)

@@ -167,6 +167,9 @@ class LabState(context: Context) {
     val redeemed = HashSet<String>()
     val packsBought = HashSet<String>()
     val merchantBought = HashSet<String>()
+    /** Spore dust made while the game was closed, waiting in the "welcome back" window. */
+    var pendingOffline = 0
+    var offlineMs = 0L
 
     // Stats
     var crosses = 0
@@ -461,6 +464,10 @@ class LabState(context: Context) {
     companion object {
         /** The meadow is twice as wide as the screen; gx runs from 0 to WORLD. */
         const val WORLD = 2f
+        /** Gaps longer than this count as time away. */
+        const val OFFLINE_MIN_HOURS = 5f / 60f
+        /** Most spore dust you can collect while away. */
+        const val OFFLINE_CAP = 250
         fun dayKey(cal: Calendar = Calendar.getInstance()) = cal.get(Calendar.YEAR) * 1000 + cal.get(Calendar.DAY_OF_YEAR)
         fun hour() = Calendar.getInstance().let { it.get(Calendar.HOUR_OF_DAY) + it.get(Calendar.MINUTE) / 60f }
 
@@ -524,6 +531,10 @@ class LabState(context: Context) {
         lastTick = now
         expireEventIngredients()
         if (hours <= 0f) return
+        // a long gap means the game was closed: production goes to the welcome-back pool instead (capped)
+        val offline = hours > OFFLINE_MIN_HOURS
+        var offlineMade = 0f
+        if (offline) offlineMs += (hours * 3_600_000f).toLong()
         val rainMul = if (rainy()) 1.5f else 1f
         val charm = max(0.4f, 1f - 0.06f * placed.size)
         val gardener = jobHolder(Data.JOB_GARDEN) != null
@@ -561,7 +572,8 @@ class LabState(context: Context) {
                     (if (gardener) 0.7f else 1f) * (if (bestieNear) 0.75f else 1f) * (if (s.area == 1 && glowing) 0.7f else 1f))
             val rate = floatArrayOf(2f, 6f, 12f, 20f)[s.stage()] * Data.TIER_MUL[s.tier()] *
                     (if (s.hunger <= 0f) 0.5f else 1f) * (if (s.shiny) 2f else 1f)
-            s.dust = min(s.dustCap(), s.dust + rate * hours)
+            if (offline) offlineMade += rate * hours
+            else s.dust = min(s.dustCap(), s.dust + rate * hours)
 
             if (upgrades[Data.UP_FEEDER] > 0 && s.hunger < 30f) {
                 val f = foods.indices.firstOrNull { foods[it] > 0 }
@@ -579,6 +591,11 @@ class LabState(context: Context) {
                 dust += n
             }
         }
+            if (offline && offlineMade > 0f) addOffline(offlineMade)
+    }
+
+    fun addOffline(made: Float) {
+        pendingOffline = min(OFFLINE_CAP, pendingOffline + made.toInt())
     }
 
     // ---------- Expeditions ----------
@@ -854,7 +871,7 @@ class LabState(context: Context) {
         o.put("seeds", ints(seeds)); o.put("plotSeed", ints(plotSeed)); o.put("plotAt", JSONArray(plotAt.toList())); o.put("plotWater", bools(plotWater))
         o.put("stickers", bools(stickers)); o.put("stickerPos", JSONArray(stickerPos.map { if (it.isNaN()) -1.0 else it.toDouble() }))
         o.put("bedtimeUsed", usedBedtime); o.put("jammed", jammed); o.put("harvested", harvested); o.put("cooked", cookedCount)
-        o.put("merchantBuys", merchantBuys)
+        o.put("merchantBuys", merchantBuys); o.put("offline", pendingOffline); o.put("offlineMs", offlineMs)
         o.put("redeemed", JSONArray(redeemed.toList())); o.put("packs", JSONArray(packsBought.toList())); o.put("merchantBought", JSONArray(merchantBought.toList()))
         if (noSave) return
         prefs.edit().putString("save", o.toString()).apply()
@@ -918,7 +935,7 @@ class LabState(context: Context) {
             readBools(o, "stickers", stickers)
             o.optJSONArray("stickerPos")?.let { a -> for (i in stickerPos.indices) { val v = a.optDouble(i, -1.0); stickerPos[i] = if (v < 0) Float.NaN else v.toFloat() } }
             usedBedtime = o.optBoolean("bedtimeUsed"); jammed = o.optBoolean("jammed"); harvested = o.optInt("harvested"); cookedCount = o.optInt("cooked")
-            merchantBuys = o.optInt("merchantBuys")
+            merchantBuys = o.optInt("merchantBuys"); pendingOffline = o.optInt("offline"); offlineMs = o.optLong("offlineMs")
             o.optJSONArray("redeemed")?.let { a -> for (i in 0 until a.length()) redeemed.add(a.optString(i)) }
             o.optJSONArray("packs")?.let { a -> for (i in 0 until a.length()) packsBought.add(a.optString(i)) }
             o.optJSONArray("merchantBought")?.let { a -> for (i in 0 until a.length()) merchantBought.add(a.optString(i)) }

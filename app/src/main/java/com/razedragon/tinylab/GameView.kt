@@ -282,6 +282,7 @@ class GameView(context: Context) : View(context) {
             popup != null -> popup = null
             photoMode -> photoMode = false
             feeding -> feeding = false
+            helpTab != null -> helpTab = null
             previewKind >= 0 -> { previewKind = -1; previewFromOffer = false }
             familyFor >= 0 -> familyFor = -1
             offerPack >= 0 -> closeOffer()
@@ -566,6 +567,11 @@ class GameView(context: Context) : View(context) {
         if (splashT > 0f) return ArrayList()
         if (mini > 0) return ArrayList<Button>().also { miniButtons(it, w, h) }
         if (settingsOpen) return ArrayList<Button>().also { settingsButtons(it, w, h) }
+        if (lab.pendingOffline > 0 && tutStep < 0 && mini == 0) return ArrayList<Button>().also { l -> welcomeButtons(l, w, h) }
+        if (helpTab != null) return ArrayList<Button>().also { l ->
+            val r = helpCard(w, h)
+            l.add(Button("help_ok", RectF(r.left + 24f * dp, r.bottom - 64f * dp, r.right - 24f * dp, r.bottom - 18f * dp), "GOT IT!", STYLE_PRIMARY) { helpTab = null })
+        }
         if (previewKind >= 0) return ArrayList<Button>().also { l -> previewButtons(l, w, h) }
         if (offerPack >= 0) return ArrayList<Button>().also { l ->
             val pk = Data.PACKS[offerPack]
@@ -652,6 +658,12 @@ class GameView(context: Context) : View(context) {
         }
 
         // Settings gear in the top bar
+        run {
+            text.textSize = 18f * dp
+            val pw = text.measureText("${max(0f, shownDust).toInt()}") + 46f * dp
+            val hx = w - 62f * dp - pw - 44f * dp
+            list.add(Button("help", RectF(hx, 15f * dp, hx + 36f * dp, 51f * dp), "?", STYLE_NORMAL) { helpTab = tab; sound.play(Fx.POP, 0.5f, 1.2f) })
+        }
         list.add(Button("gear", RectF(w - 54f * dp, 12f * dp, w - 10f * dp, 56f * dp), "", STYLE_CARD,
             custom = { c, r -> drawGear(c, r) }) { settingsOpen = true })
 
@@ -1385,7 +1397,7 @@ class GameView(context: Context) : View(context) {
                 pointerDown = true; downT = t; petting = false; hugDone = false
                 revs = 0; lastDxSign = 0; lastMoveX = x; petAcc = 0f
                 prevX = x; prevY = y; prevT = System.nanoTime(); velX = 0f; velY = 0f
-                if (settingsOpen || tutStep == T_WELCOME || tutStep == T_DONE) {
+                if (settingsOpen || tutStep == T_WELCOME || tutStep == T_DONE || overlayOpen()) {
                     pressedId = buttons.lastOrNull { hits(it, x, y) }?.id
                     return true
                 }
@@ -1525,9 +1537,9 @@ class GameView(context: Context) : View(context) {
                     if (b != null) {
                         sound.play(Fx.CLICK, 0.6f)
                         b.action()
-                    } else if (id == null && popup == null && tab == Tab.GARDEN && !photoMode && !settingsOpen) {
+                    } else if (id == null && popup == null && tab == Tab.GARDEN && !photoMode && !settingsOpen && !overlayOpen()) {
                         tapGarden(x, y)
-                    } else if (id == null && popup == null && tab == Tab.LAB && !settingsOpen) {
+                    } else if (id == null && popup == null && tab == Tab.LAB && !settingsOpen && !overlayOpen()) {
                         tapLab(x, y)
                     }
                 }
@@ -1693,6 +1705,8 @@ class GameView(context: Context) : View(context) {
     internal fun testProfSay(msg: String) = professorSay(msg, 30f)
     internal fun testSelect(id: Long) { selected = id; panelAnim = 1f }
     internal fun testBedtime() = bedtime()
+    internal fun testTutorial(step: Int) { splashT = 0f; setTut(step); tab = Tab.GARDEN }
+    internal fun testHelp(tb: String) { helpTab = Tab.valueOf(tb) }
     internal fun testEndMini() = endMini()
     internal fun testShopScroll(y: Float) { shopScroll = y; shopVel = 0f }
     internal fun testCam(x: Float) { camX = x.coerceIn(camMin(), camMax()); camVel = 0f }
@@ -1739,6 +1753,7 @@ class GameView(context: Context) : View(context) {
             if (newStickers.size > 2) toast("⭐ ${newStickers.size} new stickers! Journal → AWARDS → Sticker book", DUST)
             else for (i in newStickers) toast("⭐ New sticker: ${Data.STICKERS[i].icon} ${Data.STICKERS[i].name}!", DUST)
             checkOffers()
+            maybeShowHelp()
             if (merchantHere() && prefs.getInt("merchantDay", 0) != LabState.dayKey()) {
                 prefs.edit().putInt("merchantDay", LabState.dayKey()).apply()
                 toast("🪲 A traveling merchant is visiting the garden today!", MINT)
@@ -1893,7 +1908,7 @@ class GameView(context: Context) : View(context) {
         fill.color = Color.argb(40, 255, 255, 255)
         c.drawRect(0f, navTop, w, navTop + 1f * dp, fill)
 
-        if (!settingsOpen && cardFor < 0 && familyFor < 0 && !merchantOpen && offerPack < 0 && previewKind < 0) {
+        if (!settingsOpen && cardFor < 0 && familyFor < 0 && !merchantOpen && offerPack < 0 && previewKind < 0 && helpTab == null && !(lab.pendingOffline > 0 && tutStep < 0)) {
             c.save(); c.clipRect(0f, 0f, w, navTop)
             for (b in buttons) if (!b.id.startsWith("tut_") && !b.id.startsWith("nav")) drawButton(c, b)
             c.restore()
@@ -1938,6 +1953,8 @@ class GameView(context: Context) : View(context) {
             fill.color = Color.WHITE; fill.alpha = (255 * (flashT / 0.35f)).toInt().coerceIn(0, 255)
             c.drawRect(0f, 0f, w, h, fill); fill.alpha = 255
         }
+        if (lab.pendingOffline > 0 && tutStep < 0 && mini == 0) drawWelcome(c, w, h)
+        else if (helpTab != null) drawHelp(c, w, h)
         drawToast(c, w, h)
         if (splashT > 0f) drawSplash(c, w, h)
     }
@@ -5423,7 +5440,7 @@ class GameView(context: Context) : View(context) {
 
     /** Offers appear at friendly moments, each only once. */
     private fun checkOffers() {
-        if (tab != Tab.GARDEN || offerPack >= 0 || popup != null || tutStep >= 0 || settingsOpen) return
+        if (tab != Tab.GARDEN || offerPack >= 0 || popup != null || tutStep >= 0 || settingsOpen || helpTab != null || lab.pendingOffline > 0) return
         val now = System.currentTimeMillis()
         val starter = Data.PACKS.indexOfFirst { it.id == "starter" }
         val boost = Data.PACKS.indexOfFirst { it.id == "event_boost" }
@@ -7662,20 +7679,139 @@ class GameView(context: Context) : View(context) {
         T_BREW -> "Now tap BREW!"
         T_STIR -> "STIR! Trace circles around the flask, following the arrow. A better stir gives a stronger mushroom and a chance at a rare shiny!"
         T_REVEAL -> "Your first mushroom! Tap SEE IT to visit it in the garden."
-        T_FEED -> if (selected >= 0) "Tap FEED, then pick a food. Mushrooms grow when they're fed and happy." else "Tap one of your mushrooms."
+        T_FEED -> when {
+            selected < 0 -> "Tap one of your mushrooms."
+            feeding -> "Pick a food! The one with a ❤ is its favorite. Mushrooms grow when they're fed and happy."
+            else -> "Tap FEED to give it a snack."
+        }
         else -> "You're a real Shroomologist now! Grown mushrooms make spore dust ✦, can crossbreed in the Lab and go exploring. Check the Journal ⭐ for daily gifts and requests."
     }
 
     /** Where the spotlight goes for the current step (null = no spotlight). */
+    /** The spotlight hugs the real button, wherever the layout puts it. */
+    private fun btnSpot(vararg ids: String): RectF? {
+        var r: RectF? = null
+        for (id in ids) buttons.firstOrNull { it.id == id }?.let { b -> if (r == null) r = RectF(b.rect) else r!!.union(b.rect) }
+        return r?.apply { inset(-6f * dp, -6f * dp) }
+    }
+
     private fun tutSpot(w: Float, h: Float): RectF? = when (tutStep) {
-        T_GO_LAB -> { val tw = w / Tab.values().size; RectF(tw, navTop, tw * 2, h) }
-        T_DRAG -> RectF(8f * dp, h * 0.45f + 66f * dp, w - 8f * dp, navTop - 2f * dp)
-        T_BREW -> { val bw = min(w * 0.6f, 240f * dp); RectF(w / 2 - bw / 2 - 6f * dp, h * 0.45f - 6f * dp, w / 2 + bw / 2 + 6f * dp, h * 0.45f + 60f * dp) }
+        T_GO_LAB -> btnSpot("nav1") ?: run { val tw = w / Tab.values().size; RectF(tw, navTop, tw * 2, h) }
+        T_DRAG -> btnSpot("ing${Data.WATER}", "ing${Data.SOIL}")
+        T_BREW -> btnSpot("brew")
         T_STIR -> RectF(w / 2 - 130f * dp, flaskY() - 130f * dp, w / 2 + 130f * dp, flaskY() + 130f * dp)
-        T_REVEAL -> if (popup != null) { val bw = min(w * 0.36f, 160f * dp); RectF(w / 2, h * 0.66f - 6f * dp, w / 2 + bw + 12f * dp, h * 0.66f + 58f * dp) } else null
-        T_FEED -> if (selected >= 0) { val pad = 16f * dp; val bw = (w - pad * 2 - 16f * dp) / 3; val by = navTop - 62f * dp
-            RectF(pad - 6f * dp, by - 60f * dp, pad + bw + 6f * dp, by - 2f * dp) } else null
+        T_REVEAL -> if (popup != null) btnSpot("p_see") else null
+        T_FEED -> when {
+            selected < 0 -> lab.garden.firstOrNull()?.let { s -> val (x, y) = shroomScreen(s); val sz = shroomSize(s); RectF(x - sz * 0.8f, y - sz * 1.2f, x + sz * 0.8f, y + sz * 0.25f) }
+            feeding -> shroom(selected)?.let { btnSpot("food${Data.SPECIES[it.species].favFood}") }
+            else -> btnSpot("feed")
+        }
         else -> null
+    }
+
+    // ---------- A short guide for each tab ----------
+
+    private var helpTab: Tab? = null
+
+    /** A full-screen window is open, so taps shouldn't reach the garden or lab behind it. */
+    private fun overlayOpen() = helpTab != null || (lab.pendingOffline > 0 && tutStep < 0) || offerPack >= 0 || previewKind >= 0 ||
+        merchantOpen || familyFor >= 0 || cardFor >= 0
+    private val TAB_HELP = mapOf(
+        Tab.GARDEN to listOf("Your mushrooms live here.", "Tap one to feed it, dress it up, give it a job or send it exploring. Hold to hug, rub to pet, drag to move.",
+            "Swipe the grass to see the whole meadow. The Veggie Patch is on the right: plant seeds your shrooms find."),
+        Tab.LAB to listOf("Where new mushrooms are made.", "BREW: drag ingredients into the flask, then stir in circles. CROSSBREED: pair two Grown mushrooms to discover hybrids.",
+            "COOK: turn ingredients into special treats your mushrooms love."),
+        Tab.DEX to listOf("Your Shroomdex: every species.", "Tap one to see its recipe, or a hint if you haven't found it yet.",
+            "COMMON, RARE & BRED and EVENT tabs. Event species can only be made during their event."),
+        Tab.JOURNAL to listOf("Your daily hub.", "TODAY: daily gift, Professor Spore's requests, the event quest and the weekly mystery recipe.",
+            "CONTEST, AWARDS & sticker book, your DIARY, mini-GAMES and recipe NOTES."),
+        Tab.SHOP to listOf("Spend spore dust ✦ here.", "Ingredients, food, decorations, themes, hats, lab upgrades and pets.",
+            "Tap 🔍 on anything to preview it before you buy."),
+    )
+
+    private fun maybeShowHelp() {
+        if (tutStep >= 0 || popup != null || qaMode || offerPack >= 0 || lab.pendingOffline > 0) return
+        if (!prefs.getBoolean("help_" + tab.name, false)) { prefs.edit().putBoolean("help_" + tab.name, true).apply(); helpTab = tab }
+    }
+
+    private fun helpCard(w: Float, h: Float) = RectF(20f * dp, h * 0.2f, w - 20f * dp, h * 0.2f + 360f * dp)
+
+    private fun drawHelp(c: Canvas, w: Float, h: Float) {
+        val tb = helpTab ?: return
+        val lines = TAB_HELP[tb] ?: return
+        fill.color = Color.argb(200, 10, 6, 24); c.drawRect(0f, 0f, w, h, fill)
+        val r = helpCard(w, h)
+        fill.color = Color.rgb(38, 26, 70); c.drawRoundRect(r, 24f * dp, 24f * dp, fill)
+        panel(c, r, 24f * dp, PANEL_LIGHT)
+        drawShroom(c, professor.species, r.left + 36f * dp, r.top + 74f * dp, 44f * dp, 0, sin(t * 2f), (t % 4f) < 0.12f, false, who = professor)
+        text.textAlign = Paint.Align.LEFT
+        text.textSize = 12f * dp; text.color = ACCENT
+        c.drawText("PROFESSOR SPORE · " + tb.name, r.left + 72f * dp, r.top + 30f * dp, text)
+        text.textSize = 18f * dp; text.color = Color.WHITE
+        c.drawText(lines[0], r.left + 72f * dp, r.top + 56f * dp, text)
+        var y = r.top + 104f * dp
+        text.textSize = 14f * dp; text.color = Color.argb(230, 255, 255, 255)
+        for (para in lines.drop(1)) {
+            for (l in wrap(para, r.width() - 48f * dp)) { c.drawText(l, r.left + 24f * dp, y, text); y += 20f * dp }
+            y += 10f * dp
+        }
+        text.color = Color.WHITE; text.textAlign = Paint.Align.CENTER
+        for (b in buttons) drawButton(c, b)
+    }
+
+    // ---------- Welcome back: what your mushrooms made while you were away ----------
+
+    private fun welcomeCard(w: Float, h: Float) = RectF(24f * dp, h * 0.2f, w - 24f * dp, h * 0.2f + 400f * dp)
+
+    private fun welcomeButtons(l: ArrayList<Button>, w: Float, h: Float) {
+        val r = welcomeCard(w, h)
+        val amt = lab.pendingOffline
+        l.add(Button("wb_ad", RectF(r.left + 24f * dp, r.bottom - 124f * dp, r.right - 24f * dp, r.bottom - 74f * dp), "▶ WATCH AN AD: ${amt * 3} ✦", STYLE_PRIMARY) {
+            val act = context as? android.app.Activity ?: return@Button
+            Ads.showRewarded(act) { ok ->
+                if (ok) claimOffline(3) else toast("Video ads arrive with the Google Play release 📺", MINT)
+            }
+        })
+        l.add(Button("wb_claim", RectF(r.left + 24f * dp, r.bottom - 64f * dp, r.right - 24f * dp, r.bottom - 18f * dp), "CLAIM $amt ✦") { claimOffline(1) })
+    }
+
+    private fun claimOffline(mult: Int) {
+        val got = lab.pendingOffline * mult
+        lab.dust += got
+        lab.pendingOffline = 0; lab.offlineMs = 0L
+        sound.play(Fx.COIN); sound.play(Fx.DISCOVER, 0.5f)
+        burst(width / 2f, height * 0.35f, DUST, 40, P_SPARK)
+        toast("+$got ✦" + if (mult > 1) " (×$mult!)" else "", DUST)
+        markDirty()
+    }
+
+    private fun drawWelcome(c: Canvas, w: Float, h: Float) {
+        fill.color = Color.argb(205, 10, 6, 24); c.drawRect(0f, 0f, w, h, fill)
+        val r = welcomeCard(w, h)
+        fill.color = Color.rgb(38, 26, 70); c.drawRoundRect(r, 26f * dp, 26f * dp, fill)
+        panel(c, r, 26f * dp, PANEL_LIGHT)
+        text.textSize = 26f * dp; c.drawText("Welcome back!", w / 2, r.top + 46f * dp, text)
+        val mins = lab.offlineMs / 60000
+        text.textSize = 13f * dp; text.color = TEXT_DIM
+        c.drawText("You were away " + (if (mins >= 60) "${mins / 60}h ${mins % 60}m" else "${mins}m") + ". Your mushrooms kept working!", w / 2, r.top + 72f * dp, text)
+        text.color = Color.WHITE
+        // a few of your shrooms holding up spore dust
+        val shown = lab.home().take(3)
+        for ((k, s) in shown.withIndex()) {
+            val x = w / 2 + (k - (shown.size - 1) / 2f) * 80f * dp
+            drawShroom(c, s.species, x, r.top + 190f * dp, 60f * dp, 0, sin(t * 3f + k), false, false, shiny = s.shiny,
+                who = s.let { Shroom(-20L - k, it.species).apply { xp = it.xp; for (j in 0..2) wear[j] = it.wear[j]; expr = E_GIGGLE; exprT = 1f; variant = it.variant; tint = it.tint } })
+            val dy = r.top + 108f * dp + sin(t * 4f + k) * 4f * dp
+            fill.color = Color.WHITE
+            fill.shader = RadialGradient(x - 3f * dp, dy - 3f * dp, 12f * dp, Color.rgb(255, 245, 190), DUST, Shader.TileMode.CLAMP)
+            c.drawCircle(x, dy, 10f * dp, fill); fill.shader = null
+        }
+        text.textSize = 30f * dp; text.color = DUST
+        c.drawText("+${lab.pendingOffline} ✦", w / 2, r.top + 240f * dp, text)
+        text.textSize = 11.5f * dp; text.color = TEXT_DIM
+        c.drawText(if (lab.pendingOffline >= LabState.OFFLINE_CAP) "That's the most they can make while you're away (${LabState.OFFLINE_CAP} ✦)" else "Up to ${LabState.OFFLINE_CAP} ✦ while you're away", w / 2, r.top + 262f * dp, text)
+        text.color = Color.WHITE
+        for (b in buttons) drawButton(c, b)
     }
 
     private fun tutCardRect(w: Float, h: Float): RectF {
