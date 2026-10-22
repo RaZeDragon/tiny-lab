@@ -440,6 +440,7 @@ class ScreensTest {
         g.testFrame(1.5f)
         assertTrue(g.testSceneWhy(), g.testSceneOn())
         save(g.testRender(), "scene_ghost_1")
+        g.testTap("scene_tap"); g.testTap("scene_tap"); g.testFrame(3f); save(g.testRender(), "scene_ghost_cry")
         // tap through to the choice
         var guard = 0
         while (!g.testButtonIds().contains("scene_choice0") && guard++ < 20) { g.testTap("scene_tap"); g.testTap("scene_tap"); g.testFrame(0.1f) }

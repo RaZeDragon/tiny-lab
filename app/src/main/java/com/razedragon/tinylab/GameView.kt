@@ -5322,7 +5322,8 @@ class GameView(context: Context) : View(context) {
         // drifting candy corn
         for (k in 0 until 6) {
             val f = (age * 0.08f + k * 0.17f) % 1f
-            val x = w * ((k * 0.29f) % 1f); val y = h * (0.1f + f * 0.85f)
+            // keep to the sides so they never cross the title or the mushroom
+            val x = w * (if (k % 2 == 0) 0.05f + (k / 2) * 0.07f else 0.95f - (k / 2) * 0.07f); val y = h * (0.1f + f * 0.85f)
             c.save(); c.rotate(age * 60f + k * 50f, x, y)
             drawEventFood(c, 5, x, y, 7f * dp)
             c.restore()
@@ -6441,15 +6442,59 @@ class GameView(context: Context) : View(context) {
     // ---------- Pets ----------
 
     /** 0 snail, 1 ladybug, 2 firefly, 3 froggy, 4 ghostie, 5 penguin, 6 bunny */
-    private fun drawPet(c: Canvas, p: Int, x: Float, y0: Float, s: Float, phase: Float, facing: Float, asleep: Boolean) {
+    /** [feel]: 0 normal, 1 crying, 2 happy, 3 surprised, 4 shivering (used by story scenes). */
+    private fun drawPet(c: Canvas, p: Int, x: Float, y0: Float, s: Float, phase: Float, facing: Float, asleep: Boolean, feel: Int = 0) {
         val f = if (facing >= 0) 1f else -1f
         val eye = Color.rgb(45, 30, 55)
         fun eyes(ex: Float, ey: Float, r: Float, gap: Float) {
             fill.color = eye
-            if (asleep) { stroke.color = eye; stroke.strokeWidth = r * 0.6f
-                c.drawLine(ex - gap - r, ey, ex - gap + r, ey, stroke); c.drawLine(ex + gap - r, ey, ex + gap + r, ey, stroke) }
-            else { c.drawCircle(ex - gap, ey, r, fill); c.drawCircle(ex + gap, ey, r, fill)
-                fill.color = Color.WHITE; c.drawCircle(ex - gap + r * 0.3f, ey - r * 0.3f, r * 0.35f, fill); c.drawCircle(ex + gap + r * 0.3f, ey - r * 0.3f, r * 0.35f, fill) }
+            stroke.color = eye; stroke.strokeCap = Paint.Cap.ROUND
+            val my = ey + gap * 0.95f   // where a mouth would go
+            when {
+                asleep -> { stroke.strokeWidth = r * 0.6f
+                    c.drawLine(ex - gap - r, ey, ex - gap + r, ey, stroke); c.drawLine(ex + gap - r, ey, ex + gap + r, ey, stroke) }
+                feel == 1 -> {   // crying: worried brows, watery eyes, tears streaming, wobbly frown
+                    stroke.strokeWidth = r * 0.45f
+                    for (sd in intArrayOf(-1, 1)) c.drawLine(ex + sd * (gap + r * 1.1f), ey - r * 1.5f, ex + sd * (gap - r * 0.6f), ey - r * 2.3f, stroke)
+                    for (sd in intArrayOf(-1, 1)) {
+                        val cx2 = ex + sd * gap
+                        fill.color = eye; c.drawCircle(cx2, ey, r * 1.05f, fill)
+                        fill.color = Color.WHITE; c.drawCircle(cx2 - r * 0.3f, ey - r * 0.35f, r * 0.38f, fill); c.drawCircle(cx2 + r * 0.35f, ey + r * 0.35f, r * 0.22f, fill)
+                        // a pool of tears along the bottom of each eye, then a stream down the cheek
+                        fill.color = Color.argb(210, 120, 190, 255)
+                        c.drawOval(cx2 - r * 1.15f, ey + r * 0.45f, cx2 + r * 1.15f, ey + r * 1.15f, fill)
+                        val streamTop = ey + r * 0.9f
+                        val len = gap * 1.6f
+                        c.drawRoundRect(cx2 + sd * r * 0.55f - r * 0.32f, streamTop, cx2 + sd * r * 0.55f + r * 0.32f, streamTop + len, r * 0.3f, r * 0.3f, fill)
+                        val d = (t * 1.6f + (if (sd < 0) 0f else 0.5f)) % 1f   // drips falling off
+                        fill.color = Color.argb((230 * (1f - d)).toInt(), 120, 190, 255)
+                        c.drawCircle(cx2 + sd * r * 0.55f, streamTop + len + d * gap * 1.4f, r * 0.42f, fill)
+                    }
+                    stroke.strokeWidth = r * 0.4f
+                    path.reset(); path.moveTo(ex - r * 1.3f, my + r * 0.5f)
+                    path.quadTo(ex - r * 0.65f, my - r * 0.4f, ex, my + r * 0.1f); path.quadTo(ex + r * 0.65f, my - r * 0.4f, ex + r * 1.3f, my + r * 0.5f)
+                    c.drawPath(path, stroke)
+                }
+                feel == 2 -> {   // happy: ^^ eyes and a little smile
+                    stroke.strokeWidth = r * 0.5f
+                    for (sd in intArrayOf(-1, 1)) c.drawArc(ex + sd * gap - r, ey - r * 0.6f, ex + sd * gap + r, ey + r * 1.2f, 200f, 140f, false, stroke)
+                    c.drawArc(ex - r * 0.9f, my - r * 0.8f, ex + r * 0.9f, my + r * 0.6f, 20f, 140f, false, stroke)
+                }
+                feel == 3 -> {   // surprised: big eyes, little "o"
+                    for (sd in intArrayOf(-1, 1)) { fill.color = eye; c.drawCircle(ex + sd * gap, ey, r * 1.3f, fill)
+                        fill.color = Color.WHITE; c.drawCircle(ex + sd * gap + r * 0.35f, ey - r * 0.4f, r * 0.45f, fill) }
+                    fill.color = eye; c.drawOval(ex - r * 0.45f, my - r * 0.3f, ex + r * 0.45f, my + r * 0.7f, fill)
+                }
+                feel == 4 -> {   // shivering: squeezed > < eyes
+                    stroke.strokeWidth = r * 0.45f
+                    val j = sin(t * 40f) * r * 0.15f
+                    for (sd in intArrayOf(-1, 1)) { val cx2 = ex + sd * gap + j
+                        c.drawLine(cx2 - sd * r, ey - r * 0.8f, cx2 + sd * r * 0.6f, ey, stroke); c.drawLine(cx2 + sd * r * 0.6f, ey, cx2 - sd * r, ey + r * 0.8f, stroke) }
+                    path.reset(); path.moveTo(ex - r * 1.1f, my); for (k in 1..4) path.lineTo(ex - r * 1.1f + k * r * 0.55f, my + (if (k % 2 == 0) 0f else r * 0.4f)); c.drawPath(path, stroke)
+                }
+                else -> { c.drawCircle(ex - gap, ey, r, fill); c.drawCircle(ex + gap, ey, r, fill)
+                    fill.color = Color.WHITE; c.drawCircle(ex - gap + r * 0.3f, ey - r * 0.3f, r * 0.35f, fill); c.drawCircle(ex + gap + r * 0.3f, ey - r * 0.3f, r * 0.35f, fill) }
+            }
         }
         when (p) {
             0 -> { // snail
@@ -7444,10 +7489,11 @@ class GameView(context: Context) : View(context) {
         val vs = min(150f * dp, w * 0.36f)
         val vy = stageY + hover - vb
         c.saveLayerAlpha(0f, 0f, w, h, ((if (speaker == 0 || speaker == 2) 255 else 160) * vIn).toInt())
-        drawPet(c, q.pet, vx, vy, vs, t * 6f, -1f, false)
+        val feel = if (speaker == 0 && l != null) when (l.emote) { 1 -> 1; 2 -> 2; 3 -> 3; 4 -> 4; else -> 0 } else 0
+        drawPet(c, q.pet, vx, vy, vs, t * 6f, -1f, false, feel)
         c.restore()
         // emote over whoever is talking
-        if (l != null && l.emote > 0 && speaker != 2) {
+        if (l != null && l.emote > 0 && speaker != 2 && !(speaker == 0 && (l.emote == 1 || l.emote == 4))) {   // the visitor's own face shows tears and shivers
             val ex = if (speaker == 0) vx + vs * 0.42f else px + profS * 0.45f
             val ey = if (speaker == 0) vy - vs * 1.05f else stageY - profS * 1.15f
             when (l.emote) {
