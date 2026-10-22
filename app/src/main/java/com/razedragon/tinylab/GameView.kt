@@ -7734,7 +7734,14 @@ class GameView(context: Context) : View(context) {
         if (!prefs.getBoolean("help_" + tab.name, false)) { prefs.edit().putBoolean("help_" + tab.name, true).apply(); helpTab = tab }
     }
 
-    private fun helpCard(w: Float, h: Float) = RectF(20f * dp, h * 0.2f, w - 20f * dp, h * 0.2f + 360f * dp)
+    private fun helpCard(w: Float, h: Float): RectF {
+        val lines = TAB_HELP[helpTab] ?: emptyList()
+        text.textSize = 14f * dp
+        var body = 0f
+        for (para in lines.drop(1)) body += wrap(para, w - 40f * dp - 48f * dp).size * 20f * dp + 10f * dp
+        val ch = 104f * dp + body + 70f * dp
+        return RectF(20f * dp, h * 0.24f, w - 20f * dp, h * 0.24f + ch)
+    }
 
     private fun drawHelp(c: Canvas, w: Float, h: Float) {
         val tb = helpTab ?: return
@@ -7867,6 +7874,7 @@ class GameView(context: Context) : View(context) {
         }
         // the card, with Professor Spore
         val r = tutCardRect(w, h)
+        fill.color = Color.rgb(38, 26, 70); c.drawRoundRect(r, 20f * dp, 20f * dp, fill)
         panel(c, r, 20f * dp, PANEL_LIGHT)
         drawShroom(c, professor.species, r.left + 30f * dp, r.top + 64f * dp, 38f * dp, 0, sin(t * 2f), (t % 4f) < 0.12f, false, who = professor)
         text.textAlign = Paint.Align.LEFT
