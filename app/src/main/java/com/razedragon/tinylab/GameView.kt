@@ -1330,7 +1330,7 @@ class GameView(context: Context) : View(context) {
                 0 -> drawIngredient(c, i, pad + 20f * dp, cy, 14f * dp)
                 1 -> drawFood(c, i, pad + 20f * dp, cy, 14f * dp)
                 2 -> { iconBackdrop(c, pad + 20f * dp, cy, 22f * dp); decorIcon(c, i, pad + 20f * dp, cy, 34f * dp) }
-                4 -> { iconBackdrop(c, pad + 20f * dp, cy, 22f * dp); accIcon(c, i, pad + 20f * dp, cy, 32f * dp) }
+                4 -> { iconBackdrop(c, pad + 20f * dp, cy, 22f * dp, Data.ACCESSORIES[i].color); accIcon(c, i, pad + 20f * dp, cy, 32f * dp) }
                 7 -> drawGiftBox(c, pad + 20f * dp, cy + 14f * dp, 30f * dp, Data.PACKS[i].color)
                 6 -> { iconBackdrop(c, pad + 20f * dp, cy, 22f * dp)
                     c.save(); c.clipRect(pad - 4f * dp, y + 3f * dp, pad + 44f * dp, y + rowH - 3f * dp)
@@ -2138,9 +2138,12 @@ class GameView(context: Context) : View(context) {
             val dx = b.gx - a.gx; val dz = (b.gz - a.gz) * 1.6f
             val d = hypot(dx, dz)
             if (d < gap && d > 0.0001f) {
-                val push = (gap - d) * 0.5f * min(1f, dt * 6f)
-                if (a.act == 0) { a.gx -= dx / d * push; a.gz -= dz / d * push * 0.6f }
-                if (b.act == 0) { b.gx += dx / d * push; b.gz += dz / d * push * 0.6f }
+                // sleepers get nudged too, and if only one of them can move it takes the whole step
+                val ma = a.act == 0 || a.act == ACT_SLEEP; val mb = b.act == 0 || b.act == ACT_SLEEP
+                val share = if (ma && mb) 0.5f else 1f
+                val push = (gap - d) * share * min(1f, dt * 6f)
+                if (ma) { a.gx -= dx / d * push; a.gz -= dz / d * push * 0.6f }
+                if (mb) { b.gx += dx / d * push; b.gz += dz / d * push * 0.6f }
             }
         }
         for (s in home) { s.gx = s.gx.coerceIn(0.05f, LabState.WORLD - 0.05f); s.gz = s.gz.coerceIn(0f, 1f) }
@@ -5669,7 +5672,7 @@ class GameView(context: Context) : View(context) {
             val (name, sub) = when (o.kind) {
                 0 -> { drawIngredient(c, o.item, ix, iy, 12f * dp); Pair("${o.qty}× ${Data.INGREDIENTS[o.item].name}", "A bundle at a bargain") }
                 1 -> { drawSeedPacket(c, o.item, ix, iy, 14f * dp); Pair("${o.qty}× ${Data.SEEDS[o.item].name}", "Plant in the garden's veggie patch") }
-                2 -> { iconBackdrop(c, ix, iy, 20f * dp); accIcon(c, o.item, ix, iy, 30f * dp); Pair(Data.ACCESSORIES[o.item].name, "Only sold by Bartleby!") }
+                2 -> { iconBackdrop(c, ix, iy, 20f * dp, Data.ACCESSORIES[o.item].color); accIcon(c, o.item, ix, iy, 30f * dp); Pair(Data.ACCESSORIES[o.item].name, "Only sold by Bartleby!") }
                 else -> { drawMysteryEgg(c, ix, iy + 10f * dp, 22f * dp); Pair("Mystery Egg", "What will hatch? 🥚") }
             }
             text.textSize = 14f * dp; c.drawText(name, card.left + 66f * dp, iy - 2f * dp, text)
@@ -8197,8 +8200,9 @@ class GameView(context: Context) : View(context) {
         drawFitted(c, "dec$d", cx, cy, box) { bc, side -> drawDecor(bc, d, side / 2, side * 0.78f, side / (58f * dp) * 0.48f) }
 
     /** A soft light disc behind an icon so dark items (top hat, sunglasses) still read on the dark rows. */
-    private fun iconBackdrop(c: Canvas, cx: Float, cy: Float, r: Float) {
-        fill.color = Color.argb(34, 255, 255, 255); c.drawCircle(cx, cy, r, fill)
+    private fun iconBackdrop(c: Canvas, cx: Float, cy: Float, r: Float, itemColor: Int = Color.WHITE) {
+        val lum = (Color.red(itemColor) * 0.3f + Color.green(itemColor) * 0.59f + Color.blue(itemColor) * 0.11f)
+        fill.color = Color.argb(if (lum < 90f) 110 else 34, 255, 255, 255); c.drawCircle(cx, cy, r, fill)
     }
 
     private fun drawAccessoryIcon(c: Canvas, a: Int, x: Float, y: Float, s: Float) {
