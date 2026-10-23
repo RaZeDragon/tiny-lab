@@ -2109,7 +2109,8 @@ class GameView(context: Context) : View(context) {
         val b = ui(name) ?: return
         val sc = dst.height() / b.height
         val lw = b.width * l; val rw = b.width * (1f - r)
-        val dl = lw * sc; val dr = rw * sc
+        val fit = min(1f, dst.width() / max(1f, (lw + rw) * sc))   // narrow buttons: shrink the end caps to fit
+        val dl = lw * sc * fit; val dr = rw * sc * fit
         val bw = b.width; val bh = b.height
         c.drawBitmap(b, android.graphics.Rect(0, 0, lw.toInt(), bh), RectF(dst.left, dst.top, dst.left + dl, dst.bottom), uiPaint)
         c.drawBitmap(b, android.graphics.Rect(lw.toInt(), 0, (bw * r).toInt(), bh), RectF(dst.left + dl - 0.5f, dst.top, dst.right - dr + 0.5f, dst.bottom), uiPaint)
@@ -3958,7 +3959,7 @@ class GameView(context: Context) : View(context) {
                     else Triple(Color.rgb(56, 44, 90), Color.rgb(46, 36, 76), Color.argb(160, 255, 255, 255))
         }
         // ordinary buttons wear the glossy purple pill from the art pack
-        if (b.style == STYLE_NORMAL && ui("pill_dark") != null && r.width() >= r.height() * 1.25f) {
+        if (b.style == STYLE_NORMAL && ui("pill_dark") != null && r.width() >= r.height() * 1.05f) {
             uiPaint.alpha = if (b.enabled) 255 else 130
             val g = 3f * dp
             uiStretch(c, "pill_dark", RectF(r.left - g, r.top - g, r.right + g, r.bottom + g * 1.6f), 0.13f, 0.87f)
@@ -8573,11 +8574,15 @@ class GameView(context: Context) : View(context) {
         val b = ui(icon)
         if (b == null) { text.color = textColor; c.drawText(fallback, r.centerX(), r.centerY() + 5f * dp, text); text.color = Color.WHITE; return }
         val iw = b.width * ih / b.height
-        val total = iw + 6f * dp + text.measureText(label)
+        val spore = label.endsWith(" ✦") && ui("spore") != null
+        val words = if (spore) label.removeSuffix(" ✦") else label
+        val sw = if (spore) text.textSize * 1.25f + 2f * dp else 0f
+        val total = iw + 6f * dp + text.measureText(words) + sw
         val x0 = r.centerX() - total / 2
         uiIcon(c, icon, x0 + iw / 2, r.centerY(), ih)
         text.textAlign = Paint.Align.LEFT; text.color = textColor
-        c.drawText(label, x0 + iw + 6f * dp, r.centerY() + 5.5f * dp, text)
+        c.drawText(words, x0 + iw + 6f * dp, r.centerY() + 5.5f * dp, text)
+        if (spore) uiIcon(c, "spore", x0 + iw + 6f * dp + text.measureText(words) + sw / 2 + 1f * dp, r.centerY(), text.textSize * 1.25f)
         text.textAlign = Paint.Align.CENTER; text.color = Color.WHITE
     }
 
