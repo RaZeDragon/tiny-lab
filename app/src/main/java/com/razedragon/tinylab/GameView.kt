@@ -2469,16 +2469,103 @@ class GameView(context: Context) : View(context) {
         out
     }
 
-    // ---------- The painted meadow backdrop ----------
-    private val bgPaint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
-    private var meadowBmp: android.graphics.Bitmap? = null
-    private var meadowTried = false
-    private fun meadowBg(): android.graphics.Bitmap? {
-        if (!meadowTried) {
-            meadowTried = true
-            meadowBmp = try { context.assets.open("bg/meadow.jpg").use { android.graphics.BitmapFactory.decodeStream(it) } } catch (_: Exception) { null }
+    private fun mix(a: Int, b: Int, f: Float) = Color.rgb(
+        (Color.red(a) + (Color.red(b) - Color.red(a)) * f).toInt(),
+        (Color.green(a) + (Color.green(b) - Color.green(a)) * f).toInt(),
+        (Color.blue(a) + (Color.blue(b) - Color.blue(a)) * f).toInt())
+
+    /** Three layers of tall storybook mushrooms on soft hills. Far layers melt into the sky color, near ones are
+     *  darker with spots, gills and a rim of light, and each layer slides at its own speed when you swipe. */
+    private fun drawSkyline(c: Canvas, w: Float, hz: Float, th: Theme) {
+        val layers = 3
+        for (layer in 0 until layers) {
+            val depthF = layer / (layers - 1f)                    // 0 far .. 1 near
+            val base = if (layer == 0) th.forest1 else th.forest2
+            val col = mix(base, th.skyBottom, 0.55f * (1f - depthF))  // haze on the far ones
+            val shift = (camX - 0.5f) * pxPerWorld() * (0.18f + 0.3f * depthF)
+            val baseY = hz + 3f * dp * depthF
+            // a gentle hill for the layer to stand on
+            fill.color = col
+            path.reset(); path.moveTo(-10f * dp, baseY + 2f * dp)
+            var hx = -10f * dp
+            val hr = Random(31 + layer)
+            while (hx < w + 10f * dp) {
+                val hw = (70f + hr.nextFloat() * 90f) * dp
+                path.quadTo(hx + hw / 2, baseY - (4f + hr.nextFloat() * 9f) * dp * (1.4f - depthF * 0.6f), hx + hw, baseY + 2f * dp)
+                hx += hw
+            }
+            path.lineTo(w + 10f * dp, baseY + 4f * dp); path.lineTo(-10f * dp, baseY + 4f * dp); path.close()
+            c.drawPath(path, fill)
+            val r = Random(7 + layer)
+            var x = -shift - 120f * dp   // start from a fixed point so the pattern stays put while panning
+            val endX = w + 60f * dp
+            while (x < endX) {
+                val sz = (22f + r.nextFloat() * 22f) * dp * (0.75f + 0.45f * depthF)
+                val kind = r.nextInt(3)                // 0 dome, 1 wide flat cap, 2 tall bell
+                val lean = (r.nextFloat() - 0.5f) * sz * 0.25f
+                val stemH = sz * (if (kind == 2) 1.15f else 0.95f) * (0.85f + r.nextFloat() * 0.35f)
+                val hasSpots = r.nextFloat() < 0.75f
+                val nx = x
+                x += sz * (0.85f + r.nextFloat() * 0.9f)
+                if (nx < -sz * 1.2f || nx > w + sz * 1.2f) continue
+                if (lab.theme == 3) {   // crystals in the cave
+                    fill.color = col
+                    path.reset(); path.moveTo(nx - sz * 0.25f, baseY); path.lineTo(nx, baseY - sz * 1.3f); path.lineTo(nx + sz * 0.25f, baseY); path.close()
+                    c.drawPath(path, fill)
+                    continue
+                }
+                val topY = baseY - stemH
+                val capW = sz * (when (kind) { 1 -> 1.45f; 2 -> 0.85f; else -> 1.15f })
+                val capH = sz * (when (kind) { 1 -> 0.38f; 2 -> 0.75f; else -> 0.55f })
+                // stem: slightly curved and tapering
+                val sw = sz * 0.13f
+                path.reset()
+                path.moveTo(nx - sw * 1.25f, baseY)
+                path.quadTo(nx - sw + lean * 0.4f, baseY - stemH * 0.5f, nx - sw * 0.8f + lean, topY)
+                path.lineTo(nx + sw * 0.8f + lean, topY)
+                path.quadTo(nx + sw + lean * 0.4f, baseY - stemH * 0.5f, nx + sw * 1.25f, baseY)
+                path.close()
+                fill.color = mix(col, th.skyBottom, 0.12f); c.drawPath(path, fill)
+                fill.color = Color.argb(40, 0, 0, 0)       // shade on the right side of the stem
+                c.drawRect(nx + sw * 0.25f + lean * 0.6f, topY, nx + sw * 1.1f, baseY, fill)
+                // gills: a darker band under the cap
+                val cx = nx + lean
+                fill.color = mix(col, Color.BLACK, 0.18f)
+                c.drawOval(cx - capW * 0.42f, topY - capH * 0.12f, cx + capW * 0.42f, topY + capH * 0.16f, fill)
+                // cap
+                path.reset()
+                path.moveTo(cx - capW / 2, topY)
+                if (kind == 2) path.cubicTo(cx - capW * 0.5f, topY - capH * 1.25f, cx + capW * 0.5f, topY - capH * 1.25f, cx + capW / 2, topY)
+                else path.cubicTo(cx - capW * 0.52f, topY - capH * 1.3f, cx + capW * 0.52f, topY - capH * 1.3f, cx + capW / 2, topY)
+                path.quadTo(cx, topY + capH * 0.12f, cx - capW / 2, topY)
+                path.close()
+                fill.color = col; c.drawPath(path, fill)
+                c.save(); c.clipPath(path)
+                // soft shading and a rim of light from the upper left
+                fill.color = Color.argb(45, 0, 0, 0)
+                c.drawOval(cx - capW * 0.1f, topY - capH * 0.8f, cx + capW * 0.75f, topY + capH * 0.4f, fill)
+                fill.color = Color.argb((30 + 40 * depthF).toInt(), 255, 255, 255)
+                c.drawOval(cx - capW * 0.42f, topY - capH * 1.0f, cx - capW * 0.05f, topY - capH * 0.6f, fill)
+                if (hasSpots) {
+                    fill.color = mix(col, th.skyBottom, 0.35f + 0.15f * (1f - depthF))
+                    val sr = capW * 0.07f
+                    c.drawCircle(cx - capW * 0.2f, topY - capH * 0.55f, sr * 1.2f, fill)
+                    c.drawCircle(cx + capW * 0.12f, topY - capH * 0.78f, sr, fill)
+                    c.drawCircle(cx + capW * 0.3f, topY - capH * 0.35f, sr * 0.85f, fill)
+                    c.drawCircle(cx - capW * 0.38f, topY - capH * 0.2f, sr * 0.7f, fill)
+                }
+                if (lab.theme == 4) {   // snow on the caps
+                    fill.color = Color.argb(215, 240, 245, 255)
+                    c.drawOval(cx - capW * 0.55f, topY - capH * 1.2f, cx + capW * 0.55f, topY - capH * 0.55f, fill)
+                }
+                c.restore()
+                // grassy tufts at the foot of the near layer
+                if (layer == layers - 1) {
+                    fill.color = mix(col, Color.BLACK, 0.1f)
+                    c.drawOval(nx - sz * 0.35f, baseY - sz * 0.07f, nx + sz * 0.35f, baseY + sz * 0.05f, fill)
+                }
+            }
         }
-        return meadowBmp
     }
 
     private fun drawGardenScene(c: Canvas, w: Float, h: Float) {
@@ -2488,14 +2575,6 @@ class GameView(context: Context) : View(context) {
         fill.shader = LinearGradient(0f, 0f, 0f, hz, th.skyTop, th.skyBottom, Shader.TileMode.CLAMP)
         c.drawRect(0f, 0f, w, hz + 2f * dp, fill)
         fill.shader = null
-        // Moonlit Meadow's sky and tall background mushrooms come from the painting, sliding as you swipe
-        val painted = if (lab.theme == 0) meadowBg() else null
-        if (painted != null) {
-            val ph = hz + 2f * dp
-            val iw = painted.width * (ph / painted.height)
-            val shift = ((camX - camMin()) / max(0.001f, camMax() - camMin())).coerceIn(0f, 1f) * max(0f, iw - w)
-            c.drawBitmap(painted, null, RectF(-shift, 0f, iw - shift, ph), bgPaint)
-        }
 
         val night = LabState.darkness()
         if (night > 0.2f && lab.theme != 3) {
@@ -2546,32 +2625,8 @@ class GameView(context: Context) : View(context) {
 
         if (LabState.rainbow() && lab.theme != 3) drawRainbow(c, w, hz)
 
-        // distant skyline: giant mushrooms, or crystals in the cave
-        val forest = intArrayOf(th.forest1, th.forest2)
-        if (painted == null) for (layer in 0..1) {
-            val r = Random(7 + layer)
-            fill.color = forest[layer]
-            val shift = (camX - 0.5f) * pxPerWorld() * (if (layer == 0) 0.35f else 0.55f)
-            var x = -20f * dp - shift
-            val endX = w + 40f * dp
-            while (x < endX) {
-                val sz = (28f + r.nextFloat() * 34f) * dp * (if (layer == 0) 0.8f else 1f)
-                val baseY = hz + (if (layer == 0) 0f else 4f * dp)
-                if (lab.theme == 3) {
-                    path.reset(); path.moveTo(x - sz * 0.25f, baseY); path.lineTo(x, baseY - sz * 1.3f); path.lineTo(x + sz * 0.25f, baseY); path.close()
-                    c.drawPath(path, fill)
-                } else {
-                    c.drawRect(x - sz * 0.09f, baseY - sz * 0.9f, x + sz * 0.09f, baseY, fill)
-                    c.drawArc(x - sz * 0.6f, baseY - sz * 1.45f, x + sz * 0.6f, baseY - sz * 0.6f, 180f, 180f, true, fill)
-                    if (lab.theme == 4) { // snow on the caps
-                        fill.color = Color.argb(200, 240, 245, 255)
-                        c.drawArc(x - sz * 0.5f, baseY - sz * 1.42f, x + sz * 0.5f, baseY - sz * 0.95f, 180f, 180f, true, fill)
-                        fill.color = forest[layer]
-                    }
-                }
-                x += sz * (0.9f + r.nextFloat() * 0.8f)
-            }
-        }
+        // distant skyline: layers of giant mushrooms fading into the sky (crystals in the cave)
+        drawSkyline(c, w, hz, th)
 
         // ground plane
         val gb = navTop
