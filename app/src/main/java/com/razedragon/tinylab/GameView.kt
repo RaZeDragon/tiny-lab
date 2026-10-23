@@ -2145,7 +2145,7 @@ class GameView(context: Context) : View(context) {
         text.textSize = 18f * dp
         val tw = text.measureText("${max(0f, shownDust).toInt()}")
         val h = 38f * dp
-        val pw = uiStretchWidth("gem_bar", h, 0.32f, 0.6f) + tw + 10f * dp
+        val pw = uiStretchWidth("gem_bar", h, 0.32f, 0.6f) + tw + 18f * dp
         return RectF(w - 58f * dp - pw, 14f * dp, w - 58f * dp, 14f * dp + h)
     }
 
@@ -2166,7 +2166,7 @@ class GameView(context: Context) : View(context) {
         if (ui("gem_bar") != null) {
             uiStretch(c, "gem_bar", pr, 0.32f, 0.6f)
             text.textSize = 18f * dp; text.color = Color.rgb(120, 70, 40)
-            val lx = pr.left + (ui("gem_bar")!!.width * 0.32f) * pr.height() / ui("gem_bar")!!.height + 2f * dp
+            val lx = pr.left + (ui("gem_bar")!!.width * 0.32f) * pr.height() / ui("gem_bar")!!.height + 9f * dp
             c.drawText(label, lx, pr.centerY() + 6.5f * dp, text)
         } else {
             text.textSize = 18f * dp
@@ -8498,8 +8498,7 @@ class GameView(context: Context) : View(context) {
         list.add(Button("set_backup", RectF(card.left + pad, ky, card.left + pad + half, ky + 44f * dp), "💾 BACK UP") { backupSave() })
         list.add(Button("set_restore", RectF(card.right - pad - half, ky, card.right - pad, ky + 44f * dp), "📥 RESTORE") { restoreSave() })
         val ky2 = ky + 52f * dp
-        list.add(Button("set_redeem", RectF(card.left + pad, ky2, card.left + pad + half, ky2 + 44f * dp), "", STYLE_NORMAL,
-            custom = { c, rr -> iconLabel(c, rr, "ticket", "REDEEM CODE", "🎁 REDEEM CODE") }) { redeemDialog() })
+        list.add(Button("set_redeem", RectF(card.left + pad, ky2, card.left + pad + half, ky2 + 44f * dp), "🎁 REDEEM CODE") { redeemDialog() })
         list.add(Button("set_feedback", RectF(card.right - pad - half, ky2, card.right - pad, ky2 + 44f * dp), "", STYLE_NORMAL,
             custom = { c, rr -> iconLabel(c, rr, "envelope", "FEEDBACK", "💬 FEEDBACK") }) { feedbackDialog() })
         list.add(Button("set_close", RectF(card.left + pad, card.bottom - 62f * dp, card.right - pad, card.bottom - 16f * dp), "DONE", STYLE_PRIMARY) {
