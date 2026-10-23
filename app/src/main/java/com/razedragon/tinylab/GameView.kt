@@ -2470,8 +2470,6 @@ class GameView(context: Context) : View(context) {
     }
 
     // ---------- The painted meadow backdrop ----------
-    private val MEADOW_FAR = Color.rgb(116, 128, 124)
-    private val MEADOW_NEAR = Color.rgb(74, 104, 88)
     private val bgPaint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
     private var meadowBmp: android.graphics.Bitmap? = null
     private var meadowTried = false
@@ -2490,6 +2488,14 @@ class GameView(context: Context) : View(context) {
         fill.shader = LinearGradient(0f, 0f, 0f, hz, th.skyTop, th.skyBottom, Shader.TileMode.CLAMP)
         c.drawRect(0f, 0f, w, hz + 2f * dp, fill)
         fill.shader = null
+        // Moonlit Meadow is the painted picture, covering the whole garden and sliding as you swipe
+        val painted = if (lab.theme == 0) meadowBg() else null
+        if (painted != null) {
+            val ph = navTop
+            val iw = painted.width * (ph / painted.height)
+            val shift = ((camX - camMin()) / max(0.001f, camMax() - camMin())).coerceIn(0f, 1f) * max(0f, iw - w)
+            c.drawBitmap(painted, null, RectF(-shift, 0f, iw - shift, ph), bgPaint)
+        }
 
         val night = LabState.darkness()
         if (night > 0.2f && lab.theme != 3) {
@@ -2540,15 +2546,6 @@ class GameView(context: Context) : View(context) {
 
         if (LabState.rainbow() && lab.theme != 3) drawRainbow(c, w, hz)
 
-        // Moonlit Meadow uses the painted backdrop: mushroom hills that pan gently as you swipe
-        val painted = if (lab.theme == 0) meadowBg() else null
-        val paintBottom = hz + height * 0.27f
-        if (painted != null) {
-            val sc = paintBottom / painted.height
-            val iw = painted.width * sc
-            val shift = ((camX - camMin()) / max(0.001f, camMax() - camMin())).coerceIn(0f, 1f) * max(0f, iw - w)
-            c.drawBitmap(painted, null, RectF(-shift, 0f, iw - shift, paintBottom), bgPaint)
-        }
         // distant skyline: giant mushrooms, or crystals in the cave
         val forest = intArrayOf(th.forest1, th.forest2)
         if (painted == null) for (layer in 0..1) {
@@ -2576,18 +2573,11 @@ class GameView(context: Context) : View(context) {
             }
         }
 
-        // ground plane (over the painting it starts see-through, so the hills melt into the lawn)
+        if (painted != null) return   // the painting already has its own grass, flowers and hills
+        // ground plane
         val gb = navTop
-        if (painted != null) {
-            val far = MEADOW_FAR; val near = MEADOW_NEAR
-            fill.shader = LinearGradient(0f, hz + height * 0.1f, 0f, gb,
-                intArrayOf(Color.argb(0, Color.red(far), Color.green(far), Color.blue(far)), far, near),
-                floatArrayOf(0f, (paintBottom - hz - height * 0.1f) / (gb - hz - height * 0.1f), 1f), Shader.TileMode.CLAMP)
-            c.drawRect(0f, hz + height * 0.1f, w, gb, fill)
-        } else {
-            fill.shader = LinearGradient(0f, hz, 0f, gb, th.groundFar, th.groundNear, Shader.TileMode.CLAMP)
-            c.drawRect(0f, hz, w, gb, fill)
-        }
+        fill.shader = LinearGradient(0f, hz, 0f, gb, th.groundFar, th.groundNear, Shader.TileMode.CLAMP)
+        c.drawRect(0f, hz, w, gb, fill)
         fill.shader = null
         stroke.color = Color.argb(28, 0, 0, 0); stroke.strokeWidth = 1.5f * dp
         for (k in 0..(8 * LabState.WORLD).toInt()) {
