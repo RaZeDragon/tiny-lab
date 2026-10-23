@@ -1469,15 +1469,7 @@ class GameView(context: Context) : View(context) {
             val ev = when (kind) { 2 -> Data.DECOR[i].event; 4 -> Data.ACCESSORIES[i].event; 3 -> Data.THEMES[i].event; 6 -> Data.PETS[i].event; 1 -> Data.FOODS[i].event; 0 -> Data.INGREDIENTS[i].event; else -> 0 }
             when {
                 onSale(kind, i) -> {
-                    shopBadge(c, pad - 8f * dp, y - 1f * dp, "SALE -30%", Color.rgb(240, 70, 110))
-                    // the old price, crossed out, above the buy button
-                    text.textSize = 10f * dp; text.color = Color.argb(200, 255, 255, 255)
-                    val px = w - pad - 52f * dp; val py = y + 13f * dp
-                    val old = "${baseCost(kind, i)}"
-                    c.drawText(old, px, py, text)
-                    stroke.color = Color.rgb(255, 120, 150); stroke.strokeWidth = 1.5f * dp
-                    c.drawLine(px - text.measureText(old) / 2 - 2f * dp, py - 3.5f * dp, px + text.measureText(old) / 2 + 2f * dp, py - 3.5f * dp, stroke)
-                    text.color = Color.WHITE
+                    shopBadge(c, pad - 8f * dp, y - 1f * dp, "SALE -30% · was ${baseCost(kind, i)}", Color.rgb(240, 70, 110))
                 }
                 ev != 0 && ev == eventNow() && kind != 0 -> shopBadge(c, pad - 8f * dp, y - 1f * dp, "LIMITED", Data.EVENT_COLORS[ev])
                 isNewItem(kind, i) -> shopBadge(c, pad - 8f * dp, y - 1f * dp, "NEW", Color.rgb(80, 200, 140))
@@ -4081,15 +4073,7 @@ class GameView(context: Context) : View(context) {
         val spore = label0.endsWith(" ✦") && ui("spore") != null
         val label = if (spore) label0.removeSuffix(" ✦") else label0
         text.color = tc
-        text.textSize = if (tab == Tab.JOURNAL && r.top < topBar + 60f * dp) {   // journal tabs: one size for all six
-            text.textSize = 13f * dp
-            var sz = 13f * dp
-            for (nm in arrayOf("TODAY", "CONTEST", "AWARDS", "DIARY", "GAMES", "NOTES")) {
-                text.textSize = sz
-                while (sz > 8f * dp && text.measureText(nm) > r.width() - 15f * dp) { sz -= 0.5f * dp; text.textSize = sz }
-            }
-            sz
-        } else if (label0.length > 12) 15f * dp else 18f * dp
+        text.textSize = if (label0.length > 12) 15f * dp else 18f * dp
         while (text.textSize > 9f * dp && text.measureText(label) + (if (spore) text.textSize * 1.25f else 0f) > r.width() - 14f * dp) text.textSize -= 1f * dp
         val iw = if (spore) text.textSize * 1.2f else 0f
         val tw = text.measureText(label)
@@ -4813,15 +4797,14 @@ class GameView(context: Context) : View(context) {
         val pad = 16f * dp
         val tabs = arrayOf("TODAY", "CONTEST", "AWARDS", "DIARY", "GAMES", "NOTES")
         val ty = topBar + 6f * dp
-        // six equal tabs across the full width, so every pill has the same shape
-        val jp = 8f * dp
-        val tw = (w - jp * 2) / tabs.size
+        // two rows of three, like the Shop, so every tab is a full-size pill
+        val tw = (w - pad * 2) / 3
         for ((k, nm) in tabs.withIndex()) {
-            val x = jp + k * tw
-            list.add(Button("j$k", RectF(x + 2f * dp, ty, x + tw - 2f * dp, ty + 40f * dp), nm,
+            val x = pad + (k % 3) * tw; val y = ty + (k / 3) * 44f * dp
+            list.add(Button("j$k", RectF(x + 2f * dp, y, x + tw - 2f * dp, y + 38f * dp), nm,
                 if (journalTab == k) STYLE_TAB_ON else STYLE_NORMAL) { journalTab = k })
         }
-        val top = ty + 54f * dp
+        val top = journalTop()
         if (journalTab == 0 && lab.questNow() >= 0) {
             val qy = top + 176f * dp + lab.requests.size * 74f * dp + 4f * dp
             list.add(Button("quest_story", RectF(16f * dp, qy, w - 16f * dp, qy + 92f * dp), "", STYLE_GHOST, custom = { _, _ -> }) {
@@ -4923,7 +4906,7 @@ class GameView(context: Context) : View(context) {
 
     private fun drawJournal(c: Canvas, w: Float, h: Float) {
         val pad = 16f * dp
-        val top = topBar + 60f * dp
+        val top = journalTop()
         if (journalTab == 3) { drawDiary(c, w, top); return }
         if (journalTab == 4) { drawGamesTab(c, w, top + 10f * dp); return }
         if (journalTab == 5) { drawNotes(c, w, top); return }
@@ -6959,7 +6942,7 @@ class GameView(context: Context) : View(context) {
         val pad = 16f * dp
         val head = 24f * dp
         val cell = (w - pad * 2 - head) / 12
-        return Triple(pad + head, topBar + 60f * dp + 30f * dp + head, cell)
+        return Triple(pad + head, journalTop() + 30f * dp + head, cell)
     }
 
     private fun drawNotes(c: Canvas, w: Float, top: Float) {
@@ -8514,7 +8497,8 @@ class GameView(context: Context) : View(context) {
     private val STICKERS_PER_PAGE = 10
 
     private fun stickerPages() = (Data.STICKERS.size + STICKERS_PER_PAGE - 1) / STICKERS_PER_PAGE
-    private fun stickerBoard() = RectF(16f * dp, topBar + 60f * dp + 26f * dp, width - 16f * dp, navTop - 64f * dp)
+    private fun stickerBoard() = RectF(16f * dp, journalTop() + 26f * dp, width - 16f * dp, navTop - 64f * dp)
+    private fun journalTop() = topBar + 100f * dp
 
     /** Where a sticker sits on its page, in screen pixels. */
     private fun stickerXY(i: Int): Pair<Float, Float> {
