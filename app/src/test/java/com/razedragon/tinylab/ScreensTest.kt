@@ -463,6 +463,24 @@ class ScreensTest {
         reset()
     }
 
+    @Test fun journalAndShopExtras() {
+        reset()
+        val g = ready(0)
+        val lab = g.testLab(); lab.garden.clear()
+        val a = lab.newShroom(1, 600f, false).apply { name = "Mochi" }
+        lab.garden.add(a)
+        lab.dust = 3000
+        // shop: today's sale
+        assertTrue(g.testTap("nav4"))
+        assertTrue(g.testTap("s${g.testDealKind()}")); g.testFrame(0.3f); save(g.testRender(), "shop_sale")
+        // journal: gift calendar, empty diary, contest podium
+        assertTrue(g.testTap("nav3")); g.testFrame(0.3f); save(g.testRender(), "journal_gift_calendar")
+        assertTrue(g.testTap("j3")); g.testFrame(0.3f); save(g.testRender(), "journal_diary_empty")
+        g.testContest(listOf(Entrant("Mochi", 92, 1, true), Entrant("Pip", 85, 13, false), Entrant("Dot", 77, 30, false), Entrant("Bean", 60, 6, false)))
+        assertTrue(g.testTap("j1")); g.testFrame(0.3f); save(g.testRender(), "journal_podium")
+        reset()
+    }
+
     @Test fun merchantStickersCodes() {
         reset(); Data.forceMerchant = true
         val g = ready(0)

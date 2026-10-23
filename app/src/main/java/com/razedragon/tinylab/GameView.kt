@@ -501,15 +501,26 @@ class GameView(context: Context) : View(context) {
         markDirty()
     }
 
+    private val lastStage = HashMap<Long, Int>()
+    /** Mushrooms mostly grow on their own over time, so the tick checks who grew up since last time. */
+    private fun checkPassiveGrowth() {
+        for (s in lab.garden) {
+            val prev = lastStage[s.id]
+            if (prev != null && s.stage() > prev && !s.away() && tutStep < 0) checkGrowth(s, prev)
+            lastStage[s.id] = s.stage()
+        }
+    }
+
     private fun checkGrowth(s: Shroom, before: Int) {
         val after = s.stage()
+        lastStage[s.id] = after
         if (after > before) {
-            sound.play(Fx.GROW)
             buzz(40)
             toast("${Data.SPECIES[s.species].name} grew into ${Data.STAGE_NAMES[after]}!", MINT)
             val idx = lab.garden.indexOf(s)
             if (idx >= 0) { val (x, y) = shroomPos(idx); burst(x, y - 30f * dp, MINT, 30, P_SPARK) }
             levelUpId = s.id; levelUpT = 2.4f
+            sound.play(Fx.LEVELUP)
             if (after == 2) toast("Grown mushrooms can crossbreed in the Lab!", DUST)
             if (after == 3) toast("Elders make extra dust and boost rare brews by 3%!", DUST)
             if (after >= 2) lab.addDiary("${s.name} grew into ${if (after == 2) "a Grown" else "an Elder"} ${Data.SPECIES[s.species].name}.")
@@ -674,7 +685,7 @@ class GameView(context: Context) : View(context) {
         for ((i, tb) in tabs.withIndex()) {
             list.add(Button("nav$i", RectF(i * tw, navTop, (i + 1) * tw, h), "", STYLE_CARD,
                 custom = { c, r -> drawNavItem(c, r, tb) }) {
-                if (tab != tb) { tab = tb; particles.clear(); selected = -1; feeding = false; styling = false; moreOpen = false; jobbing = false; exploring = false; confirmRelease = false; dexPick = -1; decorating = false }
+                if (tab != tb) { if (tab == Tab.SHOP) markShopSeen(); tab = tb; particles.clear(); selected = -1; feeding = false; styling = false; moreOpen = false; jobbing = false; exploring = false; confirmRelease = false; dexPick = -1; decorating = false }
             })
         }
 
@@ -1224,7 +1235,7 @@ class GameView(context: Context) : View(context) {
         for ((k, nm) in names.withIndex()) {
             val col = k % 3; val row = k / 3
             list.add(Button("s$k", RectF(pad + col * tabW + 2f * dp, ty + row * 44f * dp, pad + (col + 1) * tabW - 2f * dp, ty + row * 44f * dp + 38f * dp), nm,
-                if (shopTab == k) STYLE_TAB_ON else STYLE_NORMAL) { shopTab = k; shopScroll = 0f; shopVel = 0f })
+                if (shopTab == k) STYLE_TAB_ON else STYLE_NORMAL) { markShopSeen(); shopTab = k; shopScroll = 0f; shopVel = 0f })
         }
         val clipR = shopListRect()
         for (r in shopRows()) {
@@ -1247,17 +1258,17 @@ class GameView(context: Context) : View(context) {
                     list.add(Button("buy5_${kind}_$i", b5, "×5", STYLE_NORMAL, lab.dust >= cost * 5, clip = clipR) { buy(kind, i, 5) })
                 }
                 2 -> {
-                    val cost = Data.DECOR[i].cost
+                    val cost = itemCost(2, i)
                     list.add(Button("dbuy$i", wide, "$cost ✦", STYLE_PRIMARY, lab.dust >= cost, clip = clipR) {
                         if (lab.dust < cost) { sound.play(Fx.DENIED); notEnoughDust() }
                         else { lab.dust -= cost; lab.decorOwned[i]++; sound.play(Fx.COIN); toast("Place it from Garden → DECORATE", MINT); markDirty() }
                     })
                 }
                 4 -> {
-                    val a = Data.ACCESSORIES[i]
-                    list.add(Button("abuy$i", wide, "${a.cost} ✦", STYLE_PRIMARY, lab.dust >= a.cost, clip = clipR) {
-                        if (lab.dust < a.cost) { sound.play(Fx.DENIED); notEnoughDust() }
-                        else { lab.dust -= a.cost; lab.accOwned[i]++; sound.play(Fx.COIN); toast("Dress up a mushroom: tap it → STYLE", MINT); markDirty() }
+                    val cost = itemCost(4, i)
+                    list.add(Button("abuy$i", wide, "$cost ✦", STYLE_PRIMARY, lab.dust >= cost, clip = clipR) {
+                        if (lab.dust < cost) { sound.play(Fx.DENIED); notEnoughDust() }
+                        else { lab.dust -= cost; lab.accOwned[i]++; sound.play(Fx.COIN); toast("Dress up a mushroom: tap it → STYLE", MINT); markDirty() }
                     })
                 }
                 7 -> {
@@ -1276,9 +1287,9 @@ class GameView(context: Context) : View(context) {
                 6 -> {
                     val pt = Data.PETS[i]
                     if (pt.event > 0) list.add(Button("pbuy$i", wide, "Quest pet", STYLE_NORMAL, false, clip = clipR) {})
-                    else list.add(Button("pbuy$i", wide, "${pt.cost} ✦", STYLE_PRIMARY, lab.dust >= pt.cost, clip = clipR) {
-                        if (lab.dust < pt.cost) { sound.play(Fx.DENIED); notEnoughDust() }
-                        else { lab.dust -= pt.cost; lab.petOwned[i]++; sound.play(Fx.COIN); toast("New pet! Tap a mushroom → STYLE to bring it along", MINT); markDirty() }
+                    else list.add(Button("pbuy$i", wide, "${itemCost(6, i)} ✦", STYLE_PRIMARY, lab.dust >= itemCost(6, i), clip = clipR) {
+                        if (lab.dust < itemCost(6, i)) { sound.play(Fx.DENIED); notEnoughDust() }
+                        else { lab.dust -= itemCost(6, i); lab.petOwned[i]++; sound.play(Fx.COIN); toast("New pet! Tap a mushroom → STYLE to bring it along", MINT); markDirty() }
                     })
                 }
                 5 -> {
@@ -1341,6 +1352,51 @@ class GameView(context: Context) : View(context) {
         6 -> Data.PETS[i].let { it.name to "Have ${lab.petOwned[i]} · ${it.desc}" }
         7 -> Data.PACKS[i].let { it.name to it.desc }
         else -> Data.THEMES[i].name to (if ((lab.themesOwned shr i) and 1 == 1) "Owned" else "New sky, ground and weather")
+    }
+
+    // ---------- Daily deal & badges ----------
+    /** One decoration, hat or pet is 30% off each day (never event, pack or quest items). */
+    private fun dailyDeal(): Pair<Int, Int> {
+        val pool = ArrayList<Pair<Int, Int>>()
+        Data.DECOR.indices.filter { Data.DECOR[it].event == 0 && Data.DECOR[it].special == 0 && Data.DECOR[it].cost > 0 }.forEach { pool.add(2 to it) }
+        Data.ACCESSORIES.indices.filter { Data.ACCESSORIES[it].event == 0 && Data.ACCESSORIES[it].special == 0 && Data.ACCESSORIES[it].cost > 0 }.forEach { pool.add(4 to it) }
+        Data.PETS.indices.filter { Data.PETS[it].event == 0 && Data.PETS[it].special == 0 && Data.PETS[it].cost > 0 }.forEach { pool.add(6 to it) }
+        return pool[Random(LabState.dayKey() * 7919L).nextInt(pool.size)]
+    }
+    private fun onSale(kind: Int, i: Int) = dailyDeal() == (kind to i)
+    private fun baseCost(kind: Int, i: Int) = when (kind) {
+        2 -> Data.DECOR[i].cost; 4 -> Data.ACCESSORIES[i].cost; 6 -> Data.PETS[i].cost; 3 -> Data.THEMES[i].cost; else -> 0 }
+    private fun itemCost(kind: Int, i: Int): Int = baseCost(kind, i).let { if (onSale(kind, i)) (it * 0.7f).toInt() else it }
+
+    /** "NEW" marks items added since the player last looked, and limited event items. */
+    private fun isNewItem(kind: Int, i: Int): Boolean {
+        if (kind == 0 || kind == 1 || kind == 5 || kind == 7) return false
+        val ev = when (kind) { 2 -> Data.DECOR[i].event; 4 -> Data.ACCESSORIES[i].event; 3 -> Data.THEMES[i].event; else -> Data.PETS[i].event }
+        if (ev != 0 && ev == eventNow()) return false   // event items get their own LIMITED tag
+        return !shopSeen.contains("$kind:$i")
+    }
+    private val shopSeen: HashSet<String> by lazy {
+        val saved = prefs.getStringSet("shopSeen", null)
+        if (saved == null) {   // first launch: everything already in the game counts as seen
+            val all = HashSet<String>()
+            Data.DECOR.indices.forEach { all.add("2:$it") }; Data.ACCESSORIES.indices.forEach { all.add("4:$it") }
+            Data.PETS.indices.forEach { all.add("6:$it") }; Data.THEMES.indices.forEach { all.add("3:$it") }
+            prefs.edit().putStringSet("shopSeen", all).apply(); all
+        } else HashSet(saved)
+    }
+    private fun markShopSeen() {
+        val before = shopSeen.size
+        for ((kind, i) in shopEntries()) if (kind in intArrayOf(2, 3, 4, 6)) shopSeen.add("$kind:$i")
+        if (shopSeen.size != before) prefs.edit().putStringSet("shopSeen", HashSet(shopSeen)).apply()
+    }
+
+    /** A little ribbon badge in the corner of a shop row. */
+    private fun shopBadge(c: Canvas, x: Float, y: Float, label: String, col: Int) {
+        text.textSize = 9.5f * dp
+        val bw = text.measureText(label) + 12f * dp
+        fill.color = shade(col, -0.35f); c.drawRoundRect(x, y + 1.5f * dp, x + bw, y + 16.5f * dp, 7f * dp, 7f * dp, fill)
+        fill.color = col; c.drawRoundRect(x, y, x + bw, y + 15f * dp, 7f * dp, 7f * dp, fill)
+        text.color = Color.WHITE; c.drawText(label, x + bw / 2, y + 11f * dp, text)
     }
 
     private fun shopRows(): List<ShopRow> {
@@ -1409,6 +1465,23 @@ class GameView(context: Context) : View(context) {
             for ((k, l) in r.lines.withIndex()) c.drawText(l, 58f * dp, textTop + 31f * dp + k * 14f * dp, text)
             text.color = Color.WHITE
             text.textAlign = Paint.Align.CENTER
+            // badges in the top-left corner of the row
+            val ev = when (kind) { 2 -> Data.DECOR[i].event; 4 -> Data.ACCESSORIES[i].event; 3 -> Data.THEMES[i].event; 6 -> Data.PETS[i].event; 1 -> Data.FOODS[i].event; 0 -> Data.INGREDIENTS[i].event; else -> 0 }
+            when {
+                onSale(kind, i) -> {
+                    shopBadge(c, pad - 8f * dp, y - 1f * dp, "SALE -30%", Color.rgb(240, 70, 110))
+                    // the old price, crossed out, above the buy button
+                    text.textSize = 10f * dp; text.color = Color.argb(200, 255, 255, 255)
+                    val px = w - pad - 52f * dp; val py = y + 13f * dp
+                    val old = "${baseCost(kind, i)}"
+                    c.drawText(old, px, py, text)
+                    stroke.color = Color.rgb(255, 120, 150); stroke.strokeWidth = 1.5f * dp
+                    c.drawLine(px - text.measureText(old) / 2 - 2f * dp, py - 3.5f * dp, px + text.measureText(old) / 2 + 2f * dp, py - 3.5f * dp, stroke)
+                    text.color = Color.WHITE
+                }
+                ev != 0 && ev == eventNow() && kind != 0 -> shopBadge(c, pad - 8f * dp, y - 1f * dp, "LIMITED", Data.EVENT_COLORS[ev])
+                isNewItem(kind, i) -> shopBadge(c, pad - 8f * dp, y - 1f * dp, "NEW", Color.rgb(80, 200, 140))
+            }
         }
         c.restore()
         // scroll bar & fade hints when there's more to see
@@ -1776,6 +1849,8 @@ class GameView(context: Context) : View(context) {
     }
     internal fun testTutStep() = tutStep
     internal var testFace: String? = null
+    internal fun testDealKind() = dailyDeal().first
+    internal fun testContest(list: List<Entrant>) { lab.lastContest = list; lab.nextContest = System.currentTimeMillis() + 3_600_000L }
     internal fun testSceneOn() = sceneOn()
     internal fun testLevelUp(id: Long) { levelUpId = id; levelUpT = 2.0f }
     internal fun testSceneWhy() = "tab=$tab tut=$tutStep popup=${popup != null} set=$settingsOpen mini=$mini help=$helpTab offer=$offerPack prev=$previewKind merch=$merchantOpen fam=$familyFor card=$cardFor off=${lab.pendingOffline} ev=${eventNow()} q=${lab.questNow()} seen=${prefs.getBoolean(sceneKey(eventNow(), lab.questNow().coerceAtLeast(0)), false)}"
@@ -1837,6 +1912,7 @@ class GameView(context: Context) : View(context) {
         tickAcc += dt
         if (tickAcc >= 1f) {
             tickAcc = 0f; lab.tick(); markDirty()
+            checkPassiveGrowth()
             lab.updateQuest()?.let { toast(if (tab == Tab.GARDEN) it else "${Data.EVENT_ICONS[eventNow()]} Quest updated! Visit the garden", DUST); sound.play(Fx.DISCOVER); buzz(40) }
             val newStickers = lab.checkStickers()
             if (newStickers.size > 2) toast("⭐ ${newStickers.size} new stickers! Journal → AWARDS → Sticker book", DUST)
@@ -1942,6 +2018,7 @@ class GameView(context: Context) : View(context) {
         updateCritters(dt)
         updateBlooms(dt)
         updateBalls(dt)
+        sound.spooky = eventNow() == 1
         sound.update(dt, LabState.darkness() > 0.6f)
         updateTutorial()
 
@@ -3962,7 +4039,7 @@ class GameView(context: Context) : View(context) {
         if (b.style == STYLE_NORMAL && ui("pill_dark") != null && r.width() >= r.height() * 1.05f) {
             uiPaint.alpha = if (b.enabled) 255 else 130
             val g = 3f * dp
-            uiStretch(c, "pill_dark", RectF(r.left - g, r.top - g, r.right + g, r.bottom + g * 1.6f), 0.13f, 0.87f)
+            uiStretch(c, "pill_dark", RectF(r.left - g, r.top - g, r.right + g, r.bottom + g * 1.6f), 0.1f, 0.9f)
             uiPaint.alpha = 255
             if (custom != null) { text.color = Color.WHITE; custom(c, r) } else drawButtonLabel(c, r, b.label, if (b.enabled) Color.WHITE else Color.argb(150, 255, 255, 255), true)
             if (pressed) c.restore()
@@ -4004,7 +4081,15 @@ class GameView(context: Context) : View(context) {
         val spore = label0.endsWith(" ✦") && ui("spore") != null
         val label = if (spore) label0.removeSuffix(" ✦") else label0
         text.color = tc
-        text.textSize = if (label0.length > 12) 15f * dp else 18f * dp
+        text.textSize = if (tab == Tab.JOURNAL && r.top < topBar + 60f * dp) {   // journal tabs: one size for all six
+            text.textSize = 13f * dp
+            var sz = 13f * dp
+            for (nm in arrayOf("TODAY", "CONTEST", "AWARDS", "DIARY", "GAMES", "NOTES")) {
+                text.textSize = sz
+                while (sz > 8f * dp && text.measureText(nm) > r.width() - 15f * dp) { sz -= 0.5f * dp; text.textSize = sz }
+            }
+            sz
+        } else if (label0.length > 12) 15f * dp else 18f * dp
         while (text.textSize > 9f * dp && text.measureText(label) + (if (spore) text.textSize * 1.25f else 0f) > r.width() - 14f * dp) text.textSize -= 1f * dp
         val iw = if (spore) text.textSize * 1.2f else 0f
         val tw = text.measureText(label)
@@ -4728,16 +4813,13 @@ class GameView(context: Context) : View(context) {
         val pad = 16f * dp
         val tabs = arrayOf("TODAY", "CONTEST", "AWARDS", "DIARY", "GAMES", "NOTES")
         val ty = topBar + 6f * dp
-        // widths follow the words, so every tab label ends up the same size
-        text.textSize = 15f * dp
-        val wts = tabs.map { text.measureText(it) + 16f * dp }
-        val scale = (w - pad * 2) / wts.sum()
-        var x = pad
+        // six equal tabs across the full width, so every pill has the same shape
+        val jp = 8f * dp
+        val tw = (w - jp * 2) / tabs.size
         for ((k, nm) in tabs.withIndex()) {
-            val tw = wts[k] * scale
+            val x = jp + k * tw
             list.add(Button("j$k", RectF(x + 2f * dp, ty, x + tw - 2f * dp, ty + 40f * dp), nm,
                 if (journalTab == k) STYLE_TAB_ON else STYLE_NORMAL) { journalTab = k })
-            x += tw
         }
         val top = ty + 54f * dp
         if (journalTab == 0 && lab.questNow() >= 0) {
@@ -4774,7 +4856,7 @@ class GameView(context: Context) : View(context) {
         when (journalTab) {
             0 -> {
                 val ready = lab.giftReady()
-                list.add(Button("gift", RectF(pad + 10f * dp, top + 78f * dp, w - pad - 10f * dp, top + 116f * dp),
+                list.add(Button("gift", RectF(pad + 10f * dp, top + 82f * dp, w - pad - 10f * dp, top + 118f * dp),
                     if (ready) "CLAIM: ${lab.giftText(lab.giftIndex())}" else "Come back tomorrow!", STYLE_PRIMARY, ready) {
                     if (!lab.giftReady()) return@Button
                     val got = lab.claimGift()
@@ -4858,13 +4940,31 @@ class GameView(context: Context) : View(context) {
                 val bw = (card.width() - 28f * dp) / 7
                 for (d in 0 until 7) {
                     val bx = card.left + 14f * dp + d * bw
-                    val r = RectF(bx + 2f * dp, card.top + 34f * dp, bx + bw - 2f * dp, card.top + 68f * dp)
+                    val r = RectF(bx + 2f * dp, card.top + 32f * dp, bx + bw - 2f * dp, card.top + 76f * dp)
                     val today = d == lab.giftIndex()
                     val done = d < lab.giftIndex() || (today && !lab.giftReady())
-                    fill.color = when { today && lab.giftReady() -> ACCENT; done -> Color.rgb(60, 110, 90); else -> PANEL_LIGHT }
-                    c.drawRoundRect(r, 8f * dp, 8f * dp, fill)
-                    text.textSize = 11f * dp
-                    c.drawText(if (done) "✓" else "${d + 1}", r.centerX(), r.centerY() + 4f * dp, text)
+                    fill.color = when { today && lab.giftReady() -> ACCENT; done -> Color.rgb(60, 110, 90); d == 6 -> Color.rgb(110, 80, 40); else -> PANEL_LIGHT }
+                    c.drawRoundRect(r, 9f * dp, 9f * dp, fill)
+                    if (today && lab.giftReady()) {   // today's box glows
+                        stroke.color = Color.argb((150 + 100 * sin(t * 4f)).toInt().coerceIn(0, 255), 255, 230, 150); stroke.strokeWidth = 2f * dp
+                        c.drawRoundRect(r, 9f * dp, 9f * dp, stroke)
+                    }
+                    // what that day gives you
+                    val ix = r.centerX(); val iy = r.top + 17f * dp
+                    val a = if (done) 110 else 255
+                    when (d) {
+                        1 -> drawFood(c, 1, ix, iy, 8f * dp)
+                        3 -> { drawIngredient(c, Data.WATER, ix - 5f * dp, iy + 2f * dp, 5.5f * dp); drawIngredient(c, Data.EMBER, ix + 5f * dp, iy - 1f * dp, 5.5f * dp) }
+                        5 -> drawFood(c, 4, ix, iy, 8f * dp)
+                        6 -> drawGiftBox(c, ix, iy + 9f * dp, 20f * dp, Color.rgb(255, 170, 90))
+                        else -> uiIcon(c, "spore", ix, iy, 21f * dp, a)
+                    }
+                    text.textSize = 9.5f * dp
+                    c.drawText(when (d) { 0 -> "40"; 1 -> "×3"; 2 -> "65"; 3 -> "×6"; 4 -> "100"; 5 -> "+Gold"; else -> "BIG" }, r.centerX(), r.bottom - 6f * dp, text)
+                    if (done) {
+                        fill.color = Color.argb(140, 30, 70, 50); c.drawRoundRect(r, 9f * dp, 9f * dp, fill)
+                        text.textSize = 16f * dp; text.color = MINT; c.drawText("✓", r.centerX(), r.centerY() + 6f * dp, text); text.color = Color.WHITE
+                    }
                 }
                 // Professor Spore
                 val py = top + 140f * dp
@@ -4910,22 +5010,7 @@ class GameView(context: Context) : View(context) {
                     c.drawText("Next contest in ${timeLeft(lab.nextContest - now)}", w / 2, top + 66f * dp, text)
                     text.color = Color.WHITE
                     val res = lab.lastContest
-                    for ((i, e) in res.withIndex()) {
-                        val y = top + 90f * dp + i * 92f * dp
-                        val rc = RectF(pad, y, w - pad, y + 84f * dp)
-                        fill.color = if (e.mine) PANEL_LIGHT else PANEL
-                        c.drawRoundRect(rc, 16f * dp, 16f * dp, fill)
-                        val mine = if (e.mine) lab.garden.firstOrNull { it.name == e.name } else null
-                        drawShroom(c, mine?.species ?: e.species, rc.left + 70f * dp, rc.bottom - 12f * dp, 52f * dp, 0, sin(t * 2f + i), false, false,
-                            shiny = mine?.shiny ?: false, who = mine)
-                        text.textAlign = Paint.Align.LEFT; text.textSize = 22f * dp
-                        c.drawText(arrayOf("🥇", "🥈", "🥉", "4th")[i], rc.left + 12f * dp, rc.top + 32f * dp, text)
-                        text.textSize = 15f * dp
-                        c.drawText(e.name + if (e.mine) " (you)" else "", rc.left + 120f * dp, rc.top + 36f * dp, text)
-                        text.textSize = 13f * dp; text.color = DUST
-                        c.drawText("${e.score} points", rc.left + 120f * dp, rc.top + 58f * dp, text)
-                        text.color = Color.WHITE; text.textAlign = Paint.Align.CENTER
-                    }
+                    if (res.isNotEmpty()) drawPodium(c, w, top + 80f * dp, res)
                     if (res.isEmpty()) {
                         text.textSize = 14f * dp; text.color = TEXT_DIM
                         c.drawText("Come back soon!", w / 2, h * 0.45f, text); text.color = Color.WHITE
@@ -5900,8 +5985,7 @@ class GameView(context: Context) : View(context) {
 
     /** What the buy button says: the price, or how much more dust you need. */
     private fun previewPrice(): Int = when (previewKind) {
-        2 -> Data.DECOR[previewIdx].cost; 3 -> Data.THEMES[previewIdx].cost
-        4 -> Data.ACCESSORIES[previewIdx].cost; 6 -> Data.PETS[previewIdx].cost; else -> 0
+        2, 3, 4, 6 -> itemCost(previewKind, previewIdx); else -> 0
     }
 
     /** The shop's own buy button for this item, so previews buy exactly the same way. */
@@ -7552,11 +7636,80 @@ class GameView(context: Context) : View(context) {
         text.color = Color.WHITE
     }
 
+    /** The last contest's results on a podium: 2nd, 1st, 3rd, with 4th place cheering below. */
+    private fun drawPodium(c: Canvas, w: Float, top: Float, res: List<Entrant>) {
+        val baseY = top + 300f * dp
+        val colW = (w - 40f * dp) / 3
+        val heights = floatArrayOf(120f, 85f, 60f)
+        val cols = intArrayOf(1, 0, 2)                    // left: 2nd, middle: 1st, right: 3rd
+        val colors = intArrayOf(Color.rgb(255, 205, 80), Color.rgb(205, 215, 235), Color.rgb(215, 150, 95))
+        // spotlight on the winner
+        fill.shader = RadialGradient(w / 2, baseY - 160f * dp, 150f * dp, Color.argb(70, 255, 230, 150), Color.argb(0, 255, 230, 150), Shader.TileMode.CLAMP)
+        c.drawCircle(w / 2, baseY - 160f * dp, 150f * dp, fill); fill.shader = null
+        for ((slot, place) in cols.withIndex()) {
+            val e = res.getOrNull(place) ?: continue
+            val x0 = 20f * dp + slot * colW
+            val ph = heights[place] * dp
+            val block = RectF(x0 + 4f * dp, baseY - ph, x0 + colW - 4f * dp, baseY)
+            fill.shader = LinearGradient(0f, block.top, 0f, block.bottom, shade(colors[place], 0.1f), shade(colors[place], -0.3f), Shader.TileMode.CLAMP)
+            c.drawRoundRect(block, 10f * dp, 10f * dp, fill); fill.shader = null
+            fill.color = shade(colors[place], 0.35f); c.drawRoundRect(block.left, block.top, block.right, block.top + 8f * dp, 6f * dp, 6f * dp, fill)
+            text.textSize = 34f * dp; text.color = Color.argb(150, 60, 40, 20)
+            c.drawText("${place + 1}", block.centerX(), block.top + 46f * dp, text)
+            // the contestant stands on top
+            val mine = if (e.mine) lab.garden.firstOrNull { it.name == e.name } else null
+            val sz = (if (place == 0) 70f else 58f) * dp
+            val hop = if (place == 0) abs(sin(t * 4f)) * 6f * dp else 0f
+            if (place == 0) { forcedFace = "grin" }
+            drawShroom(c, mine?.species ?: e.species, block.centerX(), block.top - 2f * dp - hop, sz, 0, sin(t * 2f + place), false, false,
+                shiny = mine?.shiny ?: false, who = mine ?: Shroom(-20L - place, e.species).apply { xp = 600f })
+            forcedFace = null
+            if (place == 0) uiIcon(c, "ribbon", block.centerX() + sz * 0.45f, block.top - sz * 0.95f, 28f * dp)
+            text.textSize = 13f * dp; text.color = if (e.mine) DUST else Color.WHITE
+            c.drawText(e.name + if (e.mine) " ★" else "", block.centerX(), baseY + 18f * dp, text)
+            text.textSize = 11f * dp; text.color = TEXT_DIM
+            c.drawText("${e.score} pts", block.centerX(), baseY + 33f * dp, text)
+        }
+        res.getOrNull(3)?.let { e ->
+            text.textSize = 12f * dp; text.color = if (e.mine) DUST else TEXT_DIM
+            c.drawText("4th: ${e.name}${if (e.mine) " ★" else ""} · ${e.score} pts", w / 2, baseY + 58f * dp, text)
+        }
+        if (res.none { it.mine }.not()) {
+            val my = res.indexOfFirst { it.mine }
+            text.textSize = 13f * dp; text.color = MINT
+            c.drawText(arrayOf("Your mushroom won! 🏆", "Second place, so close!", "Third place, nice!", "Fourth place, try a cute outfit next time!")[my.coerceIn(0, 3)], w / 2, baseY + 82f * dp, text)
+        }
+        text.color = Color.WHITE
+    }
+
     private fun drawDiary(c: Canvas, w: Float, top: Float) {
         val pad = 18f * dp
-        if (lab.diary.isEmpty()) {
-            text.textSize = 14f * dp; text.color = TEXT_DIM
-            c.drawText("Your garden's story will be written here.", w / 2, top + 60f * dp, text)
+        if (lab.diary.isEmpty()) {   // Professor Spore with an open book and a quill, waiting to write
+            val cy = top + (navTop - top) * 0.42f
+            fill.color = Color.argb(40, 255, 220, 160); c.drawCircle(w / 2, cy, 120f * dp, fill)
+            // the open book
+            val bw = 150f * dp; val by = cy + 40f * dp
+            fill.color = Color.rgb(120, 70, 50); c.drawRoundRect(w / 2 - bw / 2 - 6f * dp, by - 6f * dp, w / 2 + bw / 2 + 6f * dp, by + 60f * dp, 10f * dp, 10f * dp, fill)
+            fill.color = Color.rgb(250, 240, 220)
+            path.reset(); path.moveTo(w / 2, by + 6f * dp); path.quadTo(w / 2 - bw * 0.25f, by - 6f * dp, w / 2 - bw / 2, by); path.lineTo(w / 2 - bw / 2, by + 54f * dp)
+            path.quadTo(w / 2 - bw * 0.25f, by + 48f * dp, w / 2, by + 58f * dp); path.close(); c.drawPath(path, fill)
+            path.reset(); path.moveTo(w / 2, by + 6f * dp); path.quadTo(w / 2 + bw * 0.25f, by - 6f * dp, w / 2 + bw / 2, by); path.lineTo(w / 2 + bw / 2, by + 54f * dp)
+            path.quadTo(w / 2 + bw * 0.25f, by + 48f * dp, w / 2, by + 58f * dp); path.close(); c.drawPath(path, fill)
+            stroke.color = Color.rgb(200, 185, 160); stroke.strokeWidth = 1.5f * dp
+            for (k in 0..3) { val ly = by + 14f * dp + k * 9f * dp; c.drawLine(w / 2 - bw * 0.42f, ly, w / 2 - bw * 0.08f, ly + 2f * dp, stroke)
+                if (k < 2) c.drawLine(w / 2 + bw * 0.08f, ly + 2f * dp, w / 2 + bw * 0.42f, ly, stroke) }
+            // a feather quill bobbing as it writes
+            val qx = w / 2 + bw * 0.2f + sin(t * 3f) * 6f * dp; val qy = by + 30f * dp + cos(t * 6f) * 2f * dp
+            c.save(); c.rotate(-35f, qx, qy)
+            fill.color = Color.rgb(240, 160, 200); c.drawOval(qx - 6f * dp, qy - 46f * dp, qx + 6f * dp, qy - 6f * dp, fill)
+            stroke.color = Color.rgb(90, 60, 80); stroke.strokeWidth = 2f * dp; c.drawLine(qx, qy - 44f * dp, qx, qy, stroke)
+            c.restore()
+            drawShroom(c, professor.species, w / 2 - bw * 0.62f, by + 40f * dp, 70f * dp, 0, sin(t * 2f), (t % 4f) < 0.12f, false, facing = 1f, who = professor)
+            text.textSize = 17f * dp; text.color = Color.WHITE
+            c.drawText("A brand-new diary!", w / 2, cy - 70f * dp, text)
+            text.textSize = 13f * dp; text.color = TEXT_DIM
+            c.drawText("Professor Spore writes down your garden's story:", w / 2, cy - 48f * dp, text)
+            c.drawText("new friends, discoveries and big moments.", w / 2, cy - 31f * dp, text)
             text.color = Color.WHITE
             return
         }

@@ -25,7 +25,7 @@ import kotlin.random.Random
 class Sound(private val context: Context) {
 
     enum class Fx { CLICK, POP, BUBBLE, COIN, DISCOVER, EAT, GROW, PET, DENIED, BREW_DONE, STIR,
-        CHIRP, GIGGLE, WHEE, CHOMP, PURR, SNEEZE, YAWN, BOING, RIBBIT, CLINK }
+        CHIRP, GIGGLE, WHEE, CHOMP, PURR, SNEEZE, YAWN, BOING, RIBBIT, CLINK, LEVELUP }
 
     var sfxOn = true
         set(v) { field = v; if (!v) setAmbient(false, false, false, false) }
@@ -44,6 +44,9 @@ class Sound(private val context: Context) {
     @Volatile private var ready = false
     @Volatile private var dayPlayer: MediaPlayer? = null
     @Volatile private var nightPlayer: MediaPlayer? = null
+    @Volatile private var spookyPlayer: MediaPlayer? = null
+    /** During Shroomoween a spooky little tune takes over from the usual music. */
+    var spooky = false
     @Volatile private var appActive = true
     @Volatile private var released = false
 
@@ -75,7 +78,7 @@ class Sound(private val context: Context) {
     init {
         Thread {
             try {
-                val dir = File(context.cacheDir, "tinylab_sound_v4").apply { mkdirs() }
+                val dir = File(context.cacheDir, "tinylab_sound_v5").apply { mkdirs() }
                 for (fx in Fx.values()) {
                     val f = File(dir, fx.name.lowercase() + ".wav")
                     if (!f.exists()) writeWav(f, synth(fx))
@@ -102,6 +105,13 @@ class Sound(private val context: Context) {
                 val night = newPlayer(n.path)
                 if (released) { night.release(); return@Thread }
                 nightPlayer = night
+                applyVolumes()
+                updateMusic()
+                val sp = File(dir, "music_spooky.wav")
+                if (!sp.exists()) writeWav(sp, spookyMusic())
+                val spk = newPlayer(sp.path)
+                if (released) { spk.release(); return@Thread }
+                spookyPlayer = spk
                 applyVolumes()
                 updateMusic()
             } catch (_: Exception) {
@@ -137,12 +147,20 @@ class Sound(private val context: Context) {
             nightMix = if (nightMix < nightTarget) min(nightTarget, nightMix + dt * 0.3f) else max(nightTarget, nightMix - dt * 0.3f)
             applyVolumes()
         }
+        val st = if (spooky && spookyPlayer != null) 1f else 0f
+        if (spookyMix != st) {
+            spookyMix = if (spookyMix < st) min(st, spookyMix + dt * 0.4f) else max(st, spookyMix - dt * 0.4f)
+            applyVolumes()
+        }
     }
+    private var spookyMix = 0f
 
     private fun applyVolumes() {
         try {
-            dayPlayer?.setVolume(musicVol * (1f - nightMix), musicVol * (1f - nightMix))
-            nightPlayer?.setVolume(musicVol * nightMix, musicVol * nightMix)
+            val normal = 1f - spookyMix
+            dayPlayer?.setVolume(musicVol * (1f - nightMix) * normal, musicVol * (1f - nightMix) * normal)
+            nightPlayer?.setVolume(musicVol * nightMix * normal, musicVol * nightMix * normal)
+            spookyPlayer?.setVolume(musicVol * spookyMix, musicVol * spookyMix)
         } catch (_: IllegalStateException) {}
     }
 
@@ -157,13 +175,14 @@ class Sound(private val context: Context) {
         synchronized(this) {
             dayPlayer?.release(); dayPlayer = null
             nightPlayer?.release(); nightPlayer = null
+            spookyPlayer?.release(); spookyPlayer = null
         }
         pool.release()
     }
 
     @Synchronized
     private fun updateMusic() {
-        for (p in listOfNotNull(dayPlayer, nightPlayer)) {
+        for (p in listOfNotNull(dayPlayer, nightPlayer, spookyPlayer)) {
             try {
                 if (musicOn && appActive) { if (!p.isPlaying) p.start() }
                 else if (p.isPlaying) p.pause()
@@ -396,6 +415,63 @@ class Sound(private val context: Context) {
         }
         Fx.RIBBIT -> mix(sweep(0.09f, 260f, 200f, Wave.SQUARE, 0.12f), FloatArray((0.13f * rate).toInt()) + sweep(0.1f, 300f, 220f, Wave.SQUARE, 0.12f))
         Fx.CLINK -> echo(plucks(floatArrayOf(2093f), 0.05f, 0.3f, 0.4f), 0.08f, 0.3f, 0.3f)
+        // a little "ta-da!" for growing up: a quick run, then a bright chord with a shimmer
+        Fx.LEVELUP -> {
+            val run = plucks(floatArrayOf(523.3f, 659.3f, 784f), 0.08f, 0.32f, 0.5f)
+            val chord = FloatArray((1.3f * rate).toInt())
+            for (f in floatArrayOf(1046.5f, 1318.5f, 1568f, 2093f)) pluck(chord, 0, f, 0.18f, 1.2f)
+            val out = FloatArray(run.size + chord.size)
+            for (i in run.indices) out[i] += run[i]
+            val st = (0.26f * rate).toInt()
+            for (i in chord.indices) if (st + i < out.size) out[st + i] += chord[i]
+            echo(mix(out, FloatArray(st) + sweep(0.9f, 2500f, 5000f, Wave.SINE, 0.04f)), 0.15f, 0.35f, 0.4f)
+        }
+    }
+
+    /** Shroomoween: a creepy-cute waltz in A minor with a music box, a plodding bass and a little "ooo" choir. */
+    private fun spookyMusic(): FloatArray {
+        val bpm = 96
+        val beat = rate * 60 / bpm
+        val bars = 16
+        val out = FloatArray(beat * 3 * bars)
+        // Am  F  Dm  E  (two bars each), twice
+        val roots = floatArrayOf(110f, 87.31f, 73.42f, 82.41f)
+        val chords = arrayOf(
+            floatArrayOf(220f, 261.63f, 329.63f), floatArrayOf(174.61f, 220f, 261.63f),
+            floatArrayOf(146.83f, 174.61f, 220f), floatArrayOf(164.81f, 207.65f, 246.94f))
+        val tune = floatArrayOf(880f, 1046.5f, 987.77f, 880f, 830.61f, 880f, 659.25f, 698.46f, 659.25f, 587.33f, 659.25f, 830.61f)
+        val rnd = Random(31)
+        for (bar in 0 until bars) {
+            val ci = (bar / 2) % 4
+            val barStart = bar * beat * 3
+            // oom-pah-pah: bass on 1, chord plucks on 2 and 3
+            for (i in 0 until beat) {
+                val idx = barStart + i; if (idx >= out.size) break
+                val tt = i / rate.toFloat()
+                out[idx] += osc(roots[ci].toDouble() * i / rate, Wave.TRI) * exp(-3f * tt) * 0.22f
+            }
+            for (b in 1..2) for (f in chords[ci]) pluck(out, barStart + b * beat, f * 2f, 0.035f, 0.35f)
+            // ghostly "ooo": a soft wobbling sine on the chord's top note
+            if (bar % 2 == 0) {
+                val len = beat * 6; val f = chords[ci][2]
+                for (i in 0 until len) {
+                    val idx = barStart + i; if (idx >= out.size) break
+                    val p = i / len.toFloat()
+                    val env = min(1f, p * 3f) * min(1f, (1f - p) * 3f)
+                    val vib = 1f + 0.012f * sin(2 * PI * 5.5 * i / rate).toFloat()
+                    out[idx] += sin(2 * PI * f * vib * i / rate).toFloat() * env * 0.03f
+                }
+            }
+            // music-box melody in bars 1-6 and 9-14
+            if (bar % 8 in 1..6) for (b in 0 until 3) {
+                if (rnd.nextFloat() < 0.8f) pluck(out, barStart + b * beat, tune[(bar * 3 + b) % tune.size], 0.1f, 1.2f)
+            }
+        }
+        val d = beat / 2
+        val wet = out.copyOf()
+        for (pass in 0 until 2) for (i in wet.indices) wet[i] += wet[(i - d + wet.size) % wet.size] * 0.3f
+        for (i in out.indices) out[i] = ((out[i] * 0.75f + (wet[i] - out[i]) * 0.35f) * 1.4f).coerceIn(-1f, 1f)
+        return out
     }
 
     /** A calm 16-bar loop: soft pads, bass, a music-box melody and arpeggios, with a little echo. */
