@@ -414,6 +414,7 @@ class ScreensTest {
         lab.garden.add(grandpa); lab.garden.add(granny)
         for (sh in lab.garden) { sh.act = 0; sh.sleeping = false; sh.awakeUntil = Long.MAX_VALUE; sh.hunger = 90f; sh.happy = 90f }
         g.testSelect(grandpa.id); g.testFrame(0.5f); save(g.testRender(), "elders_beard")
+        g.testSelect(-1); g.testLevelUp(granny.id); g.testFrame(0.6f); save(g.testRender(), "level_up")
         // crossbreeding: one boy and one girl
         val boy = lab.newShroom(2, 600f, false).apply { sex = 0; name = "Fizz"; bestie = -1 }
         val girl = lab.newShroom(13, 600f, false).apply { sex = 1; name = "Dot" }
