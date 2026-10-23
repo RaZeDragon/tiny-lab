@@ -2109,8 +2109,8 @@ class GameView(context: Context) : View(context) {
         val b = ui(name) ?: return
         val sc = dst.height() / b.height
         val lw = b.width * l; val rw = b.width * (1f - r)
-        val fit = min(1f, dst.width() / max(1f, (lw + rw) * sc))   // narrow buttons: shrink the end caps to fit
-        val dl = lw * sc * fit; val dr = rw * sc * fit
+        if ((lw + rw) * sc > dst.width()) { c.drawBitmap(b, null, dst, uiPaint); return }   // narrow: just squeeze the whole pill
+        val dl = lw * sc; val dr = rw * sc
         val bw = b.width; val bh = b.height
         c.drawBitmap(b, android.graphics.Rect(0, 0, lw.toInt(), bh), RectF(dst.left, dst.top, dst.left + dl, dst.bottom), uiPaint)
         c.drawBitmap(b, android.graphics.Rect(lw.toInt(), 0, (bw * r).toInt(), bh), RectF(dst.left + dl - 0.5f, dst.top, dst.right - dr + 0.5f, dst.bottom), uiPaint)
