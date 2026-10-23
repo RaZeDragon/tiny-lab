@@ -2542,7 +2542,7 @@ class GameView(context: Context) : View(context) {
 
         // Moonlit Meadow uses the painted backdrop: mushroom hills that pan gently as you swipe
         val painted = if (lab.theme == 0) meadowBg() else null
-        val paintBottom = hz + height * 0.2f
+        val paintBottom = hz + height * 0.27f
         if (painted != null) {
             val sc = paintBottom / painted.height
             val iw = painted.width * sc
@@ -2580,10 +2580,10 @@ class GameView(context: Context) : View(context) {
         val gb = navTop
         if (painted != null) {
             val far = MEADOW_FAR; val near = MEADOW_NEAR
-            fill.shader = LinearGradient(0f, hz + height * 0.07f, 0f, gb,
+            fill.shader = LinearGradient(0f, hz + height * 0.1f, 0f, gb,
                 intArrayOf(Color.argb(0, Color.red(far), Color.green(far), Color.blue(far)), far, near),
-                floatArrayOf(0f, (paintBottom - hz - height * 0.07f) / (gb - hz - height * 0.07f), 1f), Shader.TileMode.CLAMP)
-            c.drawRect(0f, hz + height * 0.07f, w, gb, fill)
+                floatArrayOf(0f, (paintBottom - hz - height * 0.1f) / (gb - hz - height * 0.1f), 1f), Shader.TileMode.CLAMP)
+            c.drawRect(0f, hz + height * 0.1f, w, gb, fill)
         } else {
             fill.shader = LinearGradient(0f, hz, 0f, gb, th.groundFar, th.groundNear, Shader.TileMode.CLAMP)
             c.drawRect(0f, hz, w, gb, fill)
