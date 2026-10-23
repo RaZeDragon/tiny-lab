@@ -684,7 +684,7 @@ class GameView(context: Context) : View(context) {
             val hx = pr.left - 44f * dp
             list.add(Button("help", RectF(hx, 15f * dp, hx + 36f * dp, 51f * dp), "?", STYLE_NORMAL) { helpTab = tab; sound.play(Fx.POP, 0.5f, 1.2f) })
             // the green + on the dust counter opens the packs
-            list.add(Button("dust_plus", RectF(pr.right - pr.height() * 1.1f, pr.top, pr.right, pr.bottom), "", STYLE_GHOST, custom = { _, _ -> }) {
+            list.add(Button("dust_plus", RectF(pr.right - 6f * dp, pr.top - 2f * dp, pr.right + 34f * dp, pr.bottom + 2f * dp), "", STYLE_GHOST, custom = { _, _ -> }) {
                 tab = Tab.SHOP; shopTab = 7; shopScroll = 0f; shopVel = 0f; selected = -1; sound.play(Fx.POP, 0.6f, 1.1f)
             })
         }
@@ -2144,9 +2144,9 @@ class GameView(context: Context) : View(context) {
     private fun dustPill(w: Float): RectF {
         text.textSize = 18f * dp
         val tw = text.measureText("${max(0f, shownDust).toInt()}")
-        val h = 38f * dp
-        val pw = uiStretchWidth("gem_bar", h, 0.32f, 0.6f) + tw + 18f * dp
-        return RectF(w - 58f * dp - pw, 14f * dp, w - 58f * dp, 14f * dp + h)
+        val h = 40f * dp
+        val pw = uiStretchWidth("spore_bar", h, 0.73f, 0.83f) + tw + 6f * dp
+        return RectF(w - 86f * dp - pw, 13f * dp, w - 86f * dp, 13f * dp + h)
     }
 
     private fun drawTopBar(c: Canvas, w: Float) {
@@ -2163,11 +2163,21 @@ class GameView(context: Context) : View(context) {
         if (shownDust < 0f) shownDust = lab.dust.toFloat()
         val label = "${shownDust.toInt()}"
         val pr = dustPill(w)
-        if (ui("gem_bar") != null) {
-            uiStretch(c, "gem_bar", pr, 0.32f, 0.6f)
-            text.textSize = 18f * dp; text.color = Color.rgb(120, 70, 40)
-            val lx = pr.left + (ui("gem_bar")!!.width * 0.32f) * pr.height() / ui("gem_bar")!!.height + 9f * dp
-            c.drawText(label, lx, pr.centerY() + 6.5f * dp, text)
+        if (ui("spore_bar") != null) {
+            val b = ui("spore_bar")!!
+            uiStretch(c, "spore_bar", pr, 0.73f, 0.83f)
+            text.textSize = 18f * dp; text.textAlign = Paint.Align.RIGHT
+            val rx = pr.right - b.width * 0.17f * pr.height() / b.height + 2f * dp
+            text.color = Color.argb(90, 30, 10, 60); c.drawText(label, rx, pr.centerY() + 8f * dp, text)
+            text.color = Color.rgb(255, 246, 214); c.drawText(label, rx, pr.centerY() + 6.5f * dp, text)
+            text.textAlign = Paint.Align.LEFT
+            // a green "+" bubble: tap it for spore packs
+            val px = pr.right + 16f * dp; val py = pr.centerY()
+            fill.color = Color.rgb(30, 90, 50); c.drawCircle(px, py + 1.5f * dp, 14.5f * dp, fill)
+            fill.color = Color.rgb(110, 225, 140); c.drawCircle(px, py, 14f * dp, fill)
+            fill.color = Color.argb(90, 255, 255, 255); c.drawOval(px - 9f * dp, py - 11f * dp, px + 4f * dp, py - 4f * dp, fill)
+            stroke.color = Color.WHITE; stroke.strokeWidth = 3.2f * dp; stroke.strokeCap = Paint.Cap.ROUND
+            c.drawLine(px - 6f * dp, py, px + 6f * dp, py, stroke); c.drawLine(px, py - 6f * dp, px, py + 6f * dp, stroke)
         } else {
             text.textSize = 18f * dp
             fill.color = Color.argb(110, 0, 0, 0); c.drawRoundRect(pr, 17f * dp, 17f * dp, fill)
@@ -3947,6 +3957,17 @@ class GameView(context: Context) : View(context) {
             else -> if (b.enabled) Triple(shade(PANEL_LIGHT, 0.06f), shade(PANEL, -0.02f), Color.WHITE)
                     else Triple(Color.rgb(56, 44, 90), Color.rgb(46, 36, 76), Color.argb(160, 255, 255, 255))
         }
+        // ordinary buttons wear the glossy purple pill from the art pack
+        if (b.style == STYLE_NORMAL && ui("pill_dark") != null && r.width() >= r.height() * 1.25f) {
+            uiPaint.alpha = if (b.enabled) 255 else 130
+            val g = 3f * dp
+            uiStretch(c, "pill_dark", RectF(r.left - g, r.top - g, r.right + g, r.bottom + g * 1.6f), 0.13f, 0.87f)
+            uiPaint.alpha = 255
+            if (custom != null) { text.color = Color.WHITE; custom(c, r) } else drawButtonLabel(c, r, b.label, if (b.enabled) Color.WHITE else Color.argb(150, 255, 255, 255), true)
+            if (pressed) c.restore()
+            text.color = Color.WHITE; text.alpha = 255
+            return
+        }
         val raised = b.style != STYLE_CARD && b.style != STYLE_PICKED
         val lift = if (raised && !pressed) 4f * dp else 0f
         if (pressed && raised) r.offset(0f, 3f * dp)
@@ -3971,22 +3992,31 @@ class GameView(context: Context) : View(context) {
         if (custom != null) {
             text.color = Color.WHITE
             custom(c, r)
-        } else {
-            text.color = tc
-            text.textSize = if (b.label.length > 12) 15f * dp else 18f * dp
-            while (text.textSize > 9f * dp && text.measureText(b.label) > r.width() - 14f * dp) text.textSize -= 1f * dp
-            val ty = r.centerY() - (text.descent() + text.ascent()) / 2
-            if (b.style == STYLE_PRIMARY || b.style == STYLE_DANGER) {   // soft text shadow
-                val keep = text.color
-                text.color = Color.argb(70, 0, 0, 0)
-                c.drawText(b.label, r.centerX(), ty + 1.5f * dp, text)
-                text.color = keep
-            }
-            c.drawText(b.label, r.centerX(), ty, text)
-        }
+        } else drawButtonLabel(c, r, b.label, tc, b.style == STYLE_PRIMARY || b.style == STYLE_DANGER)
         if (pressed) c.restore()
         text.color = Color.WHITE
         text.alpha = 255
+    }
+
+    /** A button's words; a trailing "✦" becomes the little spore icon. */
+    private fun drawButtonLabel(c: Canvas, r: RectF, label0: String, tc: Int, shadow: Boolean) {
+        val spore = label0.endsWith(" ✦") && ui("spore") != null
+        val label = if (spore) label0.removeSuffix(" ✦") else label0
+        text.color = tc
+        text.textSize = if (label0.length > 12) 15f * dp else 18f * dp
+        while (text.textSize > 9f * dp && text.measureText(label) + (if (spore) text.textSize * 1.25f else 0f) > r.width() - 14f * dp) text.textSize -= 1f * dp
+        val iw = if (spore) text.textSize * 1.2f else 0f
+        val tw = text.measureText(label)
+        val cx = r.centerX() - iw / 2
+        val ty = r.centerY() - (text.descent() + text.ascent()) / 2
+        if (shadow) {
+            val keep = text.color
+            text.color = Color.argb(70, 0, 0, 0)
+            c.drawText(label, cx, ty + 1.5f * dp, text)
+            text.color = keep
+        }
+        c.drawText(label, cx, ty, text)
+        if (spore) uiIcon(c, "spore", cx + tw / 2 + iw / 2 + 2f * dp, r.centerY(), text.textSize * 1.25f, Color.alpha(tc))
     }
 
     private fun drawNavItem(c: Canvas, r: RectF, tb: Tab) {
@@ -3998,7 +4028,11 @@ class GameView(context: Context) : View(context) {
         }
         val col = if (on) ACCENT else Color.argb(150, 255, 255, 255)
         fill.color = col; stroke.color = col; stroke.strokeWidth = 2.5f * dp
-        when (tb) {
+        val navSprite = "nav_" + tb.name.lowercase()
+        if (ui(navSprite) != null) {
+            val bounce = if (on) 1.12f + 0.03f * sin(t * 4f) else 1f
+            uiIcon(c, navSprite, cx, cy, 34f * dp * bounce, if (on) 255 else 170)
+        } else when (tb) {
             Tab.GARDEN -> {
                 c.drawRoundRect(cx - 4f * dp, cy - 2f * dp, cx + 4f * dp, cy + 10f * dp, 3f * dp, 3f * dp, fill)
                 path.reset(); path.moveTo(cx - 13f * dp, cy); path.cubicTo(cx - 13f * dp, cy - 16f * dp, cx + 13f * dp, cy - 16f * dp, cx + 13f * dp, cy); path.close()
