@@ -2144,9 +2144,9 @@ class GameView(context: Context) : View(context) {
     private fun dustPill(w: Float): RectF {
         text.textSize = 18f * dp
         val tw = text.measureText("${max(0f, shownDust).toInt()}")
-        val h = 40f * dp
-        val pw = uiStretchWidth("spore_bar", h, 0.73f, 0.83f) + tw + 6f * dp
-        return RectF(w - 86f * dp - pw, 13f * dp, w - 86f * dp, 13f * dp + h)
+        val h = 44f * dp
+        val pw = uiStretchWidth("spore_bar", h, 0.73f, 0.83f) + tw + 10f * dp
+        return RectF(w - 86f * dp - pw, 11f * dp, w - 86f * dp, 11f * dp + h)
     }
 
     private fun drawTopBar(c: Canvas, w: Float) {
@@ -2167,7 +2167,7 @@ class GameView(context: Context) : View(context) {
             val b = ui("spore_bar")!!
             uiStretch(c, "spore_bar", pr, 0.73f, 0.83f)
             text.textSize = 18f * dp; text.textAlign = Paint.Align.RIGHT
-            val rx = pr.right - b.width * 0.17f * pr.height() / b.height + 2f * dp
+            val rx = pr.right - b.width * 0.17f * pr.height() / b.height - 2f * dp
             text.color = Color.argb(90, 30, 10, 60); c.drawText(label, rx, pr.centerY() + 8f * dp, text)
             text.color = Color.rgb(255, 246, 214); c.drawText(label, rx, pr.centerY() + 6.5f * dp, text)
             text.textAlign = Paint.Align.LEFT
