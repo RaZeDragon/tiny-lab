@@ -2488,10 +2488,10 @@ class GameView(context: Context) : View(context) {
         fill.shader = LinearGradient(0f, 0f, 0f, hz, th.skyTop, th.skyBottom, Shader.TileMode.CLAMP)
         c.drawRect(0f, 0f, w, hz + 2f * dp, fill)
         fill.shader = null
-        // Moonlit Meadow is the painted picture, covering the whole garden and sliding as you swipe
+        // Moonlit Meadow's sky and tall background mushrooms come from the painting, sliding as you swipe
         val painted = if (lab.theme == 0) meadowBg() else null
         if (painted != null) {
-            val ph = navTop
+            val ph = hz + 2f * dp
             val iw = painted.width * (ph / painted.height)
             val shift = ((camX - camMin()) / max(0.001f, camMax() - camMin())).coerceIn(0f, 1f) * max(0f, iw - w)
             c.drawBitmap(painted, null, RectF(-shift, 0f, iw - shift, ph), bgPaint)
@@ -2573,19 +2573,11 @@ class GameView(context: Context) : View(context) {
             }
         }
 
-        if (painted != null) return   // the painting already has its own grass, flowers and hills
         // ground plane
         val gb = navTop
         fill.shader = LinearGradient(0f, hz, 0f, gb, th.groundFar, th.groundNear, Shader.TileMode.CLAMP)
         c.drawRect(0f, hz, w, gb, fill)
         fill.shader = null
-        stroke.color = Color.argb(28, 0, 0, 0); stroke.strokeWidth = 1.5f * dp
-        for (k in 0..(8 * LabState.WORLD).toInt()) {
-            val (x1, _) = toScreen(k / 8f, 0f)
-            val (x2, y2) = toScreen(k / 8f, 1.4f)
-            if (max(x1, x2) < -20f * dp || min(x1, x2) > w + 20f * dp) continue
-            c.drawLine(x1, groundTop() - 20f * dp, x2, y2, stroke)
-        }
         val grass = when (lab.theme) { 2 -> Color.rgb(200, 140, 60); 3 -> Color.rgb(130, 110, 200); 4 -> Color.rgb(200, 215, 235); else -> Color.rgb(110, 190, 120) }
         for ((gx, gz, kind) in decor) {
             if (abs(gx - camX) > 0.62f) continue
