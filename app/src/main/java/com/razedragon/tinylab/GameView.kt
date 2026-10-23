@@ -2506,7 +2506,7 @@ class GameView(context: Context) : View(context) {
                 val stemH = sz * (if (kind == 2) 1.15f else 0.95f) * (0.85f + r.nextFloat() * 0.35f)
                 val hasSpots = r.nextFloat() < 0.75f
                 val nx = x
-                x += sz * (0.85f + r.nextFloat() * 0.9f)
+                x += sz * (1.05f + r.nextFloat() * 1.0f)
                 if (nx < -sz * 1.2f || nx > w + sz * 1.2f) continue
                 if (lab.theme == 3) {   // crystals in the cave
                     fill.color = col
