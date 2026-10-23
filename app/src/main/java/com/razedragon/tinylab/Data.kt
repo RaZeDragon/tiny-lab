@@ -702,17 +702,17 @@ object Data {
         Quest("The Lost Ghost", "A tiny ghost wandered into your garden and can't find its way home!",
             arrayOf(QuestStep("Brew a Ghost Puff to keep it company", 0, 59),
                 QuestStep("Light the way: place a Jack-o'-lantern", 1, 16),
-                QuestStep("Share treats: feed Candy Corn 3 times", 2, 5, 3)),
+                QuestStep("Share treats: feed Candy Corn 3 times (Shop → EVENT)", 2, 5, 3)),
             4, "The little ghost found its way... and decided to stay with you!"),
         Quest("Snowflake Delivery", "A shivering penguin needs help delivering snowflakes before the festival!",
             arrayOf(QuestStep("Brew a Snowglobe Puff to hold the snowflakes", 0, 67),
                 QuestStep("Build a Snowman as a landmark", 1, 20),
-                QuestStep("Warm up: feed Hot Cocoa 3 times", 2, 6, 3)),
+                QuestStep("Warm up: feed Hot Cocoa 3 times (Shop → EVENT)", 2, 6, 3)),
             5, "Every snowflake was delivered! The penguin wants to live in your garden."),
         Quest("The Bloom Party", "A sleepy bunny wants to throw a spring party in your garden!",
             arrayOf(QuestStep("Brew a Blossom Cap for decorations", 0, 72),
                 QuestStep("Place a Flower Arch for the entrance", 1, 22),
-                QuestStep("Party snacks: feed Strawberries 3 times", 2, 7, 3)),
+                QuestStep("Party snacks: feed Strawberries 3 times (Shop → EVENT)", 2, 7, 3)),
             6, "What a party! The bunny hopped right into your heart."),
     )
 
@@ -739,7 +739,8 @@ object Data {
             arrayOf(
                 Line(0, "Ooh, it's glowing! I can almost see the Hollow from here!", 3),
                 Line(0, "I'm just... a teeny bit too hungry to float that far.", 1),
-                Line(1, "Then let's have a party! Feed your mushrooms Candy Corn three times and we'll all share."),
+                Line(1, "Then let's have a party! Grab some Candy Corn from the Shop's EVENT tab and feed your mushrooms three times."),
+                Line(1, "Psst: mushrooms wearing a costume sometimes find Candy Corn for you when you tap them!"),
             ),
             arrayOf(
                 Line(0, "That was the best party ever! And look, I can see my way home now...", 2),
@@ -768,7 +769,7 @@ object Data {
             arrayOf(
                 Line(0, "What a handsome snowman! I can see the whole sky from up here.", 3),
                 Line(0, "But my b-beak is frozen solid...", 4),
-                Line(1, "Hot Cocoa fixes everything. Feed your mushrooms Hot Cocoa three times and warm up together."),
+                Line(1, "Hot Cocoa fixes everything. Get some from the Shop's EVENT tab and feed your mushrooms three times."),
             ),
             arrayOf(
                 Line(2, "Snowflakes drift down over the whole garden. The festival is saved!"),
@@ -798,7 +799,7 @@ object Data {
             arrayOf(
                 Line(0, "Ooh, fancy! The guests are going to love it!", 3),
                 Line(0, "Last thing... what's a party without snacks?", 1),
-                Line(1, "Strawberries, of course! Feed your mushrooms Strawberries three times."),
+                Line(1, "Strawberries, of course! You'll find them in the Shop's EVENT tab. Feed your mushrooms three times."),
             ),
             arrayOf(
                 Line(2, "Music, petals and giggles fill the garden. What a party!"),

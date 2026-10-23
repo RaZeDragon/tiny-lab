@@ -474,7 +474,7 @@ class GameView(context: Context) : View(context) {
 
     private fun feed(s: Shroom, f: Int) {
         val food = Data.FOODS[f]
-        if (lab.foods[f] <= 0) { sound.play(Fx.DENIED); toast("Out of ${food.name}. Buy more in the Shop", ACCENT); return }
+        if (lab.foods[f] <= 0) { sound.play(Fx.DENIED); toast("Out of ${food.name}. Buy more in the Shop" + (if (food.event != 0) " → EVENT tab" else ""), ACCENT); return }
         if (s.hunger >= 95f) { sound.play(Fx.DENIED); toast("${Data.SPECIES[s.species].name} is too full!"); return }
         val fav = Data.SPECIES[s.species].favFood == f
         val before = s.stage()
@@ -826,7 +826,7 @@ class GameView(context: Context) : View(context) {
         if (jobbing) { jobButtons(list, s, w, top, by); return }
         if (exploring) { exploreButtons(list, s, w, top, by); return }
         if (feeding) {
-            val foodsShown = Data.FOODS.indices.filter { (Data.FOODS[it].event == 0 && !Data.FOODS[it].cooked) || lab.foods[it] > 0 }
+            val foodsShown = Data.FOODS.indices.filter { (Data.FOODS[it].event == 0 && !Data.FOODS[it].cooked) || lab.foods[it] > 0 || (Data.FOODS[it].event != 0 && Data.FOODS[it].event == eventNow()) }
             val fcols = min(6, foodsShown.size)
             val frows = (foodsShown.size + fcols - 1) / fcols
             val cw = (w - pad * 2) / fcols
@@ -834,7 +834,7 @@ class GameView(context: Context) : View(context) {
             for ((pos, f) in foodsShown.withIndex()) {
                 val fy0 = top + 96f * dp + (pos / fcols) * fh
                 val r = RectF(pad + (pos % fcols) * cw + 3f * dp, fy0 + 2f * dp, pad + (pos % fcols + 1) * cw - 3f * dp, fy0 + fh - 2f * dp)
-                list.add(Button("food$f", r, "", STYLE_CARD, lab.foods[f] > 0, custom = { c, rr -> drawFoodCard(c, rr, f, s) }) {
+                list.add(Button("food$f", r, "", STYLE_CARD, lab.foods[f] > 0 || Data.FOODS[f].event != 0, custom = { c, rr -> drawFoodCard(c, rr, f, s) }) {
                     feed(s, f)
                 })
             }
@@ -1200,10 +1200,10 @@ class GameView(context: Context) : View(context) {
             5 -> Data.UPGRADES.indices.map { 5 to it }
             6 -> Data.PETS.indices.filter { (Data.PETS[it].event == 0 && Data.PETS[it].special == 0) || lab.petOwned[it] > 0 }.map { 6 to it }
             7 -> Data.PACKS.indices.filter { !Data.PACKS[it].eventOnly || ev > 0 }.map { 7 to it }
-            else -> Data.INGREDIENTS.indices.filter { Data.INGREDIENTS[it].event == ev }.map { 0 to it } +
+            else -> Data.FOODS.indices.filter { Data.FOODS[it].event == ev }.map { 1 to it } +   // the quest treat comes first
+                Data.INGREDIENTS.indices.filter { Data.INGREDIENTS[it].event == ev }.map { 0 to it } +
                 Data.ACCESSORIES.indices.filter { Data.ACCESSORIES[it].event == ev }.map { 4 to it } +
                 Data.DECOR.indices.filter { Data.DECOR[it].event == ev }.map { 2 to it } +
-                Data.FOODS.indices.filter { Data.FOODS[it].event == ev }.map { 1 to it } +
                 Data.THEMES.indices.filter { Data.THEMES[it].event == ev }.map { 3 to it }
         }
     }
