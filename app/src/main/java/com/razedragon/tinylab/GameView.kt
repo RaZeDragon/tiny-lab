@@ -3324,7 +3324,7 @@ class GameView(context: Context) : View(context) {
         // painted versions from the decor art pack
         DECOR_ART[kind]?.let { hgt ->
             dk(kind)?.let { b ->
-                val hh = s * hgt; val wv = b.width * hh / b.height
+                val hh = s * hgt * (if (iconMode) 1f else 1.5f); val wv = b.width * hh / b.height
                 c.drawBitmap(b, null, RectF(x - wv / 2, y + s * 0.1f - hh, x + wv / 2, y + s * 0.1f), uiPaint)
                 return
             }
