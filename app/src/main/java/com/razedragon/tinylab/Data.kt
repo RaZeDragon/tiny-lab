@@ -558,9 +558,13 @@ object Data {
         // More
         Decor("Moss Nest", 240),
         Decor("Star Fountain", 0, glow = true, special = 2),
+        Decor("Mossy Log", 150),
+        Decor("Glowcap Log", 280, glow = true),
     )
     const val COZY_BED = 24
     const val STAR_FOUNTAIN = 25
+    const val MOSSY_LOG = 26
+    const val GLOW_LOG = 27
 
     val THEMES = arrayOf(
         Theme("Moonlit Meadow", 0, Color.rgb(30, 20, 64), Color.rgb(110, 70, 150), Color.rgb(40, 62, 70),

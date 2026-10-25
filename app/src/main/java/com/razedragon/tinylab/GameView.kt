@@ -1023,7 +1023,13 @@ class GameView(context: Context) : View(context) {
             .show()
     }
 
+    // While you carry a decoration the tray slides out of the way, leaving a small "put away" bar at the bottom.
+    private var trayDrop = 0f
+    private fun carryingDecor() = decorating && dragging && (dragKind == 4 || dragKind == 5)
+    private fun putAwayTop() = navTop - 70f * dp
+
     private fun decorButtons(list: ArrayList<Button>, w: Float) {
+        if (carryingDecor()) return
         val top = panelTop()
         val pad = 16f * dp
         // theme switcher
@@ -1043,9 +1049,7 @@ class GameView(context: Context) : View(context) {
             val r = RectF(pad + (pos % cols) * cw + 2f * dp, gy + (pos / cols) * ch + 2f * dp,
                 pad + (pos % cols + 1) * cw - 2f * dp, gy + (pos / cols + 1) * ch - 2f * dp)
             list.add(Button("dec$k", r, "", STYLE_CARD, lab.decorOwned[k] > 0, custom = { c, rr ->
-                c.save(); c.clipRect(rr)
-                drawDecor(c, k, rr.centerX(), rr.bottom - 16f * dp, 0.55f)
-                c.restore()
+                decorIcon(c, k, rr.centerX(), rr.centerY() - 7f * dp, min(rr.width(), rr.height()) * 0.66f)
                 text.textSize = 11f * dp; text.color = if (lab.decorOwned[k] > 0) Color.WHITE else TEXT_DIM
                 c.drawText("×${lab.decorOwned[k]}", rr.centerX(), rr.bottom - 4f * dp, text)
                 text.color = Color.WHITE
@@ -1716,7 +1720,7 @@ class GameView(context: Context) : View(context) {
                 feed(s, dragIndex)
             }
             4 -> { // place a decoration from the tray
-                if (y >= panelTop() - 10f * dp) return
+                if (y >= putAwayTop()) return
                 if (lab.placed.size >= MAX_PLACED) { toast("That's a lot of decorations! (max $MAX_PLACED)"); return }
                 val (gx, gz) = toWorld(x, y)
                 lab.placed.add(Placed(dragIndex, gx, gz))
@@ -1727,7 +1731,7 @@ class GameView(context: Context) : View(context) {
             }
             5 -> { // move a placed decoration, or put it back in the tray
                 val d = lab.placed.getOrNull(dragPlaced) ?: return
-                if (y >= panelTop()) {
+                if (y >= putAwayTop()) {
                     releaseFromDecor(dragPlaced, removed = true)
                     lab.placed.removeAt(dragPlaced)
                     lab.decorOwned[d.kind]++
@@ -1841,6 +1845,8 @@ class GameView(context: Context) : View(context) {
     }
     internal fun testTutStep() = tutStep
     internal var testFace: String? = null
+    internal fun testCarryDecor(kind: Int, x: Float, y: Float) { tab = Tab.GARDEN; decorating = true; dragging = true; dragKind = 4; dragIndex = kind; dragX = x; dragY = y; trayDrop = 1f }
+    internal fun testDropDecor() { dragging = false; dragKind = 0 }
     internal fun testDealKind() = dailyDeal().first
     internal fun testContest(list: List<Entrant>) { lab.lastContest = list; lab.nextContest = System.currentTimeMillis() + 3_600_000L }
     internal fun testSceneOn() = sceneOn()
@@ -1891,6 +1897,7 @@ class GameView(context: Context) : View(context) {
     private fun update(dt: Float) {
         t += dt
         if (sceneOn()) { sceneT += dt; sceneAge += dt }
+        trayDrop = if (carryingDecor()) min(1f, trayDrop + dt * 7f) else max(0f, trayDrop - dt * 7f)
         if (levelUpT > 0f) levelUpT -= dt
         if (qaMode) { qaAcc += max(dt, realDt); if (qaAcc >= 0.5f) { qaAcc = 0f; qaReport() } }
         updateJam(dt)
@@ -2136,7 +2143,7 @@ class GameView(context: Context) : View(context) {
             }
             4, 5 -> {
                 val kind = if (dragKind == 4) dragIndex else lab.placed.getOrNull(dragPlaced)?.kind ?: return
-                val overTray = dragY >= panelTop()
+                val overTray = dragY >= putAwayTop()
                 if (!overTray) {
                     val (gx, gz) = toWorld(dragX, dragY)
                     val (sx, sy) = toScreen(gx, gz)
@@ -2155,6 +2162,37 @@ class GameView(context: Context) : View(context) {
             }
         }
     }
+
+    // ---------- Painted garden kit (assets/garden) ----------
+    private val gBmps = HashMap<String, android.graphics.Bitmap?>()
+    private fun gk(name: String): android.graphics.Bitmap? = gBmps.getOrPut(name) {
+        try { context.assets.open("garden/$name.png").use { android.graphics.BitmapFactory.decodeStream(it) } } catch (_: Exception) { null }
+    }
+    /** Draws a garden sprite standing on (x, y), [h] tall. Returns false if it's missing. */
+    private fun gkDraw(c: Canvas, name: String, x: Float, y: Float, h: Float, flip: Boolean = false, alpha: Int = 255): Boolean {
+        val b = gk(name) ?: return false
+        val wv = b.width * h / b.height
+        uiPaint.alpha = alpha
+        if (flip) { c.save(); c.scale(-1f, 1f, x, y) }
+        c.drawBitmap(b, null, RectF(x - wv / 2, y - h, x + wv / 2, y), uiPaint)
+        if (flip) c.restore()
+        uiPaint.alpha = 255
+        return true
+    }
+    private val GLOW_SHROOMS = arrayOf("gm_blue", "gm_pink", "gm_orange", "gm_purple", "gm_pink2", "gm_purple2",
+        "gm_s1", "gm_s2", "gm_s3", "gm_s4", "gm_s5", "gm_s6", "gm_s7")
+    private val GLOW_COLS = intArrayOf(Color.rgb(120, 170, 255), Color.rgb(255, 120, 210), Color.rgb(255, 180, 110), Color.rgb(200, 120, 255),
+        Color.rgb(255, 120, 210), Color.rgb(200, 120, 255), Color.rgb(255, 120, 170), Color.rgb(255, 180, 110), Color.rgb(190, 120, 255),
+        Color.rgb(255, 120, 190), Color.rgb(230, 120, 255), Color.rgb(200, 120, 255), Color.rgb(150, 120, 255))
+    /** Glowing mushroom clumps along the back edge of the meadow (world x, which sprite, size). */
+    private val glowBorder by lazy {
+        val r = Random(77); val out = ArrayList<Triple<Float, Int, Float>>()
+        var gx = 0.02f
+        while (gx < LabState.WORLD) { out.add(Triple(gx, r.nextInt(GLOW_SHROOMS.size), 0.75f + r.nextFloat() * 0.5f)); gx += 0.13f + r.nextFloat() * 0.12f }
+        out
+    }
+    private var lawnShader: android.graphics.BitmapShader? = null
+    private val lawnMatrix = android.graphics.Matrix()
 
     // ---------- UI sprites from the kawaii GUI pack (assets/ui) ----------
     private val uiBmps = HashMap<String, android.graphics.Bitmap?>()
@@ -2781,16 +2819,50 @@ class GameView(context: Context) : View(context) {
         // distant skyline: layers of giant mushrooms fading into the sky (crystals in the cave)
         drawSkyline(c, w, hz, th)
 
-        // ground plane
+        // ground plane: the painted grass texture on the meadow, a soft gradient on other themes
         val gb = navTop
-        fill.shader = LinearGradient(0f, hz, 0f, gb, th.groundFar, th.groundNear, Shader.TileMode.CLAMP)
-        c.drawRect(0f, hz, w, gb, fill)
+        val lawnBmp = if (lab.theme == 0) gk("lawn") else null
+        if (lawnBmp != null) {
+            val sh = lawnShader ?: android.graphics.BitmapShader(lawnBmp, Shader.TileMode.MIRROR, Shader.TileMode.MIRROR).also { lawnShader = it }
+            val tile = 150f * dp / lawnBmp.width
+            lawnMatrix.reset(); lawnMatrix.setScale(tile, tile); lawnMatrix.postTranslate(-(camX - 0.5f) * pxPerWorld(), hz)
+            sh.setLocalMatrix(lawnMatrix)
+            fill.shader = sh; c.drawRect(0f, hz, w, gb, fill)
+            // distance haze toward the back, a little lift toward the front
+            fill.shader = LinearGradient(0f, hz, 0f, gb, intArrayOf(Color.argb(150, 20, 30, 50), Color.argb(30, 20, 30, 50), Color.argb(0, 0, 0, 0)),
+                floatArrayOf(0f, 0.35f, 1f), Shader.TileMode.CLAMP)
+            c.drawRect(0f, hz, w, gb, fill)
+        } else {
+            fill.shader = LinearGradient(0f, hz, 0f, gb, th.groundFar, th.groundNear, Shader.TileMode.CLAMP)
+            c.drawRect(0f, hz, w, gb, fill)
+        }
         fill.shader = null
+        // glowing mushroom clumps along the back of the meadow
+        if (lab.theme != 3 && gk("gm_blue") != null) for ((bgx, k, sc) in glowBorder) {
+            if (abs(bgx - camX) > 0.75f) continue
+            val (bx, by) = toScreen(bgx, 0f)
+            gkDraw(c, GLOW_SHROOMS[k], bx, by + 4f * dp, 34f * dp * sc, flip = k % 2 == 1)
+        }
+        val useKit = lab.theme != 3 && lab.theme != 4 && gk("fl1") != null
+        val autumn = Data.season() == 2
         val grass = when (lab.theme) { 2 -> Color.rgb(200, 140, 60); 3 -> Color.rgb(130, 110, 200); 4 -> Color.rgb(200, 215, 235); else -> Color.rgb(110, 190, 120) }
-        for ((gx, gz, kind) in decor) {
+        for ((idx, it) in decor.withIndex()) {
+            val (gx, gz, kind) = it
             if (abs(gx - camX) > 0.62f) continue
             val (x, y) = toScreen(gx, gz * 1.15f - 0.05f)
             val d = depth(gz)
+            if (useKit) {   // painted tufts, clovers, pebbles, flowers and (in autumn) leaf piles
+                val v = (idx * 37 + 11) % 97
+                val flip = v % 2 == 0
+                when (kind) {
+                    0 -> if (autumn && v % 5 == 0) gkDraw(c, "lf${1 + v % 5}", x, y + 3f * dp * d, 14f * dp * d, flip)
+                         else if (v % 3 == 0) gkDraw(c, "cl${1 + v % 5}", x, y + 3f * dp * d, 13f * dp * d, flip)
+                         else gkDraw(c, "gr${1 + v % 8}", x, y + 2f * dp * d, 17f * dp * d, flip)
+                    1 -> gkDraw(c, "rk${intArrayOf(7, 8, 2, 3, 1, 4)[v % 6]}", x, y + 3f * dp * d, (if (v % 6 < 2) 9f else 15f) * dp * d, flip)
+                    else -> gkDraw(c, "fl${1 + v % 16}", x, y + 2f * dp * d, (if (v % 16 >= 10) 24f else 20f) * dp * d, flip)
+                }
+                continue
+            }
             when (kind) {
                 0 -> { stroke.color = grass; stroke.strokeWidth = 2f * dp * d
                     c.drawLine(x, y, x - 3f * dp * d, y - 9f * dp * d, stroke)
@@ -2815,12 +2887,21 @@ class GameView(context: Context) : View(context) {
             if (!Data.DECOR[d.kind].glow) continue
             val (x, y) = toScreen(d.gx, d.gz)
             val sz = 58f * dp * depth(d.gz)
-            val gc = if (d.kind == 5) Color.rgb(190, 120, 255) else Color.rgb(255, 210, 120)
+            val gc = when (d.kind) { 5 -> Color.rgb(190, 120, 255); Data.GLOW_LOG -> Color.rgb(255, 130, 210); else -> Color.rgb(255, 210, 120) }
             val gy = y - sz * (if (d.kind == 9) 0.75f else 0.55f)
             fill.shader = RadialGradient(x, gy, sz * 1.5f, Color.argb((dark * 110).toInt(), Color.red(gc), Color.green(gc), Color.blue(gc)),
                 Color.argb(0, Color.red(gc), Color.green(gc), Color.blue(gc)), Shader.TileMode.CLAMP)
             c.drawCircle(x, gy, sz * 1.5f, fill)
             fill.shader = null
+        }
+        if (lab.theme != 3 && area == 0 && gk("gm_blue") != null) for ((bgx, k, sc) in glowBorder) {   // the border mushrooms glow
+            if (abs(bgx - camX) > 0.75f) continue
+            val (bx, by) = toScreen(bgx, 0f)
+            val gc = GLOW_COLS[k]; val rr = 30f * dp * sc * (1f + 0.08f * sin(t * 1.5f + bgx * 9f))
+            fill.shader = RadialGradient(bx, by - 18f * dp * sc, rr, Color.argb((dark * 130).toInt(), Color.red(gc), Color.green(gc), Color.blue(gc)),
+                Color.argb(0, Color.red(gc), Color.green(gc), Color.blue(gc)), Shader.TileMode.CLAMP)
+            c.drawCircle(bx, by - 18f * dp * sc, rr, fill); fill.shader = null
+            gkDraw(c, GLOW_SHROOMS[k], bx, by + 4f * dp, 34f * dp * sc, flip = k % 2 == 1, alpha = (dark * 200).toInt())   // stays bright through the night tint
         }
         for (sh in local()) {
             if (!(Data.SPECIES[sh.species].glow || sh.variant == 2) || sh.act == ACT_INSIDE) continue
@@ -3088,6 +3169,24 @@ class GameView(context: Context) : View(context) {
     }
 
     private fun drawDecorTray(c: Canvas, w: Float) {
+        if (trayDrop > 0.01f) {
+            // the tray sinks away so the whole lawn is free, and a drop bar rises in its place
+            val top = panelTop() + (navTop - panelTop()) * trayDrop
+            if (top < navTop) panel(c, RectF(8f * dp, top, w - 8f * dp, panelBottom() + (navTop - panelTop()) * trayDrop), 22f * dp)
+            val bar = RectF(10f * dp, putAwayTop() + (1f - trayDrop) * 70f * dp, w - 10f * dp, navTop - 6f * dp + (1f - trayDrop) * 70f * dp)
+            val over = dragY >= putAwayTop()
+            val putting = dragKind == 5
+            fill.color = if (over && putting) Color.argb(240, 150, 60, 110) else Color.argb(235, 44, 30, 80)
+            c.drawRoundRect(bar, 20f * dp, 20f * dp, fill)
+            stroke.color = if (over && putting) ACCENT else Color.argb(120, 255, 255, 255); stroke.strokeWidth = 2f * dp
+            stroke.pathEffect = android.graphics.DashPathEffect(floatArrayOf(8f * dp, 6f * dp), t * 20f * dp)
+            c.drawRoundRect(bar, 20f * dp, 20f * dp, stroke); stroke.pathEffect = null
+            val msg = when { !putting -> "Drop it anywhere on the lawn"; over -> "Let go to put it away"; else -> "Drag here to put it away" }
+            text.textSize = 14f * dp; text.color = Color.WHITE
+            uiIcon(c, "move", w / 2 - text.measureText(msg) / 2 - 14f * dp, bar.centerY(), 18f * dp)
+            c.drawText(msg, w / 2 + 6f * dp, bar.centerY() + 5f * dp, text)
+            return
+        }
         val top = panelTop()
         panel(c, RectF(8f * dp, top, w - 8f * dp, panelBottom()), 22f * dp)
         text.textSize = 12f * dp; text.color = TEXT_DIM
@@ -3103,14 +3202,17 @@ class GameView(context: Context) : View(context) {
     private fun drawDecor(c: Canvas, kind: Int, x: Float, y: Float, scale: Float, occupant: Shroom? = null) {
         val s = 58f * dp * scale
         if (Data.DECOR[kind].glow && !iconMode) {
-            val gc = when (kind) { 5 -> Color.rgb(190, 120, 255); 9 -> Color.rgb(255, 200, 120); else -> Color.rgb(255, 210, 120) }
+            val gc = when (kind) { 5 -> Color.rgb(190, 120, 255); 9 -> Color.rgb(255, 200, 120); Data.GLOW_LOG -> Color.rgb(255, 130, 210); else -> Color.rgb(255, 210, 120) }
             val gy = y - s * (if (kind == 9) 0.75f else 0.55f)
             fill.shader = RadialGradient(x, gy, s * 1.1f, Color.argb((70 + 25 * sin(t * 2f + kind)).toInt(), Color.red(gc), Color.green(gc), Color.blue(gc)),
                 Color.argb(0, Color.red(gc), Color.green(gc), Color.blue(gc)), Shader.TileMode.CLAMP)
             c.drawCircle(x, gy, s * 1.1f, fill)
             fill.shader = null
         }
-        if (kind != 4 && !iconMode) groundShadow(c, x, y, s * (if (kind == 3 || kind == 9 || kind == 7) 0.75f else 0.45f), 90)
+        if (kind != 4 && !iconMode) groundShadow(c, x, y, s * (if (kind == 3 || kind == 9 || kind == 7 || kind >= Data.MOSSY_LOG) 0.75f else 0.45f), 90)
+        if (kind == Data.MOSSY_LOG || kind == Data.GLOW_LOG) {   // painted logs from the garden kit
+            if (gkDraw(c, if (kind == Data.MOSSY_LOG) "log2" else "log1", x, y + s * 0.08f, s * 0.62f)) return
+        }
         when (kind) {
             0 -> { // lantern on a post
                 stroke.color = Color.rgb(60, 50, 70); stroke.strokeWidth = s * 0.06f
@@ -5774,6 +5876,7 @@ class GameView(context: Context) : View(context) {
     private fun drawPlotWorld(c: Canvas, i: Int, x: Float, y: Float, d: Float) {
         val now = System.currentTimeMillis()
         val rw = 40f * dp * d; val rh = 14f * dp * d
+        if (gk("plot0") != null) { drawPlotSprite(c, i, x, y, d, now, rh); return }
         fill.color = Color.rgb(95, 65, 45); c.drawOval(x - rw, y - rh, x + rw, y + rh, fill)
         fill.color = Color.rgb(125, 85, 58); c.drawOval(x - rw * 0.86f, y - rh * 1.2f, x + rw * 0.86f, y + rh * 0.4f, fill)
         fill.color = Color.rgb(150, 105, 72)
@@ -5807,6 +5910,35 @@ class GameView(context: Context) : View(context) {
         text.color = if (p >= 1f) MINT else Color.argb(220, 255, 255, 255)
         val label = if (p >= 1f) "Harvest!" else timeLeft((lab.plotAt[i] + lab.plotDuration(i)) - now) + (if (lab.plotWater[i]) " 💧" else "")
         c.drawText(label, x, y + rh + 12f * dp * d, text)
+        text.color = Color.WHITE
+    }
+
+    /** The painted garden bed: empty soil, sprouts, leafy plants, flowers, then ripe with the ingredient floating above. */
+    private fun drawPlotSprite(c: Canvas, i: Int, x: Float, y: Float, d: Float, now: Long, rh: Float) {
+        val sd = lab.plotSeed[i]
+        val p = if (sd < 0) 0f else lab.plotProgress(i, now)
+        val stage = when { sd < 0 -> 0; p >= 1f -> 4; p >= 0.66f -> 3; p >= 0.33f -> 2; else -> 1 }
+        val h = (if (stage >= 3) 50f else 40f) * dp * d
+        val sway = if (stage >= 2) sin(t * 1.6f + i) * 1.5f else 0f
+        c.save(); c.rotate(sway, x, y + rh)
+        gkDraw(c, "plot$stage", x, y + rh * 1.1f, h, flip = i % 2 == 1)
+        c.restore()
+        text.textSize = 11f * dp * d
+        if (sd < 0) {
+            text.color = Color.argb(210, 255, 255, 255); c.drawText("+ plant", x, y - rh * 1.4f, text); text.color = Color.WHITE
+            return
+        }
+        val ing = Data.SEEDS[sd].ingredient
+        if (stage == 4) {
+            val fy = y - h * 0.8f + sin(t * 4f) * 2f * dp
+            fill.color = Color.argb(70, 255, 240, 180); c.drawCircle(x, fy, 15f * dp * d, fill)
+            drawIngredient(c, ing, x, fy, 10f * dp * d)
+            fill.color = Color.WHITE; drawSparkle(c, x + 13f * dp * d, fy - 8f * dp * d, 2.5f * dp * d)
+        }
+        if (lab.plotWater[i]) { fill.color = Color.argb(180, 140, 200, 255); c.drawOval(x - 30f * dp * d, y + rh * 0.2f, x + 30f * dp * d, y + rh * 0.9f, fill) }
+        text.color = if (p >= 1f) MINT else Color.argb(220, 255, 255, 255)
+        val label = if (p >= 1f) "Harvest!" else timeLeft((lab.plotAt[i] + lab.plotDuration(i)) - now) + (if (lab.plotWater[i]) " 💧" else "")
+        c.drawText(label, x, y + rh + 14f * dp * d, text)
         text.color = Color.WHITE
     }
 

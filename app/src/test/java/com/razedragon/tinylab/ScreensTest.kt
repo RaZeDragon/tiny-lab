@@ -470,6 +470,11 @@ class ScreensTest {
         val a = lab.newShroom(1, 600f, false).apply { name = "Mochi" }
         lab.garden.add(a)
         lab.dust = 3000
+        // decorating: the tray gets out of the way while you carry an item
+        lab.decorOwned[Data.MOSSY_LOG] = 1; lab.decorOwned[Data.GLOW_LOG] = 1
+        lab.placed.add(Placed(Data.MOSSY_LOG, 0.35f, 0.45f)); lab.placed.add(Placed(Data.GLOW_LOG, 0.7f, 0.7f))
+        g.testCarryDecor(0, 540f, 900f); g.testFrame(0.1f); save(g.testRender(), "decor_carry")
+        g.testDropDecor()
         // shop: today's sale
         assertTrue(g.testTap("nav4"))
         assertTrue(g.testTap("s${g.testDealKind()}")); g.testFrame(0.3f); save(g.testRender(), "shop_sale")
