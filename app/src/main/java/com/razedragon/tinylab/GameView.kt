@@ -2197,6 +2197,38 @@ class GameView(context: Context) : View(context) {
         out.sortedBy { it.third }   // smaller ones behind
     }
     private var lawnShader: android.graphics.BitmapShader? = null
+
+    // ----- The painted meadow, laid on the ground in perspective -----
+    private var panoBmp: android.graphics.Bitmap? = null
+    private var panoTried = false
+    private fun meadowPano(): android.graphics.Bitmap? {
+        if (!panoTried) { panoTried = true
+            panoBmp = try { context.assets.open("garden/meadow_pano.jpg").use { android.graphics.BitmapFactory.decodeStream(it) } } catch (_: Exception) { null } }
+        return panoBmp
+    }
+    private val PANO_MW = 24; private val PANO_MH = 24
+    private val panoVerts = FloatArray((PANO_MW + 1) * (PANO_MH + 1) * 2)
+    private val panoPaint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
+    /** Maps the picture onto the ground the same way the mushrooms are placed, so it pans and narrows toward the back with them. */
+    private fun drawPanoLawn(c: Canvas, w: Float, hz: Float, gb: Float, b: android.graphics.Bitmap) {
+        val g0 = -0.4f; val g1 = LabState.WORLD + 0.4f
+        val span = groundBottom() - groundTop()
+        val zTop = (hz - groundTop()) / span; val zBot = (gb - groundTop()) / span
+        var k = 0
+        for (j in 0..PANO_MH) {
+            val gz = zTop + (zBot - zTop) * j / PANO_MH
+            val f = w * 0.86f * (0.72f + 0.28f * gz)
+            val y = groundTop() + span * gz
+            for (i in 0..PANO_MW) {
+                val gx = g0 + (g1 - g0) * i / PANO_MW
+                panoVerts[k++] = w / 2 + (gx - camX) * f
+                panoVerts[k++] = y
+            }
+        }
+        c.save(); c.clipRect(0f, hz, w, gb)
+        c.drawBitmapMesh(b, PANO_MW, PANO_MH, panoVerts, 0, null, 0, panoPaint)
+        c.restore()
+    }
     private val lawnMatrix = android.graphics.Matrix()
 
     // ---------- UI sprites from the kawaii GUI pack (assets/ui) ----------
@@ -2826,8 +2858,10 @@ class GameView(context: Context) : View(context) {
 
         // ground plane: the painted grass texture on the meadow, a soft gradient on other themes
         val gb = navTop
-        val lawnBmp = if (lab.theme == 0) gk("lawn") else null
-        if (lawnBmp != null) {
+        val pano = if (lab.theme == 0) meadowPano() else null
+        val lawnBmp = if (lab.theme == 0 && pano == null) gk("lawn") else null
+        if (pano != null) drawPanoLawn(c, w, hz, gb, pano)
+        else if (lawnBmp != null) {
             val sh = lawnShader ?: android.graphics.BitmapShader(lawnBmp, Shader.TileMode.MIRROR, Shader.TileMode.MIRROR).also { lawnShader = it }
             val tile = 150f * dp / lawnBmp.width
             lawnMatrix.reset(); lawnMatrix.setScale(tile, tile); lawnMatrix.postTranslate(-(camX - 0.5f) * pxPerWorld(), hz)
@@ -2843,11 +2877,12 @@ class GameView(context: Context) : View(context) {
         }
         fill.shader = null
         // glowing mushroom clumps along the back of the meadow
-        if (lab.theme != 3 && gk("gm_blue") != null) for ((bgx, k, sc) in glowBorder) {
+        if (pano == null && lab.theme != 3 && gk("gm_blue") != null) for ((bgx, k, sc) in glowBorder) {
             if (abs(bgx - camX) > 0.75f) continue
             val (bx, by) = toScreen(bgx, 0f)
             gkDraw(c, GLOW_SHROOMS[k], bx, by + 4f * dp, 34f * dp * sc, flip = k % 2 == 1)
         }
+        if (pano != null) return   // the painted meadow already has its own flowers, rocks and glowing mushrooms
         val useKit = lab.theme != 3 && lab.theme != 4 && gk("fl1") != null
         val autumn = Data.season() == 2
         val grass = when (lab.theme) { 2 -> Color.rgb(200, 140, 60); 3 -> Color.rgb(130, 110, 200); 4 -> Color.rgb(200, 215, 235); else -> Color.rgb(110, 190, 120) }
@@ -2899,7 +2934,7 @@ class GameView(context: Context) : View(context) {
             c.drawCircle(x, gy, sz * 1.5f, fill)
             fill.shader = null
         }
-        if (lab.theme != 3 && area == 0 && gk("gm_blue") != null) for ((bgx, k, sc) in glowBorder) {   // the border mushrooms glow
+        if (lab.theme != 3 && area == 0 && meadowPano() == null && gk("gm_blue") != null) for ((bgx, k, sc) in glowBorder) {   // the border mushrooms glow
             if (abs(bgx - camX) > 0.75f) continue
             val (bx, by) = toScreen(bgx, 0f)
             val gc = GLOW_COLS[k]; val rr = 30f * dp * sc * (1f + 0.08f * sin(t * 1.5f + bgx * 9f))
