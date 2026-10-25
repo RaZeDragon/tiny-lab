@@ -9496,7 +9496,20 @@ class GameView(context: Context) : View(context) {
     private val ingPath = Path()
 
     /** Ingredients are little illustrated objects: a droplet, a flame, a honey jar... (about r*1.3 in radius). */
+    // ---------- Painted ingredient & food icons (assets/items) ----------
+    private val itemBmps = HashMap<String, android.graphics.Bitmap?>()
+    private fun itemArt(key: String): android.graphics.Bitmap? = itemBmps.getOrPut(key) {
+        try { context.assets.open("items/$key.png").use { android.graphics.BitmapFactory.decodeStream(it) } } catch (_: Exception) { null }
+    }
+    /** Draws a painted icon fitted into a box about [box] across, centred on (x, y). */
+    private fun drawItemArt(c: Canvas, b: android.graphics.Bitmap, x: Float, y: Float, box: Float) {
+        val sc = min(box / b.width, box / b.height)
+        val w2 = b.width * sc / 2; val h2 = b.height * sc / 2
+        c.drawBitmap(b, null, RectF(x - w2, y - h2, x + w2, y + h2), uiPaint)
+    }
+
     private fun drawIngredient(c: Canvas, i: Int, x: Float, y: Float, r: Float) {
+        itemArt("ing$i")?.let { drawItemArt(c, it, x, y, r * 2.7f); return }
         val u = r * 1.25f   // the size everything below is measured in
         val p = ingPath
         fun grad(x0: Float, y0: Float, rad: Float, light: Int, mid: Int, dark: Int) {
@@ -9978,6 +9991,7 @@ class GameView(context: Context) : View(context) {
     }
 
     private fun drawFood(c: Canvas, f: Int, x: Float, y: Float, r: Float) {
+        itemArt("food$f")?.let { drawItemArt(c, it, x, y, r * 2.6f); return }
         val col = Data.FOODS[f].color
         fill.color = col; fill.alpha = 45
         c.drawCircle(x, y, r * 1.35f, fill)
