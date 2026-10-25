@@ -2207,83 +2207,118 @@ class GameView(context: Context) : View(context) {
     private var lawnShader: android.graphics.BitmapShader? = null
 
     // ----- The Moonlit Meadow, laid out piece by piece like the meadow painting -----
-    private class LawnItem(val gx: Float, val gz: Float, val name: String, val h: Float, val flip: Boolean, val glow: Int = 0)
+    private class LawnItem(val gx: Float, val gz: Float, val name: String, val h: Float, val flip: Boolean, val glow: Int = 0, val dark: Boolean = false)
     private val meadowLayout: List<LawnItem> by lazy {
-        val r = Random(2026); val out = ArrayList<LawnItem>()
+        // Laid out like the reference: a thick hedge along the horizon, an open lawn with just a few
+        // clovers and flowers, and a dark leafy border along the bottom.
+        val r = Random(2027); val out = ArrayList<LawnItem>()
         val W = LabState.WORLD
         fun pick(prefix: String, n: Int) = prefix + (1 + r.nextInt(n))
-        fun inPatchArea(gx: Float, gz: Float) = gx in 1.15f..1.92f && gz in 0.05f..0.82f
         fun glowShroom(gx: Float, gz: Float, h: Float) { val k = r.nextInt(GLOW_SHROOMS.size); out.add(LawnItem(gx, gz, GLOW_SHROOMS[k], h, r.nextBoolean(), GLOW_COLS[k])) }
-        // the back hedge: leafy bushes and flowers with glowing mushrooms poking up
-        var x = -0.45f
-        while (x < W + 0.45f) {
-            out.add(LawnItem(x, -0.04f + r.nextFloat() * 0.05f, pick("gr", 8), 30f + r.nextFloat() * 10f, r.nextBoolean()))
-            if (r.nextFloat() < 0.5f) out.add(LawnItem(x + 0.02f, -0.01f + r.nextFloat() * 0.04f, pick("fl", 10), 26f + r.nextFloat() * 8f, r.nextBoolean()))
-            if (r.nextFloat() < 0.24f) glowShroom(x + 0.01f, -0.06f + r.nextFloat() * 0.03f, 52f + r.nextFloat() * 26f)
-            x += 0.045f + r.nextFloat() * 0.035f
+        fun inPatchArea(gx: Float, gz: Float) = gx in 1.15f..1.92f && gz in 0.05f..0.82f
+        // the hedge along the horizon: leafy bushes shoulder to shoulder, purple boulders, flowers, glowing mushrooms
+        var x = -0.6f
+        while (x < W + 0.6f) {
+            out.add(LawnItem(x, -0.07f + r.nextFloat() * 0.03f, pick("gr", 8), 36f + r.nextFloat() * 12f, r.nextBoolean(), dark = true))
+            x += 0.035f + r.nextFloat() * 0.02f
         }
-        // the front border: big rocks, thick bushes, flower clumps and large glowing mushrooms in the corners
-        x = -0.45f
-        while (x < W + 0.45f) {
-            val gz = 1.32f + r.nextFloat() * 0.38f
+        x = -0.6f
+        while (x < W + 0.6f) {
+            when (r.nextInt(6)) {
+                0 -> out.add(LawnItem(x, -0.04f, if (r.nextBoolean()) "rk5" else "rk6", 30f + r.nextFloat() * 12f, r.nextBoolean()))
+                1, 2 -> glowShroom(x, -0.03f, 30f + r.nextFloat() * 10f)
+                else -> out.add(LawnItem(x, -0.02f + r.nextFloat() * 0.03f, pick("fl", 10), 22f + r.nextFloat() * 6f, r.nextBoolean()))
+            }
+            x += 0.09f + r.nextFloat() * 0.08f
+        }
+        // the open lawn: only a sprinkle of clovers, little flowers and flat stones
+        var n = 0; var tries = 0
+        while (n < 46 && tries < 900) {
+            tries++
+            val gx = -0.4f + r.nextFloat() * (W + 0.8f); val gz = 0.06f + r.nextFloat() * 1.3f
+            if (inPatchArea(gx, gz)) continue
             when (r.nextInt(10)) {
-                0, 1 -> out.add(LawnItem(x, gz, if (r.nextBoolean()) "rk5" else "rk6", 46f + r.nextFloat() * 24f, r.nextBoolean()))
-                2, 3, 4 -> out.add(LawnItem(x, gz, "fl${11 + r.nextInt(5)}", 40f + r.nextFloat() * 12f, r.nextBoolean()))
-                5 -> out.add(LawnItem(x, gz, pick("fl", 10), 34f + r.nextFloat() * 8f, r.nextBoolean()))
-                else -> out.add(LawnItem(x, gz, pick("gr", 8), 34f + r.nextFloat() * 12f, r.nextBoolean()))
+                0, 1, 2, 3 -> out.add(LawnItem(gx, gz, pick("cl", 5), 14f + r.nextFloat() * 5f, r.nextBoolean()))
+                4, 5, 6 -> out.add(LawnItem(gx, gz, "fl${1 + r.nextInt(4)}", 15f + r.nextFloat() * 5f, r.nextBoolean()))
+                else -> out.add(LawnItem(gx, gz, "rk${7 + r.nextInt(2)}", 9f + r.nextFloat() * 4f, r.nextBoolean()))
             }
-            if (r.nextFloat() < 0.45f) out.add(LawnItem(x + 0.03f, 1.18f + r.nextFloat() * 0.12f, pick("fl", 10), 28f + r.nextFloat() * 8f, r.nextBoolean()))
-            x += 0.05f + r.nextFloat() * 0.05f
+            n++
         }
-        for (cx in floatArrayOf(-0.25f, 0.05f, W - 0.05f, W + 0.25f)) {   // the big glowing corner clumps
-            glowShroom(cx, 1.5f + r.nextFloat() * 0.15f, 95f + r.nextFloat() * 25f)
-            glowShroom(cx + 0.09f, 1.6f + r.nextFloat() * 0.1f, 60f + r.nextFloat() * 15f)
-            out.add(LawnItem(cx - 0.07f, 1.62f, "rk6", 60f, r.nextBoolean()))
+        // the bottom border: dark broad leaves, big boulders, glowing mushrooms, flowers
+        x = -0.6f
+        while (x < W + 0.6f) {
+            out.add(LawnItem(x, 1.66f + r.nextFloat() * 0.12f, pick("gr", 8), 52f + r.nextFloat() * 18f, r.nextBoolean(), dark = true))
+            x += 0.05f + r.nextFloat() * 0.03f
         }
-        glowShroom(W * 0.48f, 1.62f, 78f); glowShroom(W * 0.52f, 1.66f, 52f)
-        // the sides: thick clumps all the way down the edges
-        for (side in 0..1) {
-            var gz = 0.02f
-            while (gz < 1.3f) {
-                val gx = if (side == 0) -0.12f - r.nextFloat() * 0.3f else W + 0.12f + r.nextFloat() * 0.3f
-                when (r.nextInt(5)) {
-                    0 -> glowShroom(gx, gz, 60f + r.nextFloat() * 30f)
-                    1 -> out.add(LawnItem(gx, gz, "rk${4 + r.nextInt(3)}", 40f + r.nextFloat() * 20f, r.nextBoolean()))
-                    2 -> out.add(LawnItem(gx, gz, "fl${11 + r.nextInt(5)}", 38f + r.nextFloat() * 10f, r.nextBoolean()))
-                    else -> out.add(LawnItem(gx, gz, pick("gr", 8), 32f + r.nextFloat() * 10f, r.nextBoolean()))
-                }
-                gz += 0.08f + r.nextFloat() * 0.06f
+        x = -0.55f
+        while (x < W + 0.6f) {
+            when (r.nextInt(5)) {
+                0, 1 -> out.add(LawnItem(x, 1.7f, if (r.nextBoolean()) "rk5" else "rk6", 44f + r.nextFloat() * 14f, r.nextBoolean(), dark = true))
+                2 -> glowShroom(x, 1.62f, 38f + r.nextFloat() * 12f)
+                else -> out.add(LawnItem(x, 1.6f + r.nextFloat() * 0.05f, pick("fl", 10), 26f + r.nextFloat() * 6f, r.nextBoolean()))
             }
+            x += 0.12f + r.nextFloat() * 0.1f
         }
-        // the open middle: a scatter of rocks, flower tufts, clovers, leaf piles and grass, leaving room to play
-        fun scatter(n: Int, make: (Float, Float) -> LawnItem) {
-            var placed = 0; var tries = 0
-            while (placed < n && tries < n * 20) {
-                tries++
-                val gx = -0.1f + r.nextFloat() * (W + 0.2f); val gz = 0.08f + r.nextFloat() * 1.08f
-                if (inPatchArea(gx, gz)) continue
-                out.add(make(gx, gz)); placed++
-            }
-        }
-        scatter(9) { gx, gz -> LawnItem(gx, gz, "rk${1 + r.nextInt(6)}", 30f + r.nextFloat() * 26f, r.nextBoolean()) }
-        scatter(10) { gx, gz -> LawnItem(gx, gz, "rk${7 + r.nextInt(2)}", 12f + r.nextFloat() * 6f, r.nextBoolean()) }
-        scatter(16) { gx, gz -> LawnItem(gx, gz, "fl${11 + r.nextInt(5)}", 30f + r.nextFloat() * 10f, r.nextBoolean()) }
-        scatter(26) { gx, gz -> LawnItem(gx, gz, pick("fl", 10), 22f + r.nextFloat() * 8f, r.nextBoolean()) }
-        scatter(22) { gx, gz -> LawnItem(gx, gz, pick("cl", 5), 18f + r.nextFloat() * 6f, r.nextBoolean()) }
-        scatter(12) { gx, gz -> LawnItem(gx, gz, pick("lf", 5), 18f + r.nextFloat() * 8f, r.nextBoolean()) }
-        scatter(34) { gx, gz -> LawnItem(gx, gz, pick("gr", 8), 18f + r.nextFloat() * 8f, r.nextBoolean()) }
         out.sortedBy { it.gz }
     }
 
-    /** The meadow pieces behind the mushrooms ([front] = false) or the front border in front of them. */
+    /** The meadow pieces behind the mushrooms ([front] = false) or the bottom border in front of them. */
+    private val darkLeaf = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG).apply {
+        colorFilter = android.graphics.ColorMatrixColorFilter(android.graphics.ColorMatrix(floatArrayOf(
+            0.45f, 0f, 0f, 0f, 8f,  0f, 0.5f, 0f, 0f, 8f,  0f, 0f, 0.7f, 0f, 22f,  0f, 0f, 0f, 1f, 0f)))
+    }
     private fun drawMeadowLayer(c: Canvas, w: Float, front: Boolean) {
         for (it in meadowLayout) {
-            if ((it.gz > 1.08f) != front) continue
+            if ((it.gz > 1.4f) != front) continue
             val (x, y) = toScreen(it.gx, it.gz)
             val sz = it.h * dp * (0.72f + 0.28f * it.gz)
             if (x < -sz * 1.5f || x > w + sz * 1.5f) continue
-            gkDraw(c, it.name, x, y + sz * 0.06f, sz, it.flip)
+            if (it.dark) {
+                val b = gk(it.name) ?: continue
+                val wv = b.width * sz / b.height
+                if (it.flip) { c.save(); c.scale(-1f, 1f, x, y) }
+                c.drawBitmap(b, null, RectF(x - wv / 2, y + sz * 0.06f - sz, x + wv / 2, y + sz * 0.06f), darkLeaf)
+                if (it.flip) c.restore()
+            } else gkDraw(c, it.name, x, y + sz * 0.06f, sz, it.flip)
         }
+    }
+
+    /** The grass, laid on the ground in perspective so it moves exactly with the mushrooms when you swipe. */
+    private var lawnStrip: android.graphics.Bitmap? = null
+    private val LMW = 24; private val LMH = 16
+    private val lawnVerts = FloatArray((LMW + 1) * (LMH + 1) * 2)
+    private fun drawLawnMesh(c: Canvas, w: Float, hz: Float, gb: Float) {
+        val strip = lawnStrip ?: run {
+            val t0 = gk("lawn") ?: return
+            val cols = 10; val rows = 6
+            val bmp = android.graphics.Bitmap.createBitmap(t0.width * cols, t0.height * rows, android.graphics.Bitmap.Config.RGB_565)
+            val cv = Canvas(bmp)
+            for (yy in 0 until rows) for (xx in 0 until cols) {   // mirrored tiles so there are no seams
+                cv.save()
+                cv.translate((xx * t0.width).toFloat(), (yy * t0.height).toFloat())
+                if (xx % 2 == 1) cv.scale(-1f, 1f, t0.width / 2f, 0f)
+                if (yy % 2 == 1) cv.scale(1f, -1f, 0f, t0.height / 2f)
+                cv.drawBitmap(t0, 0f, 0f, null); cv.restore()
+            }
+            bmp.also { lawnStrip = it }
+        }
+        val g0 = -0.7f; val g1 = LabState.WORLD + 0.7f
+        val span = groundBottom() - groundTop()
+        val zTop = (hz - groundTop()) / span; val zBot = (gb - groundTop()) / span
+        var k = 0
+        for (j in 0..LMH) {
+            val gz = zTop + (zBot - zTop) * j / LMH
+            val f = w * 0.86f * (0.72f + 0.28f * gz)
+            val y = groundTop() + span * gz
+            for (i in 0..LMW) {
+                lawnVerts[k++] = w / 2 + (g0 + (g1 - g0) * i / LMW - camX) * f
+                lawnVerts[k++] = y
+            }
+        }
+        c.save(); c.clipRect(0f, hz - 2f * dp, w, gb)
+        c.drawBitmapMesh(strip, LMW, LMH, lawnVerts, 0, null, 0, uiPaint)
+        c.restore()
+    }
     }
 
     private val lawnMatrix = android.graphics.Matrix()
@@ -2915,29 +2950,24 @@ class GameView(context: Context) : View(context) {
 
         // ground plane: the painted grass texture on the meadow, a soft gradient on other themes
         val gb = navTop
-        val meadow = false   // plain lawn (no texture or scattered pieces)
-        val lawnBmp = if (meadow) gk("lawn") else null
-        if (lawnBmp != null) {
-            val sh = lawnShader ?: android.graphics.BitmapShader(lawnBmp, Shader.TileMode.MIRROR, Shader.TileMode.MIRROR).also { lawnShader = it }
-            val tile = 150f * dp / lawnBmp.width
-            lawnMatrix.reset(); lawnMatrix.setScale(tile, tile); lawnMatrix.postTranslate(-(camX - 0.5f) * pxPerWorld(), hz)
-            sh.setLocalMatrix(lawnMatrix)
-            fill.shader = sh; c.drawRect(0f, hz, w, gb, fill)
-            // a soft lighter clearing in the middle of the meadow, darker toward the edges (like the painting)
-            val (mx, my) = toScreen(LabState.WORLD / 2f, 0.55f)
-            fill.shader = RadialGradient(mx, my, w * 1.1f, intArrayOf(Color.argb(70, 120, 200, 110), Color.argb(25, 90, 170, 100), Color.argb(0, 0, 0, 0)),
+        val meadow = lab.theme == 0 && gk("lawn") != null
+        if (meadow) {
+            drawLawnMesh(c, w, hz, gb)
+            // a soft lighter clearing in the middle, darker toward the back
+            val (mx, my) = toScreen(camX, 0.6f)
+            fill.shader = RadialGradient(mx, my, w * 1.0f, intArrayOf(Color.argb(55, 120, 200, 110), Color.argb(15, 90, 170, 100), Color.argb(0, 0, 0, 0)),
                 floatArrayOf(0f, 0.55f, 1f), Shader.TileMode.CLAMP)
             c.drawRect(0f, hz, w, gb, fill)
-            fill.shader = LinearGradient(0f, hz, 0f, gb, intArrayOf(Color.argb(120, 15, 30, 55), Color.argb(10, 15, 30, 55), Color.argb(0, 0, 0, 0)),
-                floatArrayOf(0f, 0.3f, 1f), Shader.TileMode.CLAMP)
+            fill.shader = LinearGradient(0f, hz, 0f, gb, intArrayOf(Color.argb(110, 15, 25, 60), Color.argb(0, 15, 25, 60)), floatArrayOf(0f, 0.25f), Shader.TileMode.CLAMP)
             c.drawRect(0f, hz, w, gb, fill)
-        } else {
-            fill.shader = LinearGradient(0f, hz, 0f, gb, th.groundFar, th.groundNear, Shader.TileMode.CLAMP)
-            c.drawRect(0f, hz, w, gb, fill)
+            fill.shader = null
+            drawMeadowLayer(c, w, front = false)
+            return
         }
+        fill.shader = LinearGradient(0f, hz, 0f, gb, th.groundFar, th.groundNear, Shader.TileMode.CLAMP)
+        c.drawRect(0f, hz, w, gb, fill)
         fill.shader = null
-        // glowing mushroom clumps along the back of the meadow
-        return   // a clean lawn: nothing on the ground slides around when you swipe
+        return
         if (lab.theme != 3 && gk("gm_blue") != null) for ((bgx, k, sc) in glowBorder) {
             if (abs(bgx - camX) > 0.75f) continue
             val (bx, by) = toScreen(bgx, 0f)
@@ -2994,7 +3024,7 @@ class GameView(context: Context) : View(context) {
             c.drawCircle(x, gy, sz * 1.5f, fill)
             fill.shader = null
         }
-        if (false) for (it in meadowLayout) {   // (meadow layout retired)
+        if (lab.theme == 0 && area == 0 && gk("lawn") != null) for (it in meadowLayout) {   // meadow mushrooms glow at night
             if (it.glow == 0) continue
             val (bx, by) = toScreen(it.gx, it.gz)
             if (bx < -120f * dp || bx > w + 120f * dp) continue
@@ -3240,6 +3270,7 @@ class GameView(context: Context) : View(context) {
                 text.color = Color.WHITE
             }
         }
+        if (area == 0 && lab.theme == 0 && gk("lawn") != null) drawMeadowLayer(c, w, front = true)
         drawBestieHearts(c)
         drawLevelUp(c)
         if (area == 0 && !photoMode) drawVisitor(c)
