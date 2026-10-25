@@ -2163,6 +2163,14 @@ class GameView(context: Context) : View(context) {
         }
     }
 
+    // ---------- Painted decorations (assets/decor): how tall each one stands, in decoration-size units ----------
+    private val DECOR_ART = mapOf(0 to 1.4f, 1 to 0.62f, 2 to 0.62f, 3 to 0.62f, 5 to 1.1f, 6 to 1.35f, 7 to 0.68f, 8 to 1.05f,
+        9 to 1.45f, 10 to 0.8f, 16 to 0.8f, Data.COZY_BED to 0.75f, Data.MOSSY_LOG to 0.7f, Data.BIRDBATH to 1.0f, Data.STEPPING to 0.5f)
+    private val dBmps = HashMap<Int, android.graphics.Bitmap?>()
+    private fun dk(kind: Int): android.graphics.Bitmap? = dBmps.getOrPut(kind) {
+        try { context.assets.open("decor/d$kind.png").use { android.graphics.BitmapFactory.decodeStream(it) } } catch (_: Exception) { null }
+    }
+
     // ---------- Painted garden kit (assets/garden) ----------
     private val gBmps = HashMap<String, android.graphics.Bitmap?>()
     private fun gk(name: String): android.graphics.Bitmap? = gBmps.getOrPut(name) {
@@ -2907,7 +2915,7 @@ class GameView(context: Context) : View(context) {
 
         // ground plane: the painted grass texture on the meadow, a soft gradient on other themes
         val gb = navTop
-        val meadow = lab.theme == 0 && gk("lawn") != null
+        val meadow = false   // plain lawn (no texture or scattered pieces)
         val lawnBmp = if (meadow) gk("lawn") else null
         if (lawnBmp != null) {
             val sh = lawnShader ?: android.graphics.BitmapShader(lawnBmp, Shader.TileMode.MIRROR, Shader.TileMode.MIRROR).also { lawnShader = it }
@@ -2929,7 +2937,7 @@ class GameView(context: Context) : View(context) {
         }
         fill.shader = null
         // glowing mushroom clumps along the back of the meadow
-        if (meadow) { drawMeadowLayer(c, w, front = false); return }   // hand-placed painted pieces, like the meadow painting
+        return   // a clean lawn: nothing on the ground slides around when you swipe
         if (lab.theme != 3 && gk("gm_blue") != null) for ((bgx, k, sc) in glowBorder) {
             if (abs(bgx - camX) > 0.75f) continue
             val (bx, by) = toScreen(bgx, 0f)
@@ -2986,7 +2994,7 @@ class GameView(context: Context) : View(context) {
             c.drawCircle(x, gy, sz * 1.5f, fill)
             fill.shader = null
         }
-        if (lab.theme == 0 && area == 0 && gk("lawn") != null) for (it in meadowLayout) {   // meadow mushrooms glow at night
+        if (false) for (it in meadowLayout) {   // (meadow layout retired)
             if (it.glow == 0) continue
             val (bx, by) = toScreen(it.gx, it.gz)
             if (bx < -120f * dp || bx > w + 120f * dp) continue
@@ -2997,7 +3005,7 @@ class GameView(context: Context) : View(context) {
             c.drawCircle(bx, by - sz * 0.55f, rr, fill); fill.shader = null
             gkDraw(c, it.name, bx, by + sz * 0.06f, sz, it.flip, alpha = (dark * 190).toInt())
         }
-        else if (lab.theme != 3 && area == 0 && gk("gm_blue") != null) for ((bgx, k, sc) in glowBorder) {   // the border mushrooms glow
+        else if (false) for ((bgx, k, sc) in glowBorder) {   // (border retired)
             if (abs(bgx - camX) > 0.75f) continue
             val (bx, by) = toScreen(bgx, 0f)
             val gc = GLOW_COLS[k]; val rr = 30f * dp * sc * (1f + 0.08f * sin(t * 1.5f + bgx * 9f))
@@ -3232,7 +3240,6 @@ class GameView(context: Context) : View(context) {
                 text.color = Color.WHITE
             }
         }
-        if (area == 0 && lab.theme == 0 && gk("lawn") != null) drawMeadowLayer(c, w, front = true)
         drawBestieHearts(c)
         drawLevelUp(c)
         if (area == 0 && !photoMode) drawVisitor(c)
@@ -3314,8 +3321,16 @@ class GameView(context: Context) : View(context) {
             fill.shader = null
         }
         if (kind != 4 && !iconMode) groundShadow(c, x, y, s * (if (kind == 3 || kind == 9 || kind == 7 || kind >= Data.MOSSY_LOG) 0.75f else 0.45f), 90)
-        if (kind == Data.MOSSY_LOG || kind == Data.GLOW_LOG) {   // painted logs from the garden kit
-            if (gkDraw(c, if (kind == Data.MOSSY_LOG) "log2" else "log1", x, y + s * 0.1f, s * 0.95f)) return
+        // painted versions from the decor art pack
+        DECOR_ART[kind]?.let { hgt ->
+            dk(kind)?.let { b ->
+                val hh = s * hgt; val wv = b.width * hh / b.height
+                c.drawBitmap(b, null, RectF(x - wv / 2, y + s * 0.1f - hh, x + wv / 2, y + s * 0.1f), uiPaint)
+                return
+            }
+        }
+        if (kind == Data.GLOW_LOG) {   // painted log from the garden kit
+            if (gkDraw(c, "log1", x, y + s * 0.1f, s * 0.95f)) return
         }
         when (kind) {
             0 -> { // lantern on a post
