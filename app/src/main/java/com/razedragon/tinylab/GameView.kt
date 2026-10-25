@@ -2186,10 +2186,15 @@ class GameView(context: Context) : View(context) {
         Color.rgb(255, 120, 190), Color.rgb(230, 120, 255), Color.rgb(200, 120, 255), Color.rgb(150, 120, 255))
     /** Glowing mushroom clumps along the back edge of the meadow (world x, which sprite, size). */
     private val glowBorder by lazy {
+        // little clumps of 1-3 mushrooms with gaps between them, a bit staggered front to back
         val r = Random(77); val out = ArrayList<Triple<Float, Int, Float>>()
-        var gx = 0.02f
-        while (gx < LabState.WORLD) { out.add(Triple(gx, r.nextInt(GLOW_SHROOMS.size), 0.75f + r.nextFloat() * 0.5f)); gx += 0.13f + r.nextFloat() * 0.12f }
-        out
+        var gx = 0.03f
+        while (gx < LabState.WORLD) {
+            val n = 1 + r.nextInt(3)
+            for (k in 0 until n) out.add(Triple(gx + k * 0.045f + r.nextFloat() * 0.02f, r.nextInt(GLOW_SHROOMS.size), (if (k == 0) 1.15f else 0.7f) + r.nextFloat() * 0.35f))
+            gx += 0.2f + r.nextFloat() * 0.22f
+        }
+        out.sortedBy { it.third }   // smaller ones behind
     }
     private var lawnShader: android.graphics.BitmapShader? = null
     private val lawnMatrix = android.graphics.Matrix()
@@ -2855,11 +2860,11 @@ class GameView(context: Context) : View(context) {
                 val v = (idx * 37 + 11) % 97
                 val flip = v % 2 == 0
                 when (kind) {
-                    0 -> if (autumn && v % 5 == 0) gkDraw(c, "lf${1 + v % 5}", x, y + 3f * dp * d, 14f * dp * d, flip)
-                         else if (v % 3 == 0) gkDraw(c, "cl${1 + v % 5}", x, y + 3f * dp * d, 13f * dp * d, flip)
-                         else gkDraw(c, "gr${1 + v % 8}", x, y + 2f * dp * d, 17f * dp * d, flip)
-                    1 -> gkDraw(c, "rk${intArrayOf(7, 8, 2, 3, 1, 4)[v % 6]}", x, y + 3f * dp * d, (if (v % 6 < 2) 9f else 15f) * dp * d, flip)
-                    else -> gkDraw(c, "fl${1 + v % 16}", x, y + 2f * dp * d, (if (v % 16 >= 10) 24f else 20f) * dp * d, flip)
+                    0 -> if (autumn && v % 5 == 0) gkDraw(c, "lf${1 + v % 5}", x, y + 4f * dp * d, 22f * dp * d, flip)
+                         else if (v % 3 == 0) gkDraw(c, "cl${1 + v % 5}", x, y + 4f * dp * d, 21f * dp * d, flip)
+                         else gkDraw(c, "gr${1 + v % 8}", x, y + 3f * dp * d, 27f * dp * d, flip)
+                    1 -> gkDraw(c, "rk${intArrayOf(7, 8, 2, 3, 1, 4)[v % 6]}", x, y + 4f * dp * d, (if (v % 6 < 2) 14f else 24f) * dp * d, flip)
+                    else -> gkDraw(c, "fl${1 + v % 16}", x, y + 3f * dp * d, (if (v % 16 >= 10) 36f else 30f) * dp * d, flip)
                 }
                 continue
             }
@@ -3211,7 +3216,7 @@ class GameView(context: Context) : View(context) {
         }
         if (kind != 4 && !iconMode) groundShadow(c, x, y, s * (if (kind == 3 || kind == 9 || kind == 7 || kind >= Data.MOSSY_LOG) 0.75f else 0.45f), 90)
         if (kind == Data.MOSSY_LOG || kind == Data.GLOW_LOG) {   // painted logs from the garden kit
-            if (gkDraw(c, if (kind == Data.MOSSY_LOG) "log2" else "log1", x, y + s * 0.08f, s * 0.62f)) return
+            if (gkDraw(c, if (kind == Data.MOSSY_LOG) "log2" else "log1", x, y + s * 0.1f, s * 0.95f)) return
         }
         when (kind) {
             0 -> { // lantern on a post
@@ -5918,7 +5923,7 @@ class GameView(context: Context) : View(context) {
         val sd = lab.plotSeed[i]
         val p = if (sd < 0) 0f else lab.plotProgress(i, now)
         val stage = when { sd < 0 -> 0; p >= 1f -> 4; p >= 0.66f -> 3; p >= 0.33f -> 2; else -> 1 }
-        val h = (if (stage >= 3) 50f else 40f) * dp * d
+        val h = (if (stage >= 3) 64f else 50f) * dp * d
         val sway = if (stage >= 2) sin(t * 1.6f + i) * 1.5f else 0f
         c.save(); c.rotate(sway, x, y + rh)
         gkDraw(c, "plot$stage", x, y + rh * 1.1f, h, flip = i % 2 == 1)
