@@ -2319,7 +2319,6 @@ class GameView(context: Context) : View(context) {
         c.drawBitmapMesh(strip, LMW, LMH, lawnVerts, 0, null, 0, uiPaint)
         c.restore()
     }
-    }
 
     private val lawnMatrix = android.graphics.Matrix()
 
