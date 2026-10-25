@@ -2219,17 +2219,17 @@ class GameView(context: Context) : View(context) {
         // the hedge along the horizon: leafy bushes shoulder to shoulder, purple boulders, flowers, glowing mushrooms
         var x = -0.6f
         while (x < W + 0.6f) {
-            out.add(LawnItem(x, -0.07f + r.nextFloat() * 0.03f, pick("gr", 8), 36f + r.nextFloat() * 12f, r.nextBoolean(), dark = true))
+            out.add(LawnItem(x, -0.07f + r.nextFloat() * 0.03f, pick("gr", 8), 54f + r.nextFloat() * 16f, r.nextBoolean(), dark = true))
             x += 0.035f + r.nextFloat() * 0.02f
         }
         x = -0.6f
         while (x < W + 0.6f) {
             when (r.nextInt(6)) {
-                0 -> out.add(LawnItem(x, -0.04f, if (r.nextBoolean()) "rk5" else "rk6", 30f + r.nextFloat() * 12f, r.nextBoolean()))
-                1, 2 -> glowShroom(x, -0.03f, 30f + r.nextFloat() * 10f)
-                else -> out.add(LawnItem(x, -0.02f + r.nextFloat() * 0.03f, pick("fl", 10), 22f + r.nextFloat() * 6f, r.nextBoolean()))
+                0, 1 -> out.add(LawnItem(x, -0.04f, if (r.nextBoolean()) "rk5" else "rk6", 46f + r.nextFloat() * 16f, r.nextBoolean()))
+                2, 3 -> glowShroom(x, -0.03f, 42f + r.nextFloat() * 12f)
+                else -> out.add(LawnItem(x, -0.02f + r.nextFloat() * 0.03f, pick("fl", 10), 28f + r.nextFloat() * 6f, r.nextBoolean()))
             }
-            x += 0.09f + r.nextFloat() * 0.08f
+            x += 0.07f + r.nextFloat() * 0.07f
         }
         // the open lawn: only a sprinkle of clovers, little flowers and flat stones
         var n = 0; var tries = 0
