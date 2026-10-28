@@ -760,7 +760,7 @@ class GameView(context: Context) : View(context) {
                 })
         }
         if (lab.caveOpen() && !decorating) {
-            list.add(Button("area", RectF(70f * dp, topBar + 8f * dp, 174f * dp, topBar + 48f * dp), if (area == 0) "⛰ Cave" else "🌿 Meadow") {
+            list.add(Button("area", RectF(62f * dp, topBar + stripH() + 8f * dp, 160f * dp, topBar + stripH() + 44f * dp), if (area == 0) "⛰ Cave" else "🌿 Meadow") {
                 area = 1 - area; selected = -1; feeding = false; styling = false; moreOpen = false; jobbing = false; exploring = false
                 sound.play(Fx.POP); waveHello()
             })
@@ -770,7 +770,7 @@ class GameView(context: Context) : View(context) {
         val totalDust0 = lab.home().sumOf { it.dust.toInt() }
         text.textSize = 15f * dp
         val collectW = if (totalDust0 >= 1 && selected < 0 && !decorating) text.measureText("Collect $totalDust0") + 64f * dp else 0f
-        val decR = if (decorating) RectF(14f * dp, topBar + 8f * dp, 134f * dp, topBar + 48f * dp)
+        val decR = if (decorating) RectF(14f * dp, topBar + stripH() + 8f * dp, 134f * dp, topBar + stripH() + 48f * dp)
                    else { val right = w - 14f * dp - (if (collectW > 0f) collectW + 8f * dp else 0f); RectF(right - 136f * dp, rowY, right, rowY + 42f * dp) }
         if (area == 0 && selected < 0 && growPick < 0) list.add(Button("decorate", decR,
             "", if (decorating) STYLE_PRIMARY else STYLE_NORMAL,
@@ -780,14 +780,15 @@ class GameView(context: Context) : View(context) {
         })
         if (decorating) { decorButtons(list, w); return }
         if (selected < 0) {   // camera: top-left, just under the top bar
-            list.add(Button("photo", RectF(14f * dp, topBar + 8f * dp, 62f * dp, topBar + 48f * dp), "📷") {
+            list.add(Button("photo", RectF(14f * dp, topBar + stripH() + 8f * dp, 54f * dp, topBar + stripH() + 44f * dp), "📷") {
                 photoMode = true; selected = -1; feeding = false; styling = false; moreOpen = false; jobbing = false; exploring = false
                 toast("Photo mode: tap SAVE & SHARE")
             })
         }
         val away = lab.garden.filter { it.away() }
         if (away.isNotEmpty() && selected < 0) {
-            list.add(Button("away", RectF(14f * dp, topBar + 54f * dp, 134f * dp, topBar + 84f * dp), "🧭 ${away.size} exploring") {
+            val ax = if (lab.caveOpen()) 168f * dp else 62f * dp
+            list.add(Button("away", RectF(ax, topBar + stripH() + 8f * dp, ax + 120f * dp, topBar + stripH() + 44f * dp), "🧭 ${away.size} exploring") {
                 val now = System.currentTimeMillis()
                 for (a in away) toast("${a.name}: ${Data.ZONES[a.awayZone].name}, back in ${timeLeft(a.awayUntil - now)}", MINT)
             })
@@ -862,12 +863,14 @@ class GameView(context: Context) : View(context) {
             val bw = (w - pad * 2 - 16f * dp) / 3
             fun cell(col: Int, row: Int) = RectF(pad + col * (bw + 8f * dp), by - (1 - row) * 54f * dp,
                 pad + col * (bw + 8f * dp) + bw, by - (1 - row) * 54f * dp + 46f * dp)
-            list.add(Button("feed", cell(0, 0), "FEED", STYLE_PRIMARY) { feeding = true; confirmRelease = false })
             if (moreOpen) {
-                list.add(Button("card", cell(0, 0), "CARD") { cardFor = s.id; moreOpen = false })
-                list.add(Button("family", cell(1, 0), "FAMILY") { familyFor = s.id; moreOpen = false })
-                list.add(Button("job", cell(2, 0), if (s.job > 0) Data.JOBS[s.job].icon + " JOB" else "JOB") { jobbing = true; moreOpen = false })
-                list.add(Button("move", cell(0, 1), if (!lab.caveOpen()) "🔒 CAVE" else if (s.area == 0) "TO CAVE" else "TO MEADOW", STYLE_NORMAL, lab.caveOpen()) {
+                val qw = (w - pad * 2 - 24f * dp) / 4
+                fun cell4(col: Int, row: Int) = RectF(pad + col * (qw + 8f * dp), by - (1 - row) * 54f * dp,
+                    pad + col * (qw + 8f * dp) + qw, by - (1 - row) * 54f * dp + 46f * dp)
+                list.add(Button("card", cell4(0, 0), "CARD") { cardFor = s.id; moreOpen = false })
+                list.add(Button("family", cell4(1, 0), "FAMILY") { familyFor = s.id; moreOpen = false })
+                list.add(Button("job", cell4(2, 0), if (s.job > 0) Data.JOBS[s.job].icon + " JOB" else "JOB") { jobbing = true; moreOpen = false })
+                list.add(Button("move", cell4(3, 0), if (!lab.caveOpen()) "🔒 CAVE" else if (s.area == 0) "TO CAVE" else "TO MEADOW", STYLE_NORMAL, lab.caveOpen()) {
                     if (!lab.caveOpen()) { toast("Unlock the Glow Cave in the Shop → LAB"); return@Button }
                     s.area = 1 - s.area; s.act = 0; s.pendingAct = 0; s.sleeping = false
                     s.gx = 0.2f + Random.nextFloat() * 0.6f; s.gz = 0.3f + Random.nextFloat() * 0.5f; s.tx = s.gx; s.tz = s.gz; s.petGx = Float.NaN
@@ -875,22 +878,50 @@ class GameView(context: Context) : View(context) {
                     sound.play(Fx.WHEE); selected = -1; moreOpen = false; markDirty()
                 })
                 val fav = prefs.getLong("widgetShroom", -1L) == s.id
-                list.add(Button("widget", cell(1, 1), if (fav) "★ ON WIDGET" else "☆ WIDGET", if (fav) STYLE_PICKED else STYLE_NORMAL) {
+                list.add(Button("widget", cell4(0, 1), if (fav) "★ WIDGET" else "☆ WIDGET", if (fav) STYLE_PICKED else STYLE_NORMAL) {
                     prefs.edit().putLong("widgetShroom", s.id).apply()
                     updateWidget()
                     toast("${s.name} will live on your home-screen widget! Add it: long-press your home screen → Widgets → Shroomology", MINT)
                 })
-                list.add(Button("mback", cell(2, 1), "BACK") { moreOpen = false })
+                val relR = RectF(cell4(1, 1).left, cell4(1, 1).top, cell4(2, 1).right, cell4(1, 1).bottom)
+                list.add(Button("release", relR, if (confirmRelease) "SURE? TAP AGAIN" else "RELEASE", STYLE_DANGER) {
+                    if (confirmRelease) release(s) else confirmRelease = true
+                })
+                list.add(Button("mback", cell4(3, 1), "BACK") { moreOpen = false; confirmRelease = false })
                 return
             }
-            list.add(Button("more", cell(1, 0), "MORE") { moreOpen = true; confirmRelease = false })
-            list.add(Button("style", cell(2, 0), "STYLE") { styling = true; confirmRelease = false })
-            list.add(Button("explore", cell(0, 1), "EXPLORE") { exploring = true; confirmRelease = false })
-            list.add(Button("rename", cell(1, 1), "NAME") { renameDialog(s); confirmRelease = false })
-            list.add(Button("release", cell(2, 1), if (confirmRelease) "SURE?" else "RELEASE", STYLE_DANGER) {
-                if (confirmRelease) release(s) else confirmRelease = true
-            })
+            // one row of icon tabs
+            val tabs = listOf("feed" to "FEED", "style" to "STYLE", "explore" to "EXPLORE", "rename" to "NAME", "more" to "MORE")
+            val tw = (w - pad * 2 - 4 * 6f * dp) / tabs.size
+            val ty = by - 26f * dp
+            for ((k, tb) in tabs.withIndex()) {
+                val r = RectF(pad + k * (tw + 6f * dp), ty, pad + k * (tw + 6f * dp) + tw, ty + 72f * dp)
+                list.add(Button(tb.first, r, "", if (k == 0) STYLE_PRIMARY else STYLE_NORMAL, custom = { c, rr -> drawPanelTab(c, rr, tb.first, tb.second, s) }) {
+                    confirmRelease = false
+                    when (tb.first) {
+                        "feed" -> feeding = true
+                        "style" -> styling = true
+                        "explore" -> exploring = true
+                        "rename" -> renameDialog(s)
+                        else -> moreOpen = true
+                    }
+                })
+            }
         }
+    }
+
+    /** An icon over a small label, for the mushroom panel's tab row. */
+    private fun drawPanelTab(c: Canvas, r: RectF, id: String, label: String, s: Shroom) {
+        val ix = r.centerX(); val iy = r.top + r.height() * 0.4f; val isz = r.height() * 0.46f
+        when (id) {
+            "feed" -> { val b = itemArt("food2"); if (b != null) drawItemArt(c, b, ix, iy, isz) else uiIcon(c, "carrot", ix, iy, isz) }
+            "style" -> accIcon(c, 1, ix, iy, isz)
+            "more" -> { fill.color = Color.WHITE; for (k in -1..1) c.drawCircle(ix + k * isz * 0.32f, iy, isz * 0.11f, fill) }
+            else -> { text.textSize = isz * 0.8f; text.color = Color.WHITE; c.drawText(if (id == "explore") "🧭" else "✏️", ix, iy + isz * 0.3f, text) }
+        }
+        text.textSize = 11.5f * dp; text.color = Color.WHITE
+        while (text.textSize > 8f * dp && text.measureText(label) > r.width() - 6f * dp) text.textSize -= 0.5f * dp
+        c.drawText(label, ix, r.bottom - 9f * dp, text)
     }
 
     private fun styleButtons(list: ArrayList<Button>, s: Shroom, w: Float, top: Float, by: Float) {
@@ -3107,6 +3138,38 @@ class GameView(context: Context) : View(context) {
         text.textAlign = Paint.Align.CENTER; text.color = Color.WHITE
     }
 
+    private fun stripH() = 30f * dp
+    /** One slim bar under the title: time of day / weather, the event, and how many mushrooms you have. */
+    private fun drawStatusStrip(c: Canvas, w: Float) {
+        val top = topBar; val bot = top + stripH()
+        fill.color = Color.argb(200, 22, 14, 44); c.drawRect(0f, top, w, bot, fill)
+        fill.color = Color.argb(40, 255, 255, 255); c.drawRect(0f, bot - 1f * dp, w, bot, fill)
+        val cy = (top + bot) / 2 + 4.5f * dp
+        text.textSize = 12.5f * dp
+        val dark = LabState.darkness()
+        val left = if (area == 1) "⛰ Glow Cave · glowing shrooms +50%" else when {
+            LabState.rainbow() -> "🌈 Rainbow · +50% growth"
+            LabState.raining() -> "🌧 Rainy · +50% growth"
+            dark > 0.6f -> "🌙 Night · sleepy time"
+            dark > 0.05f -> "🌆 Evening"
+            else -> "☀ Daytime"
+        }
+        text.textAlign = Paint.Align.LEFT; text.color = Color.argb(230, 255, 255, 255)
+        sporeText(c, left, 12f * dp, cy, text)
+        val ev = eventNow()
+        val count = "🍄 ${lab.garden.size}/${lab.capacity()}"
+        text.textAlign = Paint.Align.RIGHT; text.color = Color.argb(230, 255, 255, 255)
+        sporeText(c, count, w - 12f * dp, cy, text)
+        if (ev > 0 && area == 0) {
+            val lw = text.measureText(left); val rw = text.measureText(count)
+            val label = "${Data.EVENT_ICONS[ev]} until ${Data.EVENT_ENDS[ev]}"
+            text.textAlign = Paint.Align.CENTER; text.color = Color.rgb(255, 190, 110)
+            val mid = (12f * dp + lw + w - 12f * dp - rw) / 2
+            sporeText(c, label, mid, cy, text)
+        }
+        text.textAlign = Paint.Align.CENTER; text.color = Color.WHITE
+    }
+
     private fun drawEventBanner(c: Canvas, w: Float) {
         val ev = eventNow()
         if (ev == 0 || photoMode) return
@@ -3303,13 +3366,8 @@ class GameView(context: Context) : View(context) {
             if (lab.theme !in intArrayOf(1, 2, 3, 5, 6)) drawMoon(c, w * 0.78f, horizon() * 0.45f)
             drawAmbient(c, w)
             drawSeasonAir(c, w)
-            drawWeatherLabel(c, w)
-        } else {
-            text.textSize = 12f * dp; text.color = Color.argb(220, 200, 255, 240)
-            sporeText(c, "⛰ Glow Cave · glowing shrooms grow 50% faster", w / 2, topBar + 66f * dp, text)
-            text.color = Color.WHITE
         }
-        drawEventBanner(c, w)
+        if (!photoMode) drawStatusStrip(c, w)
         if (local().isEmpty() && !decorating && !photoMode && growPick < 0) {
             // low on the lawn, clear of the veggie patch and decorations
             val ey = groundBottom() - 6f * dp
@@ -3320,12 +3378,6 @@ class GameView(context: Context) : View(context) {
             text.color = Color.WHITE
         }
 
-        if (selected < 0 && !decorating && !photoMode && growPick < 0) {
-            text.textSize = 12f * dp; text.color = Color.argb(200, 255, 255, 255)
-            val awayN = lab.garden.count { it.away() }
-            sporeText(c, "${lab.garden.size} / ${lab.capacity()} mushrooms" + (if (awayN > 0) " · $awayN exploring" else " · drag them to move"), w / 2, groundBottom() + 44f * dp, text)
-            text.color = Color.WHITE
-        }
 
         if (photoMode) return
         if (growPick >= 0 && area == 0) { drawSeedPanel(c, w); return }
