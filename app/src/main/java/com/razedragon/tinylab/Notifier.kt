@@ -25,7 +25,11 @@ class Notifier : BroadcastReceiver() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         @Suppress("DEPRECATION")
         val b = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(context, CHANNEL) else Notification.Builder(context)
-        val n = b.setSmallIcon(R.drawable.ic_notify)
+        // status bar: the white bell outline (Android only shows shapes there); inside the notification: the full-color bell
+        val bell = try { android.graphics.BitmapFactory.decodeResource(context.resources, R.drawable.notify_bell) } catch (_: Exception) { null }
+        if (bell != null) b.setLargeIcon(bell)
+        if (Build.VERSION.SDK_INT >= 21) b.setColor(android.graphics.Color.rgb(150, 90, 230))
+        val n = b.setSmallIcon(R.drawable.ic_notify_bell)
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(Notification.BigTextStyle().bigText(body))
