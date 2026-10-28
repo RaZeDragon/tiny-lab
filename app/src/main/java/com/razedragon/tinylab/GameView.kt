@@ -2961,17 +2961,17 @@ class GameView(context: Context) : View(context) {
         }
         when (lab.theme) {
             5 -> { // big orange harvest moon
-                fill.shader = RadialGradient(w * 0.75f, hz * 0.42f, 70f * dp, Color.argb(120, 255, 170, 80), Color.argb(0, 255, 170, 80), Shader.TileMode.CLAMP)
-                c.drawCircle(w * 0.75f, hz * 0.42f, 70f * dp, fill); fill.shader = null
-                fill.color = Color.rgb(255, 190, 110); c.drawCircle(w * 0.75f, hz * 0.42f, 32f * dp, fill)
-                fill.color = Color.rgb(240, 160, 90); c.drawCircle(w * 0.75f - 9f * dp, hz * 0.42f - 6f * dp, 6f * dp, fill)
-                c.drawCircle(w * 0.75f + 10f * dp, hz * 0.42f + 8f * dp, 4f * dp, fill)
+                fill.shader = RadialGradient(w * 0.75f, hz * 0.66f, 70f * dp, Color.argb(120, 255, 170, 80), Color.argb(0, 255, 170, 80), Shader.TileMode.CLAMP)
+                c.drawCircle(w * 0.75f, hz * 0.66f, 70f * dp, fill); fill.shader = null
+                fill.color = Color.rgb(255, 190, 110); c.drawCircle(w * 0.75f, hz * 0.66f, 32f * dp, fill)
+                fill.color = Color.rgb(240, 160, 90); c.drawCircle(w * 0.75f - 9f * dp, hz * 0.66f - 6f * dp, 6f * dp, fill)
+                c.drawCircle(w * 0.75f + 10f * dp, hz * 0.66f + 8f * dp, 4f * dp, fill)
             }
             1, 2, 6 -> { // sun
                 val sc = when (lab.theme) { 1 -> Color.rgb(255, 245, 170); 6 -> Color.rgb(255, 240, 200); else -> Color.rgb(255, 190, 110) }
-                fill.shader = RadialGradient(w * 0.78f, hz * 0.45f, 60f * dp, sc, Color.argb(0, Color.red(sc), Color.green(sc), Color.blue(sc)), Shader.TileMode.CLAMP)
-                c.drawCircle(w * 0.78f, hz * 0.45f, 60f * dp, fill); fill.shader = null
-                fill.color = sc; c.drawCircle(w * 0.78f, hz * 0.45f, 22f * dp, fill)
+                fill.shader = RadialGradient(w * 0.78f, hz * 0.66f, 60f * dp, sc, Color.argb(0, Color.red(sc), Color.green(sc), Color.blue(sc)), Shader.TileMode.CLAMP)
+                c.drawCircle(w * 0.78f, hz * 0.66f, 60f * dp, fill); fill.shader = null
+                fill.color = sc; c.drawCircle(w * 0.78f, hz * 0.66f, 22f * dp, fill)
                 if (lab.theme == 1) { // drifting clouds
                     fill.color = Color.argb(200, 255, 255, 255)
                     for (k in 0..2) {
@@ -3363,7 +3363,7 @@ class GameView(context: Context) : View(context) {
         if (area == 0) {
             for (cr in critters) if (cr.type == 0) drawCritter(c, cr)
             drawNight(c, w)
-            if (lab.theme !in intArrayOf(1, 2, 3, 5, 6)) drawMoon(c, w * 0.78f, horizon() * 0.45f)
+            if (lab.theme !in intArrayOf(1, 2, 3, 5, 6)) drawMoon(c, w * 0.78f, horizon() * 0.66f)
             drawAmbient(c, w)
             drawSeasonAir(c, w)
         }
