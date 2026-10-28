@@ -760,7 +760,7 @@ class GameView(context: Context) : View(context) {
                 })
         }
         if (lab.caveOpen() && !decorating) {
-            list.add(Button("area", RectF(112f * dp, 16f * dp, 196f * dp, 50f * dp), if (area == 0) "⛰ Cave" else "🌿 Meadow") {
+            list.add(Button("area", RectF(70f * dp, topBar + 8f * dp, 174f * dp, topBar + 48f * dp), if (area == 0) "⛰ Cave" else "🌿 Meadow") {
                 area = 1 - area; selected = -1; feeding = false; styling = false; moreOpen = false; jobbing = false; exploring = false
                 sound.play(Fx.POP); waveHello()
             })

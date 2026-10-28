@@ -402,6 +402,9 @@ class ScreensTest {
         g.testToss(b); assertEquals("giggle", g.testFaceOf(b))
         g.testToss(b); assertEquals("shout", g.testFaceOf(b))
         g.testFrame(0.15f); save(g.testRender(), "face_reactions")
+        a.dust = 14f; b.dust = 9f; lab.upgrades[Data.UP_CAVE] = 1
+        g.testFrame(0.2f); save(g.testRender(), "garden_collect")
+        assertTrue(g.testButtonIds().contains("collect"))
         reset()
     }
 
