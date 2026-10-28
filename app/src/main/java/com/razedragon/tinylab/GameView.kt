@@ -4222,7 +4222,7 @@ class GameView(context: Context) : View(context) {
         val lines = wrap(tt.text, w - 64f * dp)
         val tw = min(w - 24f * dp, (lines.maxOfOrNull { text.measureText(it) } ?: 0f) + 36f * dp + (if (toastAward(tt.text)) 30f * dp else 0f))
         val th = 18f * dp + lines.size * 18f * dp
-        val top = max(8f * dp, topBar / 2 - th / 2)
+        val top = topBar + 4f * dp
         return Pair(RectF(w / 2 - tw / 2, top, w / 2 + tw / 2, top + th), lines)
     }
 
