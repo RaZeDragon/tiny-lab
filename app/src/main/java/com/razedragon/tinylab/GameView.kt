@@ -765,19 +765,22 @@ class GameView(context: Context) : View(context) {
                 sound.play(Fx.POP); waveHello()
             })
         }
-        if (area == 1) {
-            if (selected < 0) list.add(Button("photo", RectF(14f * dp, topBar + 8f * dp, 62f * dp, topBar + 48f * dp), "📷") {
-                photoMode = true; selected = -1; toast("Photo mode: tap SAVE & SHARE")
-            })
-        } else list.add(Button("decorate", RectF(14f * dp, topBar + 8f * dp, 134f * dp, topBar + 48f * dp),
+        // bottom-right row (above JOURNAL and SHOP): DECORATE, then COLLECT; while decorating, DONE sits top-left
+        val rowY = navTop - 54f * dp
+        val totalDust0 = lab.home().sumOf { it.dust.toInt() }
+        text.textSize = 15f * dp
+        val collectW = if (totalDust0 >= 1 && selected < 0 && !decorating) text.measureText("Collect $totalDust0") + 64f * dp else 0f
+        val decR = if (decorating) RectF(14f * dp, topBar + 8f * dp, 134f * dp, topBar + 48f * dp)
+                   else { val right = w - 14f * dp - (if (collectW > 0f) collectW + 8f * dp else 0f); RectF(right - 136f * dp, rowY, right, rowY + 42f * dp) }
+        if (area == 0 && selected < 0 && growPick < 0) list.add(Button("decorate", decR,
             "", if (decorating) STYLE_PRIMARY else STYLE_NORMAL,
             custom = { c, rr -> if (decorating) iconLabel(c, rr, "move", "DONE", "DONE") else iconLabel(c, rr, "brush", "DECORATE", "DECORATE") }) {
             decorating = !decorating
             selected = -1; feeding = false; styling = false; moreOpen = false; jobbing = false; exploring = false; confirmRelease = false
         })
         if (decorating) { decorButtons(list, w); return }
-        if (selected < 0 && area == 0) {
-            list.add(Button("photo", RectF(142f * dp, topBar + 8f * dp, 190f * dp, topBar + 48f * dp), "📷") {
+        if (selected < 0) {   // camera: top-left, just under the top bar
+            list.add(Button("photo", RectF(14f * dp, topBar + 8f * dp, 62f * dp, topBar + 48f * dp), "📷") {
                 photoMode = true; selected = -1; feeding = false; styling = false; moreOpen = false; jobbing = false; exploring = false
                 toast("Photo mode: tap SAVE & SHARE")
             })
@@ -791,7 +794,7 @@ class GameView(context: Context) : View(context) {
         }
         val totalDust = lab.home().sumOf { it.dust.toInt() }
         if (totalDust >= 1 && selected < 0) {
-            list.add(Button("collect", RectF(w - 170f * dp, topBar + 8f * dp, w - 14f * dp, topBar + 48f * dp),
+            list.add(Button("collect", RectF(w - 14f * dp - collectW, rowY, w - 14f * dp, rowY + 42f * dp),
                 "Collect $totalDust ✦", STYLE_PRIMARY) {
                 for ((i, s) in lab.garden.withIndex()) collect(s, i)
             })
