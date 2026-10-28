@@ -909,7 +909,7 @@ class GameView(context: Context) : View(context) {
                 val lbl = if (mine) "✓ " + Data.PETS[p].name else Data.PETS[p].name
                 text.textSize = 9.5f * dp
                 while (text.textSize > 7f * dp && text.measureText(lbl) > rr.width() - 6f * dp) text.textSize -= 0.5f * dp
-                c.drawText(lbl, rr.centerX(), rr.bottom - 5f * dp, text)
+                sporeText(c, lbl, rr.centerX(), rr.bottom - 5f * dp, text)
             }) {
                 when {
                     mine -> s.pet = -1
@@ -929,7 +929,7 @@ class GameView(context: Context) : View(context) {
                 val lbl = if (worn) "✓ " + Data.ACCESSORIES[a].name else Data.ACCESSORIES[a].name
                 text.textSize = 9.5f * dp
                 while (text.textSize > 7f * dp && text.measureText(lbl) > rr.width() - 6f * dp) text.textSize -= 0.5f * dp
-                c.drawText(lbl, rr.centerX(), rr.bottom - 5f * dp, text)
+                sporeText(c, lbl, rr.centerX(), rr.bottom - 5f * dp, text)
             }) {
                 when {
                     worn -> s.wear[slot] = -1
@@ -953,9 +953,9 @@ class GameView(context: Context) : View(context) {
             val ok = j == 0 || (s.stage() >= 2 && (holder == null || holder === s))
             list.add(Button("job$j", r, "", if (mine) STYLE_PICKED else STYLE_CARD, ok || mine, custom = { c, rr ->
                 text.textAlign = Paint.Align.LEFT; text.textSize = 14f * dp
-                c.drawText((if (job.icon.isNotEmpty()) job.icon + "  " else "") + job.name, rr.left + 14f * dp, rr.centerY() - 1f * dp, text)
+                sporeText(c, (if (job.icon.isNotEmpty()) job.icon + "  " else "") + job.name, rr.left + 14f * dp, rr.centerY() - 1f * dp, text)
                 text.textSize = 11f * dp; text.color = TEXT_DIM
-                c.drawText(when {
+                sporeText(c, when {
                     j > 0 && s.stage() < 2 -> "Needs a Grown mushroom"
                     holder != null && holder !== s -> "${holder.name} has this job"
                     else -> job.desc
@@ -984,11 +984,11 @@ class GameView(context: Context) : View(context) {
                 c.drawCircle(rr.left + 20f * dp, rr.centerY(), 9f * dp, fill)
                 text.textAlign = Paint.Align.LEFT
                 text.textSize = 14f * dp
-                c.drawText(zone.name, rr.left + 38f * dp, rr.centerY() - 1f * dp, text)
+                sporeText(c, zone.name, rr.left + 38f * dp, rr.centerY() - 1f * dp, text)
                 text.textSize = 11f * dp; text.color = TEXT_DIM
                 val hrs = lab.expeditionHours(z)
                 val loot = zone.loot.distinct().joinToString(", ") { Data.INGREDIENTS[it].name }
-                c.drawText(if (ok) "${if (hrs < 1f) "${(hrs * 60).toInt()} min" else "${"%.1f".format(hrs).removeSuffix(".0")} h"} · $loot"
+                sporeText(c, if (ok) "${if (hrs < 1f) "${(hrs * 60).toInt()} min" else "${"%.1f".format(hrs).removeSuffix(".0")} h"} · $loot"
                     else "Needs an ${Data.STAGE_NAMES[zone.minStage]} mushroom", rr.left + 38f * dp, rr.centerY() + 14f * dp, text)
                 text.color = Color.WHITE
                 text.textAlign = Paint.Align.CENTER
@@ -1051,7 +1051,7 @@ class GameView(context: Context) : View(context) {
             list.add(Button("dec$k", r, "", STYLE_CARD, lab.decorOwned[k] > 0, custom = { c, rr ->
                 decorIcon(c, k, rr.centerX(), rr.centerY() - 7f * dp, min(rr.width(), rr.height()) * 0.66f)
                 text.textSize = 11f * dp; text.color = if (lab.decorOwned[k] > 0) Color.WHITE else TEXT_DIM
-                c.drawText("×${lab.decorOwned[k]}", rr.centerX(), rr.bottom - 4f * dp, text)
+                sporeText(c, "×${lab.decorOwned[k]}", rr.centerX(), rr.bottom - 4f * dp, text)
                 text.color = Color.WHITE
             }) {
                 if (lab.decorOwned[k] <= 0) toast("Buy a ${Data.DECOR[k].name} in the Shop → DECOR")
@@ -1400,7 +1400,7 @@ class GameView(context: Context) : View(context) {
         val bw = text.measureText(label) + 12f * dp
         fill.color = shade(col, -0.35f); c.drawRoundRect(x, y + 1.5f * dp, x + bw, y + 16.5f * dp, 7f * dp, 7f * dp, fill)
         fill.color = col; c.drawRoundRect(x, y, x + bw, y + 15f * dp, 7f * dp, 7f * dp, fill)
-        text.color = Color.WHITE; c.drawText(label, x + bw / 2, y + 11f * dp, text)
+        text.color = Color.WHITE; sporeText(c, label, x + bw / 2, y + 11f * dp, text)
     }
 
     private fun shopRows(): List<ShopRow> {
@@ -1449,7 +1449,7 @@ class GameView(context: Context) : View(context) {
                 5 -> { val u = Data.UPGRADES[i]
                     fill.color = MINT; c.drawCircle(pad + 20f * dp, cy, 14f * dp, fill)
                     text.textSize = 12f * dp; text.color = BG
-                    c.drawText("${lab.upgrades[i]}/${u.costs.size}", pad + 20f * dp, cy + 4f * dp, text); text.color = Color.WHITE }
+                    sporeText(c, "${lab.upgrades[i]}/${u.costs.size}", pad + 20f * dp, cy + 4f * dp, text); text.color = Color.WHITE }
                 else -> { val th = Data.THEMES[i]
                     fill.shader = LinearGradient(0f, cy - 14f * dp, 0f, cy + 14f * dp, intArrayOf(th.skyTop, th.skyBottom, th.groundFar, th.groundNear),
                         floatArrayOf(0f, 0.45f, 0.55f, 1f), Shader.TileMode.CLAMP)
@@ -1459,14 +1459,14 @@ class GameView(context: Context) : View(context) {
             val textTop = cy - (18f * dp + r.lines.size * 14f * dp) / 2
             text.textAlign = Paint.Align.LEFT
             text.textSize = 15f * dp
-            c.drawText(r.name, 58f * dp, textTop + 14f * dp, text)
+            sporeText(c, r.name, 58f * dp, textTop + 14f * dp, text)
             if (kind == 2 || kind == 3 || kind == 4 || kind == 6 || kind == 7) {
                 val nw = text.measureText(r.name)
                 text.textSize = 10f * dp; text.color = Color.argb(170, 255, 255, 255)
-                c.drawText("🔍", 64f * dp + nw, textTop + 13f * dp, text); text.color = Color.WHITE
+                sporeText(c, "🔍", 64f * dp + nw, textTop + 13f * dp, text); text.color = Color.WHITE
             }
             text.textSize = 11f * dp; text.color = TEXT_DIM
-            for ((k, l) in r.lines.withIndex()) c.drawText(l, 58f * dp, textTop + 31f * dp + k * 14f * dp, text)
+            for ((k, l) in r.lines.withIndex()) sporeText(c, l, 58f * dp, textTop + 31f * dp + k * 14f * dp, text)
             text.color = Color.WHITE
             text.textAlign = Paint.Align.CENTER
             // badges in the top-left corner of the row
@@ -1495,7 +1495,7 @@ class GameView(context: Context) : View(context) {
         if (shopTab == 8) {
             val ev = eventNow()
             text.textSize = 12f * dp; text.color = DUST
-            c.drawText("${Data.EVENT_ICONS[ev]} ${Data.EVENTS[ev]} until ${Data.EVENT_ENDS[ev]} · its ingredients fade when it ends", w / 2, navTop - 6f * dp, text)
+            sporeText(c, "${Data.EVENT_ICONS[ev]} ${Data.EVENTS[ev]} until ${Data.EVENT_ENDS[ev]} · its ingredients fade when it ends", w / 2, navTop - 6f * dp, text)
             text.color = Color.WHITE
         }
     }
@@ -1885,13 +1885,13 @@ class GameView(context: Context) : View(context) {
         drawShroom(c, sp, x, y, size, 0, 0f, false, false)
         if (label) {
             text.textSize = 11f * dp; text.color = Color.WHITE
-            c.drawText(Data.SPECIES[sp].name, x, y + 16f * dp, text)
+            sporeText(c, Data.SPECIES[sp].name, x, y + 16f * dp, text)
         }
     }
     internal fun testDrawIngredient(c: Canvas, i: Int, x: Float, y: Float, r: Float) {
         drawIngredient(c, i, x, y, r)
         text.textSize = 11f * dp; text.color = Color.WHITE
-        c.drawText(Data.INGREDIENTS[i].name, x, y + r * 1.3f + 16f * dp, text)
+        sporeText(c, Data.INGREDIENTS[i].name, x, y + r * 1.3f + 16f * dp, text)
     }
 
     private fun update(dt: Float) {
@@ -2103,7 +2103,7 @@ class GameView(context: Context) : View(context) {
             for (b in buttons) drawButton(c, b)
         }
         if (familyFor >= 0) shroom(familyFor)?.let { s ->
-            fill.color = Color.argb(215, 10, 6, 24); c.drawRect(0f, 0f, w, h, fill)
+            fill.color = Color.argb(248, 18, 12, 36); c.drawRect(0f, 0f, w, h, fill)   // solid, so the garden panel can't show through
             drawFamily(c, w, h, s)
             for (b in buttons) drawButton(c, b)
         } ?: run { familyFor = -1 }
@@ -2150,7 +2150,7 @@ class GameView(context: Context) : View(context) {
                     drawDecor(c, kind, sx, sy, depth(gz))
                 } else {
                     drawDecor(c, kind, dragX, dragY, 0.7f)
-                    if (dragKind == 5) { text.textSize = 12f * dp; c.drawText("put away", dragX, dragY + 18f * dp, text) }
+                    if (dragKind == 5) { text.textSize = 12f * dp; sporeText(c, "put away", dragX, dragY + 18f * dp, text) }
                 }
             }
             3 -> shroom(dragShroom)?.let { s ->
@@ -2322,6 +2322,31 @@ class GameView(context: Context) : View(context) {
 
     private val lawnMatrix = android.graphics.Matrix()
 
+    /** Draws text, swapping each "✦" for the little spore-mushroom icon so prices and rewards match the buttons. */
+    private fun sporeText(c: Canvas, str: String, x: Float, y: Float, p: Paint) {
+        val icon = if (str.indexOf('✦') >= 0) ui("spore") else null
+        if (icon == null) { c.drawText(str, x, y, p); return }
+        val ih = p.textSize * 1.15f
+        val iw = icon.width * ih / icon.height
+        val parts = str.split('✦')
+        var total = 0f
+        for (part in parts) total += p.measureText(part)
+        total += iw * (parts.size - 1)
+        var cx = when (p.textAlign) { Paint.Align.CENTER -> x - total / 2; Paint.Align.RIGHT -> x - total; else -> x }
+        val keep = p.textAlign
+        p.textAlign = Paint.Align.LEFT
+        for ((k, part) in parts.withIndex()) {
+            if (part.isNotEmpty()) { c.drawText(part, cx, y, p); cx += p.measureText(part) }
+            if (k < parts.size - 1) {
+                uiPaint.alpha = p.alpha
+                c.drawBitmap(icon, null, RectF(cx, y - ih * 0.82f, cx + iw, y + ih * 0.18f), uiPaint)
+                uiPaint.alpha = 255
+                cx += iw
+            }
+        }
+        p.textAlign = keep
+    }
+
     // ---------- UI sprites from the kawaii GUI pack (assets/ui) ----------
     private val uiBmps = HashMap<String, android.graphics.Bitmap?>()
     private val uiPaint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
@@ -2394,7 +2419,7 @@ class GameView(context: Context) : View(context) {
         text.textSize = 25f * dp
         text.color = Color.WHITE
         val title = when (tab) { Tab.GARDEN -> if (area == 1) "Cave" else "Garden"; Tab.LAB -> "Lab"; Tab.DEX -> "Shroomdex"; Tab.SHOP -> "Shop"; Tab.JOURNAL -> "Journal" }
-        c.drawText(title, 18f * dp, 43f * dp, text)
+        sporeText(c, title, 18f * dp, 43f * dp, text)
         // spore dust: gem + amount + "+"
         if (shownDust < 0f) shownDust = lab.dust.toFloat()
         val label = "${shownDust.toInt()}"
@@ -2404,8 +2429,8 @@ class GameView(context: Context) : View(context) {
             uiStretch(c, "spore_bar", pr, 0.73f, 0.83f)
             text.textSize = 18f * dp; text.textAlign = Paint.Align.RIGHT
             val rx = pr.right - b.width * 0.17f * pr.height() / b.height - 2f * dp
-            text.color = Color.argb(90, 30, 10, 60); c.drawText(label, rx, pr.centerY() + 8f * dp, text)
-            text.color = Color.rgb(255, 246, 214); c.drawText(label, rx, pr.centerY() + 6.5f * dp, text)
+            text.color = Color.argb(90, 30, 10, 60); sporeText(c, label, rx, pr.centerY() + 8f * dp, text)
+            text.color = Color.rgb(255, 246, 214); sporeText(c, label, rx, pr.centerY() + 6.5f * dp, text)
             text.textAlign = Paint.Align.LEFT
             // a green "+" bubble: tap it for spore packs
             val px = pr.right + 16f * dp; val py = pr.centerY()
@@ -2418,7 +2443,7 @@ class GameView(context: Context) : View(context) {
             text.textSize = 18f * dp
             fill.color = Color.argb(110, 0, 0, 0); c.drawRoundRect(pr, 17f * dp, 17f * dp, fill)
             fill.color = DUST; drawSparkle(c, pr.left + 18f * dp, pr.centerY(), 4f * dp)
-            text.color = Color.WHITE; c.drawText(label, pr.left + 32f * dp, pr.centerY() + 6.5f * dp, text)
+            text.color = Color.WHITE; sporeText(c, label, pr.left + 32f * dp, pr.centerY() + 6.5f * dp, text)
         }
         text.color = Color.WHITE
         text.textAlign = Paint.Align.CENTER
@@ -3068,7 +3093,7 @@ class GameView(context: Context) : View(context) {
         val pill = if (night) "moon_pill" else "sun_pill"
         if (ui(pill) == null) {
             text.textSize = 12f * dp; text.color = Color.argb(220, 255, 255, 255)
-            c.drawText(label, w / 2, topBar + 70f * dp, text); text.color = Color.WHITE; return
+            sporeText(c, label, w / 2, topBar + 70f * dp, text); text.color = Color.WHITE; return
         }
         text.textSize = 12.5f * dp
         val h = 28f * dp
@@ -3079,7 +3104,7 @@ class GameView(context: Context) : View(context) {
         text.textAlign = Paint.Align.LEFT
         text.color = if (night) Color.WHITE else Color.rgb(40, 50, 110)
         val icon = ui(pill)!!
-        c.drawText(label, r.left + icon.width * 0.42f * h / icon.height, r.centerY() + 4.5f * dp, text)
+        sporeText(c, label, r.left + icon.width * 0.42f * h / icon.height, r.centerY() + 4.5f * dp, text)
         text.textAlign = Paint.Align.CENTER; text.color = Color.WHITE
     }
 
@@ -3093,7 +3118,7 @@ class GameView(context: Context) : View(context) {
         fill.color = Color.argb(150, 40, 20, 50)
         c.drawRoundRect(w / 2 - tw / 2, y - 14f * dp, w / 2 + tw / 2, y + 6f * dp, 10f * dp, 10f * dp, fill)
         text.color = Color.rgb(255, 190, 110)
-        c.drawText(label, w / 2, y, text)
+        sporeText(c, label, w / 2, y, text)
         text.color = Color.WHITE
     }
 
@@ -3254,7 +3279,7 @@ class GameView(context: Context) : View(context) {
                 path.reset(); path.moveTo(bx - 3f * dp, by + 7f * dp); path.lineTo(bx - s.facing * 6f * dp, by + 14f * dp); path.lineTo(bx + 4f * dp, by + 7f * dp); path.close()
                 c.drawPath(path, fill)
                 text.textSize = 12f * dp; text.color = ACCENT
-                c.drawText(arrayOf("♥", "♪", "!", "?", "☺")[((t + s.id) % 5).toInt()], bx, by + 4f * dp, text)
+                sporeText(c, arrayOf("♥", "♪", "!", "?", "☺")[((t + s.id) % 5).toInt()], bx, by + 4f * dp, text)
                 text.color = Color.WHITE
             }
             if (s.dust >= 1f) {
@@ -3265,7 +3290,7 @@ class GameView(context: Context) : View(context) {
                 c.drawCircle(x, dy, 10f * dp, fill)
                 fill.shader = null
                 text.textSize = 10f * dp; text.color = BG
-                c.drawText("${s.dust.toInt()}", x, dy + 3.5f * dp, text)
+                sporeText(c, "${s.dust.toInt()}", x, dy + 3.5f * dp, text)
                 text.color = Color.WHITE
             }
         }
@@ -3282,7 +3307,7 @@ class GameView(context: Context) : View(context) {
             drawWeatherLabel(c, w)
         } else {
             text.textSize = 12f * dp; text.color = Color.argb(220, 200, 255, 240)
-            c.drawText("⛰ Glow Cave · glowing shrooms grow 50% faster", w / 2, topBar + 66f * dp, text)
+            sporeText(c, "⛰ Glow Cave · glowing shrooms grow 50% faster", w / 2, topBar + 66f * dp, text)
             text.color = Color.WHITE
         }
         drawEventBanner(c, w)
@@ -3290,16 +3315,16 @@ class GameView(context: Context) : View(context) {
             // low on the lawn, clear of the veggie patch and decorations
             val ey = groundBottom() - 6f * dp
             text.textSize = 17f * dp; text.color = Color.WHITE
-            c.drawText(if (area == 1) "The cave is empty" else "Your garden is empty", w / 2, ey, text)
+            sporeText(c, if (area == 1) "The cave is empty" else "Your garden is empty", w / 2, ey, text)
             text.textSize = 14f * dp; text.color = TEXT_DIM
-            c.drawText(if (area == 1) "Send mushrooms here from their MORE menu" else "Brew a mushroom in the Lab to get started", w / 2, ey + 21f * dp, text)
+            sporeText(c, if (area == 1) "Send mushrooms here from their MORE menu" else "Brew a mushroom in the Lab to get started", w / 2, ey + 21f * dp, text)
             text.color = Color.WHITE
         }
 
         if (selected < 0 && !decorating && !photoMode && growPick < 0) {
             text.textSize = 12f * dp; text.color = Color.argb(200, 255, 255, 255)
             val awayN = lab.garden.count { it.away() }
-            c.drawText("${lab.garden.size} / ${lab.capacity()} mushrooms" + (if (awayN > 0) " · $awayN exploring" else " · drag them to move"), w / 2, groundBottom() + 44f * dp, text)
+            sporeText(c, "${lab.garden.size} / ${lab.capacity()} mushrooms" + (if (awayN > 0) " · $awayN exploring" else " · drag them to move"), w / 2, groundBottom() + 44f * dp, text)
             text.color = Color.WHITE
         }
 
@@ -3325,7 +3350,7 @@ class GameView(context: Context) : View(context) {
             val msg = when { !putting -> "Drop it anywhere on the lawn"; over -> "Let go to put it away"; else -> "Drag here to put it away" }
             text.textSize = 14f * dp; text.color = Color.WHITE
             uiIcon(c, "move", w / 2 - text.measureText(msg) / 2 - 14f * dp, bar.centerY(), 18f * dp)
-            c.drawText(msg, w / 2 + 6f * dp, bar.centerY() + 5f * dp, text)
+            sporeText(c, msg, w / 2 + 6f * dp, bar.centerY() + 5f * dp, text)
             return
         }
         val top = panelTop()
@@ -3333,7 +3358,7 @@ class GameView(context: Context) : View(context) {
         text.textSize = 12f * dp; text.color = TEXT_DIM
         val msg = if (gardenItemCount() == 0) "Buy decorations in the Shop → DECOR"
         else "Drag items onto the ground · drag them back here to put away"
-        c.drawText(msg, w / 2, navTop - 18f * dp, text)
+        sporeText(c, msg, w / 2, navTop - 18f * dp, text)
         if (gardenItemCount() > 0) uiIcon(c, "move", w / 2 - text.measureText(msg) / 2 - 12f * dp, navTop - 22f * dp, 15f * dp, 200)
         text.color = Color.WHITE
     }
@@ -3459,7 +3484,7 @@ class GameView(context: Context) : View(context) {
                 path.reset(); path.moveTo(x - s * 0.35f, y - s * 0.8f); path.lineTo(x + s * 0.3f, y - s * 0.8f); path.lineTo(x + s * 0.42f, y - s * 0.68f)
                 path.lineTo(x + s * 0.3f, y - s * 0.56f); path.lineTo(x - s * 0.35f, y - s * 0.56f); path.close(); c.drawPath(path, fill)
                 text.textSize = s * 0.13f; text.color = Color.rgb(80, 50, 30)
-                c.drawText("SHROOMS", x, y - s * 0.63f, text); text.color = Color.WHITE
+                sporeText(c, "SHROOMS", x, y - s * 0.63f, text); text.color = Color.WHITE
             }
             9 -> { // fairy lights
                 stroke.color = Color.rgb(90, 70, 60); stroke.strokeWidth = s * 0.04f
@@ -3533,7 +3558,7 @@ class GameView(context: Context) : View(context) {
 
         text.textAlign = Paint.Align.LEFT
         text.textSize = 21f * dp
-        c.drawText(s.name, pad, top + 30f * dp, text)
+        sporeText(c, s.name, pad, top + 30f * dp, text)
         val nameW = text.measureText(s.name) + 20f * dp
         drawSexIcon(c, pad + nameW - 8f * dp, top + 23f * dp, 6.5f * dp, s.sex)
         for (k in 0 until 5) {   // friendship hearts
@@ -3541,16 +3566,16 @@ class GameView(context: Context) : View(context) {
             drawHeart(c, w - pad - 8f * dp - (4 - k) * 17f * dp, top + 20f * dp, 5.5f * dp)
         }
         text.textSize = 13f * dp; text.color = if (s.shiny) Color.WHITE else TEXT_DIM
-        c.drawText((if (s.shiny) "✨ Shiny " else "") + sp.name, pad + nameW + 10f * dp, top + 30f * dp, text)
+        sporeText(c, (if (s.shiny) "✨ Shiny " else "") + sp.name, pad + nameW + 10f * dp, top + 30f * dp, text)
         text.color = TEXT_DIM
         val extras = ArrayList<String>()
         extras.add(Data.STAGE_NAMES[s.stage()]); extras.add(Data.TIER_NAMES[sp.tier])
         if (s.variant == 1) extras.add("Albino") else if (s.variant == 2) extras.add("Neon")
         if (s.size > 1.1f) extras.add("Big") else if (s.size < 0.9f) extras.add("Tiny")
         extras.add("loves ${Data.FOODS[sp.favFood].name}")
-        c.drawText(extras.joinToString(" · "), pad, top + 48f * dp, text)
+        sporeText(c, extras.joinToString(" · "), pad, top + 48f * dp, text)
         text.color = ACCENT
-        c.drawText("${Data.TRAITS[s.trait]}: ${Data.TRAIT_DESC[s.trait]}", pad, top + 64f * dp, text)
+        sporeText(c, "${Data.TRAITS[s.trait]}: ${Data.TRAIT_DESC[s.trait]}", pad, top + 64f * dp, text)
         text.color = Color.WHITE
         text.textAlign = Paint.Align.CENTER
 
@@ -3565,7 +3590,7 @@ class GameView(context: Context) : View(context) {
         }
         if (modeHint != null) {
             text.textSize = 12f * dp; text.color = TEXT_DIM
-            c.drawText(modeHint, w / 2, top + 86f * dp, text)
+            sporeText(c, modeHint, w / 2, top + 86f * dp, text)
             text.color = Color.WHITE
             return
         }
@@ -3590,7 +3615,7 @@ class GameView(context: Context) : View(context) {
             2 -> "Hungry! It grows slowly until you feed it."
             else -> "A little lonely. Try a pat."
         }
-        c.drawText(moodText, w / 2, y + 6f * dp, text)
+        sporeText(c, moodText, w / 2, y + 6f * dp, text)
         text.color = Color.WHITE
     }
 
@@ -3598,7 +3623,7 @@ class GameView(context: Context) : View(context) {
         text.textAlign = Paint.Align.LEFT
         val iw = if (icon != null) uiIcon(c, icon, 32f * dp, y + 5.5f * dp, 17f * dp) else 0f
         text.textSize = if (iw > 0f) 12f * dp else 13f * dp
-        c.drawText(label, if (iw > 0f) 44f * dp else 24f * dp, y + 9f * dp, text)
+        sporeText(c, label, if (iw > 0f) 44f * dp else 24f * dp, y + 9f * dp, text)
         text.textAlign = Paint.Align.CENTER
         fill.color = Color.argb(50, 255, 255, 255)
         c.drawRoundRect(x, y, x + w, y + 11f * dp, 6f * dp, 6f * dp, fill)
@@ -3611,14 +3636,14 @@ class GameView(context: Context) : View(context) {
         val fav = Data.SPECIES[s.species].favFood == f
         drawFood(c, f, r.centerX(), r.top + r.height() * 0.32f, min(r.width(), r.height()) * 0.22f)
         text.textSize = 10.5f * dp
-        c.drawText(food.name, r.centerX(), r.top + r.height() * 0.66f, text)
+        sporeText(c, food.name, r.centerX(), r.top + r.height() * 0.66f, text)
         text.textSize = 13f * dp
         text.color = if (lab.foods[f] > 0) Color.WHITE else ACCENT
-        c.drawText("×${lab.foods[f]}", r.centerX(), r.top + r.height() * 0.84f, text)
+        sporeText(c, "×${lab.foods[f]}", r.centerX(), r.top + r.height() * 0.84f, text)
         text.color = Color.WHITE
         if (fav) {
             text.textSize = 12f * dp
-            c.drawText("❤", r.right - 10f * dp, r.top + 16f * dp, text)
+            sporeText(c, "❤", r.right - 10f * dp, r.top + 16f * dp, text)
         }
     }
 
@@ -3729,8 +3754,8 @@ class GameView(context: Context) : View(context) {
         text.textSize = 26f * dp; text.color = TEXT_DIM
         val off = min(w * 0.33f, 130f * dp)
         if (labMode <= 1) {
-            c.drawText("+", fx - off / 2 - 14f * dp, fy + 9f * dp, text)
-            c.drawText("+", fx + off / 2 + 14f * dp, fy + 9f * dp, text)
+            sporeText(c, "+", fx - off / 2 - 14f * dp, fy + 9f * dp, text)
+            sporeText(c, "+", fx + off / 2 + 14f * dp, fy + 9f * dp, text)
         }
         text.color = Color.WHITE
 
@@ -3825,11 +3850,11 @@ class GameView(context: Context) : View(context) {
             // with the Big Flask the third ingredient sits above the flask, so the words move out of its way
             val third = slotCount() == 3
             val lx = if (third) w / 2f + min(w * 0.33f, 130f * dp) else fx
-            c.drawText(if (q >= 1f) "PERFECT!" else "STIR!", lx, if (third) fy - 52f * dp else fy - r * 1.8f, text)
+            sporeText(c, if (q >= 1f) "PERFECT!" else "STIR!", lx, if (third) fy - 52f * dp else fy - r * 1.8f, text)
             text.textSize = 13f * dp; text.color = Color.WHITE
             if (q < 1f) {
                 val hy = if (!third) fy - r * 1.8f + 20f * dp else if (specialTarget() >= 0) fy + r + 68f * dp else fy + r + 44f * dp
-                c.drawText("Trace circles around the flask", fx, hy, text)
+                sporeText(c, "Trace circles around the flask", fx, hy, text)
             }
             text.color = Color.WHITE
         }
@@ -3841,7 +3866,7 @@ class GameView(context: Context) : View(context) {
         } else "Pick a Grown boy and a Grown girl"
         val target = specialTarget()
         if (target >= 0) drawChanceMeter(c, fx, fy + r + 30f * dp, target)
-        else if (brewing <= 0f && labMode <= 1) c.drawText(hint, fx, fy + r + 44f * dp, text)
+        else if (brewing <= 0f && labMode <= 1) sporeText(c, hint, fx, fy + r + 44f * dp, text)
         if (labMode == 3) drawCook(c, w, h)
         text.color = Color.WHITE
 
@@ -3849,11 +3874,11 @@ class GameView(context: Context) : View(context) {
 
         if (labMode == 1) {
             text.textSize = 12f * dp; text.color = TEXT_DIM
-            c.drawText("Parents rest 20 min after breeding. Some pairs make new species!", w / 2, h * 0.45f + 74f * dp, text)
+            sporeText(c, "Parents rest 20 min after breeding. Some pairs make new species!", w / 2, h * 0.45f + 74f * dp, text)
             text.color = Color.WHITE
             if (lab.garden.isEmpty()) {
                 text.textSize = 15f * dp; text.color = TEXT_DIM
-                c.drawText("No mushrooms yet. Brew some first!", w / 2, h * 0.65f, text)
+                sporeText(c, "No mushrooms yet. Brew some first!", w / 2, h * 0.65f, text)
                 text.color = Color.WHITE
             }
         }
@@ -3867,7 +3892,7 @@ class GameView(context: Context) : View(context) {
         val label = "${Data.TIER_NAMES[sp.tier]}: ${if (lab.discovered[target] || lab.fizzles[target] >= 2) sp.name else "???"} · ${(ch * 100).toInt()}% chance" +
             (if (lab.jobHolder(Data.JOB_STIR) != null) " 🥄" else "")
         text.textSize = 13f * dp; text.color = DUST
-        c.drawText(label, cx, y + 8f * dp, text)
+        sporeText(c, label, cx, y + 8f * dp, text)
         val bw = 190f * dp; val bh = 9f * dp; val by = y + 16f * dp
         fill.color = Color.argb(70, 255, 255, 255)
         c.drawRoundRect(cx - bw / 2, by, cx + bw / 2, by + bh, bh / 2, bh / 2, fill)
@@ -3878,7 +3903,7 @@ class GameView(context: Context) : View(context) {
         c.drawRoundRect(cx - bw / 2, by, cx - bw / 2 + max(bh, bw * ch), by + bh, bh / 2, bh / 2, fill)
         if (brewing <= 0f) {
             text.textSize = 11f * dp; text.color = TEXT_DIM
-            c.drawText("Stir well for up to ${(best * 100).toInt()}%", cx, by + bh + 13f * dp, text)
+            sporeText(c, "Stir well for up to ${(best * 100).toInt()}%", cx, by + bh + 13f * dp, text)
         }
         text.color = Color.WHITE
     }
@@ -3891,14 +3916,14 @@ class GameView(context: Context) : View(context) {
         if (labMode == 0) {
             val i = slots[k]
             if (i >= 0) drawIngredient(c, i, r.centerX(), r.centerY(), r.width() * 0.36f)
-            else { text.textSize = 22f * dp; text.color = TEXT_DIM; c.drawText("?", r.centerX(), r.centerY() + 8f * dp, text); text.color = Color.WHITE }
+            else { text.textSize = 22f * dp; text.color = TEXT_DIM; sporeText(c, "?", r.centerX(), r.centerY() + 8f * dp, text); text.color = Color.WHITE }
         } else {
             val s = picks.getOrNull(k)?.let { shroom(it) }
             if (s != null) {
                 drawShroom(c, s.species, r.centerX(), r.centerY() + r.height() * 0.32f, r.width() * 0.5f, 0, 0f, false, false, shiny = s.shiny, who = s)
                 drawSexIcon(c, r.right - 6f * dp, r.top + 8f * dp, 7f * dp, s.sex)
             }
-            else { text.textSize = 22f * dp; text.color = TEXT_DIM; c.drawText("?", r.centerX(), r.centerY() + 8f * dp, text); text.color = Color.WHITE }
+            else { text.textSize = 22f * dp; text.color = TEXT_DIM; sporeText(c, "?", r.centerX(), r.centerY() + 8f * dp, text); text.color = Color.WHITE }
         }
     }
 
@@ -3911,14 +3936,14 @@ class GameView(context: Context) : View(context) {
         drawIngredient(c, i, r.centerX(), r.top + r.height() * 0.36f, min(r.width(), r.height()) * 0.2f)
         text.textSize = 13f * dp
         while (text.textSize > 9f * dp && text.measureText(Data.INGREDIENTS[i].name) > r.width() - 8f * dp) text.textSize -= 0.5f * dp
-        c.drawText(Data.INGREDIENTS[i].name, r.centerX(), r.top + r.height() * 0.72f, text)
+        sporeText(c, Data.INGREDIENTS[i].name, r.centerX(), r.top + r.height() * 0.72f, text)
         if (ev > 0) {
             text.textSize = 11f * dp
-            c.drawText(Data.EVENT_ICONS[ev], r.right - 12f * dp, r.top + 16f * dp, text)
+            sporeText(c, Data.EVENT_ICONS[ev], r.right - 12f * dp, r.top + 16f * dp, text)
         }
         text.textSize = 12f * dp
         text.color = if (left > 0) TEXT_DIM else ACCENT
-        c.drawText("×$left", r.centerX(), r.top + r.height() * 0.9f, text)
+        sporeText(c, "×$left", r.centerX(), r.top + r.height() * 0.9f, text)
         text.color = Color.WHITE
     }
 
@@ -3936,7 +3961,7 @@ class GameView(context: Context) : View(context) {
         }
         text.textSize = 10f * dp
         val name = Data.SPECIES[s.species].name.split(" ").first()
-        c.drawText(name, r.centerX(), r.top + r.height() * 0.8f, text)
+        sporeText(c, name, r.centerX(), r.top + r.height() * 0.8f, text)
         text.textSize = 10f * dp; text.color = TEXT_DIM
         val status = when {
             s.stage() < 2 -> Data.STAGE_NAMES[s.stage()]
@@ -3947,7 +3972,7 @@ class GameView(context: Context) : View(context) {
         val mate = picks.firstOrNull()?.let { shroom(it) }
         val bestieMatch = picks.size == 1 && mate != null && mate !== s && mate.sex != s.sex && mate.bestie == s.id && status == "ready"
         if (bestieMatch) text.color = DUST
-        c.drawText(if (bestieMatch) "bestie +10%" else status, r.centerX(), r.top + r.height() * 0.94f, text)
+        sporeText(c, if (bestieMatch) "bestie +10%" else status, r.centerX(), r.top + r.height() * 0.94f, text)
         text.color = Color.WHITE
     }
 
@@ -3957,7 +3982,7 @@ class GameView(context: Context) : View(context) {
         text.textSize = 14f * dp; text.color = TEXT_DIM
         val baseFound = Data.BASE_SPECIES.count { lab.discovered[it] }
         val evAll = Data.SPECIES.indices.filter { Data.SPECIES[it].event > 0 }
-        c.drawText("$baseFound of ${Data.BASE_SPECIES.size} species · ${evAll.count { lab.discovered[it] }} of ${evAll.size} event", w / 2, topBar + 26f * dp, text)
+        sporeText(c, "$baseFound of ${Data.BASE_SPECIES.size} species · ${evAll.count { lab.discovered[it] }} of ${evAll.size} event", w / 2, topBar + 26f * dp, text)
         text.color = Color.WHITE
         if (dexTab == 2) {
             val block = (dexBottom() - dexTop()) / 3
@@ -3965,10 +3990,10 @@ class GameView(context: Context) : View(context) {
             for (ev in 1..3) {
                 val y = dexTop() + (ev - 1) * block + 14f * dp
                 text.textAlign = Paint.Align.LEFT; text.textSize = 13f * dp; text.color = Data.EVENT_COLORS[ev]
-                c.drawText("${Data.EVENT_ICONS[ev]} ${Data.EVENTS[ev]}", 16f * dp, y, text)
+                sporeText(c, "${Data.EVENT_ICONS[ev]} ${Data.EVENTS[ev]}", 16f * dp, y, text)
                 text.textAlign = Paint.Align.RIGHT; text.textSize = 11f * dp
                 text.color = if (ev == now) MINT else TEXT_DIM
-                c.drawText(if (ev == now) "On now, until ${Data.EVENT_ENDS[ev]}!" else "${Data.EVENT_STARTS[ev]} – ${Data.EVENT_ENDS[ev]}", w - 16f * dp, y, text)
+                sporeText(c, if (ev == now) "On now, until ${Data.EVENT_ENDS[ev]}!" else "${Data.EVENT_STARTS[ev]} – ${Data.EVENT_ENDS[ev]}", w - 16f * dp, y, text)
             }
             text.textAlign = Paint.Align.CENTER; text.color = Color.WHITE
         }
@@ -3981,29 +4006,29 @@ class GameView(context: Context) : View(context) {
         text.textAlign = Paint.Align.LEFT
         if (dexPick < 0) {
             text.textSize = 14f * dp; text.color = TEXT_DIM
-            c.drawText("Tap a mushroom to see how to make it", pad, top + 34f * dp, text)
+            sporeText(c, "Tap a mushroom to see how to make it", pad, top + 34f * dp, text)
             text.color = Color.WHITE
         } else {
             val sp = Data.SPECIES[dexPick]
             val known = lab.discovered[dexPick]
             text.textSize = 19f * dp
-            c.drawText(if (known) sp.name else "???", pad, top + 32f * dp, text)
+            sporeText(c, if (known) sp.name else "???", pad, top + 32f * dp, text)
             text.textSize = 13f * dp
             text.color = if (sp.event > 0) Data.EVENT_COLORS[sp.event] else when (sp.tier) { 3 -> DUST; 2 -> Color.rgb(140, 200, 255); else -> TEXT_DIM }
-            c.drawText(tierLabel(dexPick), pad, top + 52f * dp, text)
+            sporeText(c, tierLabel(dexPick), pad, top + 52f * dp, text)
             text.color = Color.WHITE
             text.textSize = 14f * dp
             if (known) {
-                c.drawText("Recipe: ${Data.recipeText(dexPick)}", pad, top + 78f * dp, text)
+                sporeText(c, "Recipe: ${Data.recipeText(dexPick)}", pad, top + 78f * dp, text)
                 text.color = TEXT_DIM
-                c.drawText("Favorite food: ${Data.FOODS[sp.favFood].name}", pad, top + 100f * dp, text)
+                sporeText(c, "Favorite food: ${Data.FOODS[sp.favFood].name}", pad, top + 100f * dp, text)
             } else {
                 text.color = TEXT_DIM
-                c.drawText("Hint: ${sp.hint}", pad, top + 78f * dp, text)
+                sporeText(c, "Hint: ${sp.hint}", pad, top + 78f * dp, text)
             }
             if (sp.event > 0) {
                 text.color = if (Data.offSeason(dexPick)) ACCENT else MINT
-                c.drawText(if (Data.offSeason(dexPick)) "Only during ${Data.EVENTS[sp.event]} (${Data.EVENT_STARTS[sp.event]} – ${Data.EVENT_ENDS[sp.event]})"
+                sporeText(c, if (Data.offSeason(dexPick)) "Only during ${Data.EVENTS[sp.event]} (${Data.EVENT_STARTS[sp.event]} – ${Data.EVENT_ENDS[sp.event]})"
                     else "Available now, until ${Data.EVENT_ENDS[sp.event]}!", pad, top + (if (known) 122f else 100f) * dp, text)
             }
             text.color = Color.WHITE
@@ -4028,7 +4053,7 @@ class GameView(context: Context) : View(context) {
         }
         text.textSize = 9.5f * dp
         text.color = if (known) Color.WHITE else TEXT_DIM
-        c.drawText(if (known) sp.name.split(" ").first() else "???", r.centerX(), r.bottom - 6f * dp, text)
+        sporeText(c, if (known) sp.name.split(" ").first() else "???", r.centerX(), r.bottom - 6f * dp, text)
         text.color = Color.WHITE
     }
 
@@ -4072,9 +4097,9 @@ class GameView(context: Context) : View(context) {
             drawShroom(c, p.species, w / 2, h * 0.52f, size * (0.6f + 0.4f * popupT / 0.9f), 0, 0f, false, true)
             c.restore()
             text.textSize = 40f * dp; text.color = Color.WHITE
-            c.drawText("?", w / 2, h * 0.4f, text)
+            sporeText(c, "?", w / 2, h * 0.4f, text)
             text.textSize = 15f * dp; text.color = TEXT_DIM
-            c.drawText("Something is growing...", w / 2, card.top + 40f * dp, text)
+            sporeText(c, "Something is growing...", w / 2, card.top + 40f * dp, text)
             text.color = Color.WHITE
             return
         }
@@ -4085,7 +4110,7 @@ class GameView(context: Context) : View(context) {
         }
         text.textSize = 15f * dp
         text.color = when { p.shiny -> Color.WHITE; p.isNew -> DUST; else -> MINT }
-        c.drawText(when {
+        sporeText(c, when {
             p.shiny -> "✨ SHINY! ✨"
             p.missed >= 0 -> "So close! It fizzled..."
             p.isNew -> "✦ NEW DISCOVERY! ✦"
@@ -4100,25 +4125,25 @@ class GameView(context: Context) : View(context) {
         forcedFace = null
         text.textSize = 26f * dp
         val baby = shroom(p.shroomId)
-        c.drawText((if (p.shiny) "Shiny " else "") + sp.name, w / 2, h * 0.59f, text)
+        sporeText(c, (if (p.shiny) "Shiny " else "") + sp.name, w / 2, h * 0.59f, text)
         if (baby != null) {
             text.textSize = 14f * dp; text.color = ACCENT
-            c.drawText("Meet ${baby.name}, a ${Data.TRAITS[baby.trait].lowercase()} one" +
+            sporeText(c, "Meet ${baby.name}, a ${Data.TRAITS[baby.trait].lowercase()} one" +
                 (if (baby.variant == 1) " · ALBINO!" else if (baby.variant == 2) " · NEON!" else ""), w / 2, h * 0.59f - 30f * dp, text)
             text.color = Color.WHITE
         }
         text.textSize = 13f * dp; text.color = TEXT_DIM
-        c.drawText("${tierLabel(p.species)} · Loves ${Data.FOODS[sp.favFood].name}", w / 2, h * 0.59f + 24f * dp, text)
+        sporeText(c, "${tierLabel(p.species)} · Loves ${Data.FOODS[sp.favFood].name}", w / 2, h * 0.59f + 24f * dp, text)
         if (p.missed >= 0) {
             val m = Data.SPECIES[p.missed]
             text.color = ACCENT
-            c.drawText("The ${Data.TIER_NAMES[m.tier].lowercase()} ${if (lab.discovered[p.missed]) m.name else "recipe"} didn't take. Try again!", w / 2, h * 0.59f + 44f * dp, text)
+            sporeText(c, "The ${Data.TIER_NAMES[m.tier].lowercase()} ${if (lab.discovered[p.missed]) m.name else "recipe"} didn't take. Try again!", w / 2, h * 0.59f + 44f * dp, text)
             text.color = Color.WHITE
             return
         }
         val grade = stars(p.quality) + "  " + when { p.quality >= 1f -> "Perfect brew!"; p.quality >= 0.6f -> "Great stir"; p.quality >= 0.25f -> "Good stir"; else -> "Tip: stir in circles while it brews" }
         text.color = if (p.quality >= 1f) DUST else TEXT_DIM
-        c.drawText(grade, w / 2, h * 0.59f + 44f * dp, text)
+        sporeText(c, grade, w / 2, h * 0.59f + 44f * dp, text)
         text.color = Color.WHITE
     }
 
@@ -4164,7 +4189,7 @@ class GameView(context: Context) : View(context) {
         text.color = tt.color; text.alpha = (255 * a).toInt()
         val award = toastAward(tt.text)
         if (award) uiIcon(c, "ribbon", r.left + 22f * dp, r.centerY(), min(30f * dp, r.height() - 6f * dp), (255 * a).toInt())
-        for ((i, ln) in lines.withIndex()) c.drawText(ln, w / 2 + (if (award) 15f * dp else 0f), r.top + 9f * dp + 18f * dp * i + 14f * dp, text)
+        for ((i, ln) in lines.withIndex()) sporeText(c, ln, w / 2 + (if (award) 15f * dp else 0f), r.top + 9f * dp + 18f * dp * i + 14f * dp, text)
         text.color = Color.WHITE; text.alpha = 255
         c.restore()
     }
@@ -4184,7 +4209,7 @@ class GameView(context: Context) : View(context) {
         c.save(); c.scale(pop, pop, x, top)
         uiIcon(c, "levelup", x, top, 30f * dp, a)
         text.textSize = 13f * dp; text.color = Color.argb(a, 255, 240, 200)
-        c.drawText(Data.STAGE_NAMES[s.stage()] + "!", x, top + 30f * dp, text); text.color = Color.WHITE
+        sporeText(c, Data.STAGE_NAMES[s.stage()] + "!", x, top + 30f * dp, text); text.color = Color.WHITE
         c.restore()
     }
 
@@ -4209,7 +4234,7 @@ class GameView(context: Context) : View(context) {
                 P_Z, P_NOTE -> {
                     text.color = p.color; text.alpha = (255 * min(1f, a * 1.5f)).toInt()
                     text.textSize = (if (p.type == P_Z) 11f + (1f - a) * 8f else 15f) * dp
-                    c.drawText(if (p.type == P_Z) "z" else "♪", p.x, p.y, text)
+                    sporeText(c, if (p.type == P_Z) "z" else "♪", p.x, p.y, text)
                     text.color = Color.WHITE; text.alpha = 255
                 }
                 else -> drawSparkle(c, p.x, p.y, 4f * dp * (0.5f + a))
@@ -4251,7 +4276,7 @@ class GameView(context: Context) : View(context) {
         if (b.style == STYLE_GHOST && custom != null) { custom(c, r); return }
         if (b.style == STYLE_GHOST) {
             text.textSize = 12f * dp; text.color = Color.argb(if (pressed) 255 else 190, 255, 255, 255)
-            c.drawText(b.label, r.centerX(), r.centerY() + 4f * dp, text)
+            sporeText(c, b.label, r.centerX(), r.centerY() + 4f * dp, text)
             stroke.color = text.color; stroke.strokeWidth = 1f * dp
             val tw = text.measureText(b.label)
             c.drawLine(r.centerX() - tw / 2, r.centerY() + 7f * dp, r.centerX() + tw / 2, r.centerY() + 7f * dp, stroke)
@@ -4333,10 +4358,10 @@ class GameView(context: Context) : View(context) {
         if (shadow) {
             val keep = text.color
             text.color = Color.argb(70, 0, 0, 0)
-            c.drawText(label, cx, ty + 1.5f * dp, text)
+            sporeText(c, label, cx, ty + 1.5f * dp, text)
             text.color = keep
         }
-        c.drawText(label, cx, ty, text)
+        sporeText(c, label, cx, ty, text)
         if (spore) uiIcon(c, "spore", cx + tw / 2 + iw / 2 + 2f * dp, r.centerY(), text.textSize * 1.25f, Color.alpha(tc))
     }
 
@@ -4386,7 +4411,7 @@ class GameView(context: Context) : View(context) {
         }
         text.textSize = 11f * dp
         text.color = col
-        c.drawText(when (tb) { Tab.GARDEN -> "GARDEN"; Tab.LAB -> "LAB"; Tab.DEX -> "DEX"; Tab.SHOP -> "SHOP"; Tab.JOURNAL -> "JOURNAL" },
+        sporeText(c, when (tb) { Tab.GARDEN -> "GARDEN"; Tab.LAB -> "LAB"; Tab.DEX -> "DEX"; Tab.SHOP -> "SHOP"; Tab.JOURNAL -> "JOURNAL" },
             cx, r.top + 60f * dp, text)
         text.color = Color.WHITE
         if (tb == Tab.JOURNAL && journalAlert()) {
@@ -5133,9 +5158,9 @@ class GameView(context: Context) : View(context) {
                         list.add(Button("cand${s.id}", r, "", if (contestPick == s.id) STYLE_PICKED else STYLE_CARD, custom = { c, rr ->
                             drawShroom(c, s.species, rr.centerX(), rr.top + rr.height() * 0.66f, rr.width() * 0.42f, s.mood(), 0f, false, false, shiny = s.shiny, who = s)
                             text.textSize = 10f * dp
-                            c.drawText(s.name, rr.centerX(), rr.top + rr.height() * 0.82f, text)
+                            sporeText(c, s.name, rr.centerX(), rr.top + rr.height() * 0.82f, text)
                             text.color = DUST
-                            c.drawText("${lab.contestScore(s)} pts", rr.centerX(), rr.bottom - 5f * dp, text)
+                            sporeText(c, "${lab.contestScore(s)} pts", rr.centerX(), rr.bottom - 5f * dp, text)
                             text.color = Color.WHITE
                         }) { contestPick = s.id })
                     }
@@ -5167,9 +5192,9 @@ class GameView(context: Context) : View(context) {
                 val card = RectF(pad, top, w - pad, top + 124f * dp)
                 fill.color = PANEL; c.drawRoundRect(card, 18f * dp, 18f * dp, fill)
                 text.textAlign = Paint.Align.LEFT; text.textSize = 15f * dp
-                c.drawText("Daily gift", card.left + 14f * dp, card.top + 24f * dp, text)
+                sporeText(c, "Daily gift", card.left + 14f * dp, card.top + 24f * dp, text)
                 text.textAlign = Paint.Align.RIGHT; text.textSize = 12f * dp; text.color = DUST
-                c.drawText("${lab.streak}-day streak 🔥", card.right - 14f * dp, card.top + 24f * dp, text)
+                sporeText(c, "${lab.streak}-day streak 🔥", card.right - 14f * dp, card.top + 24f * dp, text)
                 text.color = Color.WHITE; text.textAlign = Paint.Align.CENTER
                 val bw = (card.width() - 28f * dp) / 7
                 for (d in 0 until 7) {
@@ -5194,19 +5219,19 @@ class GameView(context: Context) : View(context) {
                         else -> uiIcon(c, "spore", ix, iy, 21f * dp, a)
                     }
                     text.textSize = 9.5f * dp
-                    c.drawText(when (d) { 0 -> "40"; 1 -> "×3"; 2 -> "65"; 3 -> "×6"; 4 -> "100"; 5 -> "+Gold"; else -> "BIG" }, r.centerX(), r.bottom - 6f * dp, text)
+                    sporeText(c, when (d) { 0 -> "40"; 1 -> "×3"; 2 -> "65"; 3 -> "×6"; 4 -> "100"; 5 -> "+Gold"; else -> "BIG" }, r.centerX(), r.bottom - 6f * dp, text)
                     if (done) {
                         fill.color = Color.argb(140, 30, 70, 50); c.drawRoundRect(r, 9f * dp, 9f * dp, fill)
-                        text.textSize = 16f * dp; text.color = MINT; c.drawText("✓", r.centerX(), r.centerY() + 6f * dp, text); text.color = Color.WHITE
+                        text.textSize = 16f * dp; text.color = MINT; sporeText(c, "✓", r.centerX(), r.centerY() + 6f * dp, text); text.color = Color.WHITE
                     }
                 }
                 // Professor Spore
                 val py = top + 140f * dp
                 drawShroom(c, professor.species, pad + 22f * dp, py + 22f * dp, 34f * dp, 0, sin(t * 2f), (t % 4f) < 0.12f, false, who = professor)
                 text.textAlign = Paint.Align.LEFT; text.textSize = 15f * dp
-                c.drawText("Professor Spore's requests", pad + 50f * dp, py + 10f * dp, text)
+                sporeText(c, "Professor Spore's requests", pad + 50f * dp, py + 10f * dp, text)
                 text.textSize = 11f * dp; text.color = TEXT_DIM
-                c.drawText("\"Help my research and I'll pay you in spore dust!\"", pad + 50f * dp, py + 26f * dp, text)
+                sporeText(c, "\"Help my research and I'll pay you in spore dust!\"", pad + 50f * dp, py + 26f * dp, text)
                 text.color = Color.WHITE; text.textAlign = Paint.Align.CENTER
                 val ry = top + 170f * dp
                 for ((i, r) in lab.requests.withIndex()) {
@@ -5215,9 +5240,9 @@ class GameView(context: Context) : View(context) {
                     fill.color = PANEL; c.drawRoundRect(rc, 16f * dp, 16f * dp, fill)
                     val (cur, goal) = lab.requestProgress(r)
                     text.textAlign = Paint.Align.LEFT; text.textSize = 14f * dp
-                    c.drawText(lab.requestText(r), rc.left + 14f * dp, rc.top + 24f * dp, text)
+                    sporeText(c, lab.requestText(r), rc.left + 14f * dp, rc.top + 24f * dp, text)
                     text.textSize = 11f * dp; text.color = DUST
-                    c.drawText("Reward: ${r.reward} ✦", rc.left + 14f * dp, rc.top + 56f * dp, text)
+                    sporeText(c, "Reward: ${r.reward} ✦", rc.left + 14f * dp, rc.top + 56f * dp, text)
                     text.color = Color.WHITE; text.textAlign = Paint.Align.CENTER
                     if (cur < goal) {
                         val bx = rc.left + 14f * dp; val bw2 = rc.width() - 120f * dp
@@ -5226,7 +5251,7 @@ class GameView(context: Context) : View(context) {
                         fill.color = MINT
                         c.drawRoundRect(bx, rc.top + 34f * dp, bx + bw2 * (cur.toFloat() / goal).coerceIn(0.03f, 1f), rc.top + 42f * dp, 4f * dp, 4f * dp, fill)
                         text.textSize = 12f * dp; text.color = TEXT_DIM
-                        c.drawText("$cur / $goal", rc.right - 50f * dp, rc.top + 42f * dp, text)
+                        sporeText(c, "$cur / $goal", rc.right - 50f * dp, rc.top + 42f * dp, text)
                         text.color = Color.WHITE
                     }
                 }
@@ -5235,34 +5260,34 @@ class GameView(context: Context) : View(context) {
             1 -> {
                 val now = System.currentTimeMillis()
                 text.textSize = 18f * dp
-                c.drawText("🏅 Beauty Contest", w / 2, top + 22f * dp, text)
+                sporeText(c, "🏅 Beauty Contest", w / 2, top + 22f * dp, text)
                 text.textSize = 11f * dp; text.color = TEXT_DIM
-                c.drawText("Judged on happiness, growth, rarity, shine, outfits and your garden's decorations", w / 2, top + 42f * dp, text)
+                sporeText(c, "Judged on happiness, growth, rarity, shine, outfits and your garden's decorations", w / 2, top + 42f * dp, text)
                 text.color = Color.WHITE
                 if (now < lab.nextContest) {
                     text.textSize = 13f * dp; text.color = MINT
-                    c.drawText("Next contest in ${timeLeft(lab.nextContest - now)}", w / 2, top + 66f * dp, text)
+                    sporeText(c, "Next contest in ${timeLeft(lab.nextContest - now)}", w / 2, top + 66f * dp, text)
                     text.color = Color.WHITE
                     val res = lab.lastContest
                     if (res.isNotEmpty()) drawPodium(c, w, top + 80f * dp, res)
                     if (res.isEmpty()) {
                         text.textSize = 14f * dp; text.color = TEXT_DIM
-                        c.drawText("Come back soon!", w / 2, h * 0.45f, text); text.color = Color.WHITE
+                        sporeText(c, "Come back soon!", w / 2, h * 0.45f, text); text.color = Color.WHITE
                     }
                 } else {
                     text.textSize = 13f * dp; text.color = MINT
-                    c.drawText("Pick your contestant (prizes: 160 / 80 / 40 / 15 ✦)", w / 2, top + 66f * dp, text)
+                    sporeText(c, "Pick your contestant (prizes: 160 / 80 / 40 / 15 ✦)", w / 2, top + 66f * dp, text)
                     text.color = Color.WHITE
                     if (lab.home().none { it.stage() >= 1 }) {
                         text.textSize = 14f * dp; text.color = TEXT_DIM
-                        c.drawText("Raise a mushroom to Young to enter", w / 2, h * 0.45f, text); text.color = Color.WHITE
+                        sporeText(c, "Raise a mushroom to Young to enter", w / 2, h * 0.45f, text); text.color = Color.WHITE
                     }
                 }
             }
             else -> {
                 if (stickerView) { drawStickers(c, w, top); return }
                 text.textSize = 14f * dp; text.color = TEXT_DIM
-                c.drawText("${lab.achieved.count { it }} of ${Data.ACHIEVEMENTS.size} earned", w / 2, top + 6f * dp, text)
+                sporeText(c, "${lab.achieved.count { it }} of ${Data.ACHIEVEMENTS.size} earned", w / 2, top + 6f * dp, text)
                 text.color = Color.WHITE
                 val rowH = min(42f * dp, (navTop - top - 76f * dp) / Data.ACHIEVEMENTS.size)
                 for ((i, a) in Data.ACHIEVEMENTS.withIndex()) {
@@ -5270,15 +5295,15 @@ class GameView(context: Context) : View(context) {
                     val got = lab.achieved[i]
                     fill.color = if (got) DUST else Color.rgb(60, 48, 100)
                     c.drawCircle(pad + 12f * dp, y + rowH / 2, 9f * dp, fill)
-                    if (got) { text.textSize = 11f * dp; text.color = BG; c.drawText("✓", pad + 12f * dp, y + rowH / 2 + 4f * dp, text) }
+                    if (got) { text.textSize = 11f * dp; text.color = BG; sporeText(c, "✓", pad + 12f * dp, y + rowH / 2 + 4f * dp, text) }
                     text.textAlign = Paint.Align.LEFT
                     text.textSize = 13f * dp; text.color = if (got) Color.WHITE else Color.argb(200, 255, 255, 255)
-                    c.drawText(a.name, pad + 30f * dp, y + rowH / 2 - 1f * dp, text)
+                    sporeText(c, a.name, pad + 30f * dp, y + rowH / 2 - 1f * dp, text)
                     text.textSize = 10.5f * dp; text.color = TEXT_DIM
-                    c.drawText(a.desc, pad + 30f * dp, y + rowH / 2 + 12f * dp, text)
+                    sporeText(c, a.desc, pad + 30f * dp, y + rowH / 2 + 12f * dp, text)
                     text.textAlign = Paint.Align.RIGHT; text.textSize = 12f * dp
                     text.color = if (got) MINT else DUST
-                    c.drawText(if (got) "done" else "+${a.reward} ✦", w - pad, y + rowH / 2 + 4f * dp, text)
+                    sporeText(c, if (got) "done" else "+${a.reward} ✦", w - pad, y + rowH / 2 + 4f * dp, text)
                     text.color = Color.WHITE; text.textAlign = Paint.Align.CENTER
                 }
             }
@@ -5362,10 +5387,10 @@ class GameView(context: Context) : View(context) {
         c.drawRoundRect(22f * dp, hgt - 64f * dp, w * 0.62f, hgt - 22f * dp, 14f * dp, 14f * dp, fill)
         text.textAlign = Paint.Align.LEFT
         text.textSize = 17f * dp; text.color = Color.WHITE
-        c.drawText("🍄 Shroomology", 34f * dp, hgt - 42f * dp, text)
+        sporeText(c, "🍄 Shroomology", 34f * dp, hgt - 42f * dp, text)
         text.textSize = 11f * dp; text.color = TEXT_DIM
         val date = java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.getDefault()).format(java.util.Date())
-        c.drawText("${lab.discoveredCount()} species discovered · $date", 34f * dp, hgt - 28f * dp, text)
+        sporeText(c, "${lab.discoveredCount()} species discovered · $date", 34f * dp, hgt - 28f * dp, text)
         text.color = Color.WHITE; text.textAlign = Paint.Align.CENTER
     }
 
@@ -5810,9 +5835,9 @@ class GameView(context: Context) : View(context) {
         for ((k, ch) in title.withIndex()) {
             val lt = ((age - 0.5f - k * 0.05f) / 0.35f).coerceIn(0f, 1f)
             val hop = (1f - easeOutBack(lt)) * 30f * dp
-            if (ev == 3) { text.color = Color.argb((lt * 120).toInt(), 200, 80, 130); c.drawText(ch.toString(), x + 2f * dp, h * 0.3f + hop + 3f * dp, text) }
+            if (ev == 3) { text.color = Color.argb((lt * 120).toInt(), 200, 80, 130); sporeText(c, ch.toString(), x + 2f * dp, h * 0.3f + hop + 3f * dp, text) }
             text.color = Color.argb((lt * 255).toInt(), Color.red(titleC), Color.green(titleC), Color.blue(titleC))
-            c.drawText(ch.toString(), x, h * 0.3f + hop, text)
+            sporeText(c, ch.toString(), x, h * 0.3f + hop, text)
             x += text.measureText(ch.toString())
         }
         text.textAlign = Paint.Align.CENTER
@@ -5822,11 +5847,11 @@ class GameView(context: Context) : View(context) {
             val subC = when (ev) { 1 -> Color.rgb(200, 255, 170); 2 -> Color.rgb(255, 255, 255); else -> Color.rgb(200, 80, 140) }
             text.color = Color.argb(subA, Color.red(subC), Color.green(subC), Color.blue(subC))
             val sub = when (ev) { 1 -> "🎃 Happy Shroomoween! 🎃"; 2 -> "❄️ Frosty Festival ❄️"; else -> "🌸 Spring Bloom 🌸" }
-            c.drawText(sub, w / 2, h * 0.3f + 36f * dp, text)
+            sporeText(c, sub, w / 2, h * 0.3f + 36f * dp, text)
         }
         text.textSize = 14f * dp
         text.color = if (ev == 3) Color.argb((subA * 0.8f).toInt(), 160, 70, 120) else Color.argb((subA * 0.8f).toInt(), 255, 200, 230)
-        c.drawText("Made by Omnymara", w / 2, h * 0.88f, text)
+        sporeText(c, "Made by Omnymara", w / 2, h * 0.88f, text)
         text.color = Color.WHITE
         c.restore()
     }
@@ -5996,9 +6021,9 @@ class GameView(context: Context) : View(context) {
             list.add(Button("seed$sd", r, "", STYLE_CARD, custom = { c, rr ->
                 drawSeedPacket(c, sd, rr.left + 22f * dp, rr.centerY(), min(14f * dp, rr.height() * 0.32f))
                 text.textAlign = Paint.Align.LEFT; text.textSize = 14f * dp
-                c.drawText("${Data.SEEDS[sd].name}  ×${lab.seeds[sd]}", rr.left + 46f * dp, rr.centerY() - 1f * dp, text)
+                sporeText(c, "${Data.SEEDS[sd].name}  ×${lab.seeds[sd]}", rr.left + 46f * dp, rr.centerY() - 1f * dp, text)
                 text.textSize = 11f * dp; text.color = TEXT_DIM
-                c.drawText("Grows ${Data.INGREDIENTS[Data.SEEDS[sd].ingredient].name} in ${fmtHours(Data.SEEDS[sd].hours)}", rr.left + 46f * dp, rr.centerY() + 14f * dp, text)
+                sporeText(c, "Grows ${Data.INGREDIENTS[Data.SEEDS[sd].ingredient].name} in ${fmtHours(Data.SEEDS[sd].hours)}", rr.left + 46f * dp, rr.centerY() + 14f * dp, text)
                 text.color = Color.WHITE; text.textAlign = Paint.Align.CENTER
             }) {
                 val i = growPick
@@ -6016,7 +6041,7 @@ class GameView(context: Context) : View(context) {
     private fun drawSeedPanel(c: Canvas, w: Float) {
         val top = panelTop()
         panel(c, RectF(8f * dp, top, w - 8f * dp, panelBottom()), 22f * dp)
-        text.textSize = 17f * dp; c.drawText("Plant a seed 🌱", w / 2, top + 30f * dp, text)
+        text.textSize = 17f * dp; sporeText(c, "Plant a seed 🌱", w / 2, top + 30f * dp, text)
     }
 
     private fun fmtHours(hrs: Float) = if (hrs < 1f) "${(hrs * 60).toInt()} min" else "${"%.1f".format(hrs).removeSuffix(".0")} h"
@@ -6036,7 +6061,7 @@ class GameView(context: Context) : View(context) {
         val sd = lab.plotSeed[i]
         text.textSize = 11f * dp * d
         if (sd < 0) {
-            text.color = Color.argb(200, 255, 255, 255); c.drawText("+ plant", x, y - rh * 1.6f, text); text.color = Color.WHITE
+            text.color = Color.argb(200, 255, 255, 255); sporeText(c, "+ plant", x, y - rh * 1.6f, text); text.color = Color.WHITE
             return
         }
         val p = lab.plotProgress(i, now)
@@ -6058,7 +6083,7 @@ class GameView(context: Context) : View(context) {
         c.restore()
         text.color = if (p >= 1f) MINT else Color.argb(220, 255, 255, 255)
         val label = if (p >= 1f) "Harvest!" else timeLeft((lab.plotAt[i] + lab.plotDuration(i)) - now) + (if (lab.plotWater[i]) " 💧" else "")
-        c.drawText(label, x, y + rh + 12f * dp * d, text)
+        sporeText(c, label, x, y + rh + 12f * dp * d, text)
         text.color = Color.WHITE
     }
 
@@ -6074,7 +6099,7 @@ class GameView(context: Context) : View(context) {
         c.restore()
         text.textSize = 11f * dp * d
         if (sd < 0) {
-            text.color = Color.argb(210, 255, 255, 255); c.drawText("+ plant", x, y - rh * 1.4f, text); text.color = Color.WHITE
+            text.color = Color.argb(210, 255, 255, 255); sporeText(c, "+ plant", x, y - rh * 1.4f, text); text.color = Color.WHITE
             return
         }
         val ing = Data.SEEDS[sd].ingredient
@@ -6087,7 +6112,7 @@ class GameView(context: Context) : View(context) {
         if (lab.plotWater[i]) { fill.color = Color.argb(180, 140, 200, 255); c.drawOval(x - 30f * dp * d, y + rh * 0.2f, x + 30f * dp * d, y + rh * 0.9f, fill) }
         text.color = if (p >= 1f) MINT else Color.argb(220, 255, 255, 255)
         val label = if (p >= 1f) "Harvest!" else timeLeft((lab.plotAt[i] + lab.plotDuration(i)) - now) + (if (lab.plotWater[i]) " 💧" else "")
-        c.drawText(label, x, y + rh + 14f * dp * d, text)
+        sporeText(c, label, x, y + rh + 14f * dp * d, text)
         text.color = Color.WHITE
     }
 
@@ -6098,7 +6123,7 @@ class GameView(context: Context) : View(context) {
         fill.color = Color.rgb(190, 140, 85)
         c.drawRoundRect(x - 34f * dp * d, y - 50f * dp * d, x + 34f * dp * d, y - 30f * dp * d, 4f * dp * d, 4f * dp * d, fill)
         text.textSize = 10f * dp * d; text.color = Color.rgb(80, 50, 25)
-        c.drawText("Veggie Patch", x, y - 36f * dp * d, text); text.color = Color.WHITE
+        sporeText(c, "Veggie Patch", x, y - 36f * dp * d, text); text.color = Color.WHITE
     }
 
     private fun drawEdgeArrow(c: Canvas, r: RectF, dir: Float) {
@@ -6201,7 +6226,7 @@ class GameView(context: Context) : View(context) {
     private fun drawCook(c: Canvas, w: Float, h: Float) {
         val a = growArea(w, h)
         text.textSize = 13f * dp; text.color = TEXT_DIM
-        c.drawText("Kitchen · cook ingredients into special treats", w / 2, a.top - 12f * dp, text)
+        sporeText(c, "Kitchen · cook ingredients into special treats", w / 2, a.top - 12f * dp, text)
         text.color = Color.WHITE
         val rh = min(66f * dp, a.height() / Data.RECIPES.size)
         for ((k, rcp) in Data.RECIPES.withIndex()) {
@@ -6212,9 +6237,9 @@ class GameView(context: Context) : View(context) {
             drawFood(c, rcp.food, a.left + 24f * dp, cy, 14f * dp)
             val f = Data.FOODS[rcp.food]
             text.textAlign = Paint.Align.LEFT; text.textSize = 14f * dp
-            c.drawText(f.name + "  ×${lab.foods[rcp.food]}", a.left + 46f * dp, cy - 6f * dp, text)
+            sporeText(c, f.name + "  ×${lab.foods[rcp.food]}", a.left + 46f * dp, cy - 6f * dp, text)
             text.textSize = 10.5f * dp; text.color = TEXT_DIM
-            c.drawText(Data.FOOD_EFFECTS[rcp.food] ?: "", a.left + 46f * dp, cy + 8f * dp, text)
+            sporeText(c, Data.FOOD_EFFECTS[rcp.food] ?: "", a.left + 46f * dp, cy + 8f * dp, text)
             text.color = Color.WHITE; text.textAlign = Paint.Align.CENTER
             // ingredients needed
             val need = rcp.ingredients.toList().groupingBy { it }.eachCount()
@@ -6223,7 +6248,7 @@ class GameView(context: Context) : View(context) {
                 drawIngredient(c, ing, x + 6f * dp, cy + 20f * dp, 5f * dp)
                 text.textSize = 10f * dp; text.textAlign = Paint.Align.LEFT
                 text.color = if (lab.ingredients[ing] >= n) MINT else ACCENT
-                c.drawText("${lab.ingredients[ing]}/$n", x + 15f * dp, cy + 24f * dp, text)
+                sporeText(c, "${lab.ingredients[ing]}/$n", x + 15f * dp, cy + 24f * dp, text)
                 text.color = Color.WHITE; text.textAlign = Paint.Align.CENTER
                 x += 50f * dp
             }
@@ -6367,15 +6392,15 @@ class GameView(context: Context) : View(context) {
             }
         }
         text.textSize = 22f * dp; text.color = Color.WHITE
-        c.drawText(title, w / 2, card.top + 32f * dp, text)
+        sporeText(c, title, w / 2, card.top + 32f * dp, text)
         text.textSize = 12f * dp; text.color = TEXT_DIM
-        c.drawText(sub, w / 2, card.top + 52f * dp, text)
+        sporeText(c, sub, w / 2, card.top + 52f * dp, text)
         text.color = Color.WHITE
         if (previewKind != 7) {
             val owned = when (previewKind) { 3 -> (lab.themesOwned shr previewIdx) and 1 == 1; 2 -> lab.decorOwned[previewIdx] > 0 || lab.placed.any { it.kind == previewIdx }
                 4 -> lab.accOwned[previewIdx] > 0; else -> lab.petOwned[previewIdx] > 0 }
             text.textSize = 13f * dp; text.color = if (owned) MINT else TEXT_DIM
-            c.drawText(if (owned) "✓ You own this" else "Modeled by ${shroom(selected)?.name ?: lab.garden.firstOrNull()?.name ?: "a Button Cap"}", w / 2, scene.bottom + 26f * dp, text)
+            sporeText(c, if (owned) "✓ You own this" else "Modeled by ${shroom(selected)?.name ?: lab.garden.firstOrNull()?.name ?: "a Button Cap"}", w / 2, scene.bottom + 26f * dp, text)
             text.color = Color.WHITE
         }
         c.restore()
@@ -6408,11 +6433,11 @@ class GameView(context: Context) : View(context) {
             val label = tile.first
             text.textSize = 9.5f * dp
             while (text.textSize > 7f * dp && text.measureText(label) > tw - 8f * dp) text.textSize -= 0.5f * dp
-            c.drawText(label, tx + tw / 2, ty + th - 9f * dp, text)
+            sporeText(c, label, tx + tw / 2, ty + th - 9f * dp, text)
             text.color = Color.WHITE
         }
         text.textSize = 10.5f * dp; text.color = TEXT_DIM
-        c.drawText("★ = only from this pack", r.centerX(), r.bottom + 2f * dp, text); text.color = Color.WHITE
+        sporeText(c, "★ = only from this pack", r.centerX(), r.bottom + 2f * dp, text); text.color = Color.WHITE
     }
 
     // ---------- Pack offers: a pop-up up to twice a day, then a 2-hour button on the garden ----------
@@ -6500,11 +6525,11 @@ class GameView(context: Context) : View(context) {
         c.restore()
         drawGiftBox(c, w / 2, card.top + 160f * dp + sin(t * 3f) * 4f * dp, 90f * dp, pk.color)
         text.textSize = 13f * dp; text.color = DUST
-        c.drawText(if (pk.eventOnly) "${Data.EVENT_ICONS[eventNow()]} Limited event offer" else if (pk.oneTime) "✨ One per player" else "✨ Special offer", w / 2, card.top + 34f * dp, text)
+        sporeText(c, if (pk.eventOnly) "${Data.EVENT_ICONS[eventNow()]} Limited event offer" else if (pk.oneTime) "✨ One per player" else "✨ Special offer", w / 2, card.top + 34f * dp, text)
         text.textSize = 26f * dp; text.color = Color.WHITE
-        c.drawText(pk.name, w / 2, card.top + 210f * dp, text)
+        sporeText(c, pk.name, w / 2, card.top + 210f * dp, text)
         text.textSize = 13f * dp; text.color = Color.argb(225, 255, 255, 255)
-        for ((i, l) in wrap(pk.desc, card.width() - 48f * dp).withIndex()) c.drawText(l, w / 2, card.top + 238f * dp + i * 18f * dp, text)
+        for ((i, l) in wrap(pk.desc, card.width() - 48f * dp).withIndex()) sporeText(c, l, w / 2, card.top + 238f * dp + i * 18f * dp, text)
         text.color = Color.WHITE
     }
 
@@ -6524,7 +6549,7 @@ class GameView(context: Context) : View(context) {
                 drawGiftBox(c, rr.centerX(), rr.top + 36f * dp + sin(t * 4f) * 2f * dp, 28f * dp, pk.color)
                 text.textSize = 10f * dp; text.color = DUST
                 val sec = left / 1000
-                c.drawText(if (sec >= 3600) "%d:%02d:%02d".format(sec / 3600, (sec / 60) % 60, sec % 60) else "%d:%02d".format(sec / 60, sec % 60), rr.centerX(), rr.bottom - 6f * dp, text)
+                sporeText(c, if (sec >= 3600) "%d:%02d:%02d".format(sec / 3600, (sec / 60) % 60, sec % 60) else "%d:%02d".format(sec / 60, sec % 60), rr.centerX(), rr.bottom - 6f * dp, text)
                 text.color = Color.WHITE
             }) { offerPack = i })
             y += 70f * dp
@@ -6584,7 +6609,7 @@ class GameView(context: Context) : View(context) {
         fill.color = Color.rgb(255, 220, 120); c.drawRoundRect(x + s * 0.42f, y - s * 0.75f, x + s * 0.54f, y - s * 0.58f, s * 0.03f, s * 0.03f, fill)
         // "!" bubble so you notice
         text.textSize = s * 0.32f; text.color = DUST
-        c.drawText("!", x + s * 0.12f, y - s * 1.35f - abs(sin(t * 3f)) * s * 0.08f, text); text.color = Color.WHITE
+        sporeText(c, "!", x + s * 0.12f, y - s * 1.35f - abs(sin(t * 3f)) * s * 0.08f, text); text.color = Color.WHITE
     }
 
     private fun drawMerchantPanel(c: Canvas, w: Float, h: Float) {
@@ -6592,10 +6617,10 @@ class GameView(context: Context) : View(context) {
         panel(c, card, 24f * dp)
         drawMerchant(c, card.left + 56f * dp, card.top + 104f * dp, 70f * dp)
         text.textAlign = Paint.Align.LEFT; text.textSize = 20f * dp
-        c.drawText("Bartleby the Beetle", card.left + 104f * dp, card.top + 40f * dp, text)
+        sporeText(c, "Bartleby the Beetle", card.left + 104f * dp, card.top + 40f * dp, text)
         text.textSize = 12f * dp; text.color = TEXT_DIM
         for ((k, l) in wrap("\"Psst! Rare goodies from far-off forests. Only today!\"", card.width() - 124f * dp).withIndex())
-            c.drawText(l, card.left + 104f * dp, card.top + 62f * dp + k * 16f * dp, text)
+            sporeText(c, l, card.left + 104f * dp, card.top + 62f * dp + k * 16f * dp, text)
         text.color = Color.WHITE
         val day = LabState.dayKey()
         val rh = 64f * dp
@@ -6609,8 +6634,8 @@ class GameView(context: Context) : View(context) {
                 2 -> { iconBackdrop(c, ix, iy, 20f * dp, Data.ACCESSORIES[o.item].color); accIcon(c, o.item, ix, iy, 30f * dp); Pair(Data.ACCESSORIES[o.item].name, "Only sold by Bartleby!") }
                 else -> { drawMysteryEgg(c, ix, iy + 10f * dp, 22f * dp); Pair("Mystery Egg", "What will hatch? 🥚") }
             }
-            text.textSize = 14f * dp; c.drawText(name, card.left + 66f * dp, iy - 2f * dp, text)
-            text.textSize = 11f * dp; text.color = TEXT_DIM; c.drawText(sub, card.left + 66f * dp, iy + 14f * dp, text); text.color = Color.WHITE
+            text.textSize = 14f * dp; sporeText(c, name, card.left + 66f * dp, iy - 2f * dp, text)
+            text.textSize = 11f * dp; text.color = TEXT_DIM; sporeText(c, sub, card.left + 66f * dp, iy + 14f * dp, text); text.color = Color.WHITE
         }
         text.textAlign = Paint.Align.CENTER
     }
@@ -6799,7 +6824,7 @@ class GameView(context: Context) : View(context) {
         val a = min(1f, s.thoughtT / 0.3f)
         drawBubble(c, RectF(bx - 4f * dp, by - 2f * dp, bx + bw + 4f * dp, by + bh + 2f * dp), x, (255 * a).toInt())
         text.color = Color.argb((255 * a).toInt(), 70, 30, 100)
-        for ((k, l) in lines.withIndex()) c.drawText(l, bx + bw / 2, by + 16f * dp + k * 14f * dp, text)
+        for ((k, l) in lines.withIndex()) sporeText(c, l, bx + bw / 2, by + 16f * dp + k * 14f * dp, text)
         text.color = Color.WHITE
     }
 
@@ -7188,16 +7213,16 @@ class GameView(context: Context) : View(context) {
             stroke.color = Data.EVENT_COLORS[ev]; stroke.strokeWidth = 1.5f * dp; c.drawRoundRect(r, 16f * dp, 16f * dp, stroke)
             drawPet(c, q.pet, r.right - 34f * dp, r.top + 58f * dp, 34f * dp, t * 6f, -1f, false)
             text.textAlign = Paint.Align.LEFT; text.textSize = 14f * dp
-            c.drawText("${Data.EVENT_ICONS[ev]} ${q.title}" + if (step >= 3) "  ✓" else "  (${step + 1}/3)", r.left + 14f * dp, r.top + 22f * dp, text)
+            sporeText(c, "${Data.EVENT_ICONS[ev]} ${q.title}" + if (step >= 3) "  ✓" else "  (${step + 1}/3)", r.left + 14f * dp, r.top + 22f * dp, text)
             text.textAlign = Paint.Align.RIGHT; text.textSize = 11f * dp; text.color = Data.EVENT_COLORS[ev]
-            c.drawText("▶ story", r.right - 14f * dp, r.top + 22f * dp, text)
+            sporeText(c, "▶ story", r.right - 14f * dp, r.top + 22f * dp, text)
             text.textAlign = Paint.Align.LEFT; text.textSize = 14f * dp; text.color = Color.WHITE
             text.textSize = 11.5f * dp; text.color = TEXT_DIM
-            for ((k, l) in bodyLines.withIndex()) c.drawText(l, r.left + 14f * dp, r.top + 40f * dp + k * 15f * dp, text)
+            for ((k, l) in bodyLines.withIndex()) sporeText(c, l, r.left + 14f * dp, r.top + 40f * dp + k * 15f * dp, text)
             if (step < 3) {
                 val st = q.steps[step]
                 text.color = MINT; text.textSize = 12f * dp
-                c.drawText("→ " + st.text + (if (st.type == 2) "  (${lab.questCount}/${st.count})" else ""), r.left + 14f * dp, r.bottom - 12f * dp, text)
+                sporeText(c, "→ " + st.text + (if (st.type == 2) "  (${lab.questCount}/${st.count})" else ""), r.left + 14f * dp, r.bottom - 12f * dp, text)
             }
             text.color = Color.WHITE; text.textAlign = Paint.Align.CENTER
             y += 100f * dp + extra
@@ -7209,9 +7234,9 @@ class GameView(context: Context) : View(context) {
         fill.color = PANEL; c.drawRoundRect(r, 16f * dp, 16f * dp, fill)
         drawShroom(c, m, r.left + 30f * dp, r.top + 50f * dp, 30f * dp, 0, sin(t * 2f), false, !solved)
         text.textAlign = Paint.Align.LEFT; text.textSize = 14f * dp
-        c.drawText("🔮 Mystery recipe of the week" + if (solved) "  ✓" else "  · 160 ✦", r.left + 58f * dp, r.top + 24f * dp, text)
+        sporeText(c, "🔮 Mystery recipe of the week" + if (solved) "  ✓" else "  · 160 ✦", r.left + 58f * dp, r.top + 24f * dp, text)
         text.textSize = 11.5f * dp; text.color = if (solved) MINT else TEXT_DIM
-        c.drawText(if (solved) "Solved: ${Data.SPECIES[m].name}! A new one comes next week." else "Hint: ${Data.SPECIES[m].hint}", r.left + 58f * dp, r.top + 44f * dp, text)
+        sporeText(c, if (solved) "Solved: ${Data.SPECIES[m].name}! A new one comes next week." else "Hint: ${Data.SPECIES[m].hint}", r.left + 58f * dp, r.top + 44f * dp, text)
         text.color = Color.WHITE; text.textAlign = Paint.Align.CENTER
     }
 
@@ -7230,7 +7255,7 @@ class GameView(context: Context) : View(context) {
         val pad = 16f * dp
         val (gx, gy, cell) = notesGrid(w)
         text.textSize = 12f * dp; text.color = TEXT_DIM
-        c.drawText("Every pair you've brewed · ${lab.tried.count { it.key.split(",").all { k -> k.toInt() < 12 } }} of 78 tried · tap a square", w / 2, top + 16f * dp, text)
+        sporeText(c, "Every pair you've brewed · ${lab.tried.count { it.key.split(",").all { k -> k.toInt() < 12 } }} of 78 tried · tap a square", w / 2, top + 16f * dp, text)
         text.color = Color.WHITE
         // the grid only changes when you brew, so it's drawn once into a picture
         val key = "${lab.tried.size}-${width}-${lab.tried.values.sum()}"
@@ -7264,13 +7289,13 @@ class GameView(context: Context) : View(context) {
         if (notesPick >= 0) {
             val a = notesPick / 12; val b = notesPick % 12
             val sp = lab.triedPair(a, b)
-            c.drawText("${Data.INGREDIENTS[a].name} + ${Data.INGREDIENTS[b].name} → " + (if (sp >= 0) Data.SPECIES[sp].name else "not tried yet"), w / 2, y, text)
+            sporeText(c, "${Data.INGREDIENTS[a].name} + ${Data.INGREDIENTS[b].name} → " + (if (sp >= 0) Data.SPECIES[sp].name else "not tried yet"), w / 2, y, text)
         } else {
-            text.color = TEXT_DIM; c.drawText("Tap a square to see what that pair grows", w / 2, y, text); text.color = Color.WHITE
+            text.color = TEXT_DIM; sporeText(c, "Tap a square to see what that pair grows", w / 2, y, text); text.color = Color.WHITE
         }
         y += 24f * dp
         text.textAlign = Paint.Align.LEFT; text.textSize = 13f * dp
-        c.drawText("Rare 3-ingredient recipes", pad, y, text)
+        sporeText(c, "Rare 3-ingredient recipes", pad, y, text)
         y += 6f * dp
         for (i in Data.SPECIES.indices.filter { Data.SPECIES[it].tier == 4 && Data.SPECIES[it].event == 0 }) {
             y += 17f * dp
@@ -7280,9 +7305,9 @@ class GameView(context: Context) : View(context) {
             text.textSize = 11.5f * dp
             text.color = if (known) MINT else Color.WHITE
             val nm = if (known || f >= 2) Data.SPECIES[i].name else "???"
-            c.drawText((if (known) "✓ " else "• ") + nm, pad, y, text)
+            sporeText(c, (if (known) "✓ " else "• ") + nm, pad, y, text)
             text.color = TEXT_DIM
-            c.drawText(if (known) Data.recipeText(i) else (if (f > 0) "fizzled ${f}× · " else "") + Data.SPECIES[i].hint, pad + 120f * dp, y, text)
+            sporeText(c, if (known) Data.recipeText(i) else (if (f > 0) "fizzled ${f}× · " else "") + Data.SPECIES[i].hint, pad + 120f * dp, y, text)
         }
         text.color = Color.WHITE; text.textAlign = Paint.Align.CENTER
     }
@@ -7364,23 +7389,23 @@ class GameView(context: Context) : View(context) {
         if (missed) {   // the ones you missed pop their heads up so you can see where they were
             drawShroom(c, hsHidden[i], x + s * 0.15f, y - s * 0.6f, s * 0.55f, 0, 0f, false, false,
                 who = Shroom(-9L, hsHidden[i]).apply { expr = E_GIGGLE; exprT = 1f; xp = 600f })
-            text.textSize = 12f * dp; text.color = DUST; c.drawText("here!", x, r.top + 16f * dp, text); text.color = Color.WHITE
+            text.textSize = 12f * dp; text.color = DUST; sporeText(c, "here!", x, r.top + 16f * dp, text); text.color = Color.WHITE
         }
         drawBush(c, x, y, s, if (hsRustle[i] > 0f) sin(t * 40f) else 0f)
         if (hsFound[i]) {   // found! it hops out in front of its bush
             drawShroom(c, hsHidden[i], x + s * 0.18f, y + s * 0.02f - abs(sin(t * 5f)) * s * 0.06f, s * 0.6f, 0, sin(t * 4f), false, false,
                 who = Shroom(-9L, hsHidden[i]).apply { expr = E_GIGGLE; exprT = 1f; xp = 600f })
         }
-        if (hsTapped[i] && hsHidden[i] < 0) { text.textSize = 13f * dp; text.color = TEXT_DIM; c.drawText("nobody", x, r.top + 16f * dp, text); text.color = Color.WHITE }
+        if (hsTapped[i] && hsHidden[i] < 0) { text.textSize = 13f * dp; text.color = TEXT_DIM; sporeText(c, "nobody", x, r.top + 16f * dp, text); text.color = Color.WHITE }
     }
 
     // ---------- Family tree ----------
 
     private fun drawFamily(c: Canvas, w: Float, h: Float, s: Shroom) {
         text.textSize = 24f * dp; text.color = Color.WHITE
-        c.drawText("${s.name}'s family", w / 2, h * 0.1f, text)
+        sporeText(c, "${s.name}'s family", w / 2, h * 0.1f, text)
         text.textSize = 12f * dp; text.color = TEXT_DIM
-        c.drawText(if (s.family[0].isEmpty()) "Brewed in the lab, so Professor Spore is like a parent!" else "Grandparents · parents · ${s.name}", w / 2, h * 0.1f + 22f * dp, text)
+        sporeText(c, if (s.family[0].isEmpty()) "Brewed in the lab, so Professor Spore is like a parent!" else "Grandparents · parents · ${s.name}", w / 2, h * 0.1f + 22f * dp, text)
         text.color = Color.WHITE
         // positions: grandparents row, parents row, the mushroom itself
         val gy = h * 0.3f; val py = h * 0.52f; val cy = h * 0.76f
@@ -7405,16 +7430,16 @@ class GameView(context: Context) : View(context) {
             val parts = entry.split("|")
             if (entry.isEmpty() || parts.size < 2) {
                 fill.color = Color.argb(40, 255, 255, 255); c.drawCircle(x, y - size * 0.5f, size * 0.45f, fill)
-                text.textSize = 16f * dp; text.color = TEXT_DIM; c.drawText("?", x, y - size * 0.4f, text)
-                text.textSize = 11f * dp; c.drawText("unknown", x, y + 16f * dp, text); text.color = Color.WHITE
+                text.textSize = 16f * dp; text.color = TEXT_DIM; sporeText(c, "?", x, y - size * 0.4f, text)
+                text.textSize = 11f * dp; sporeText(c, "unknown", x, y + 16f * dp, text); text.color = Color.WHITE
                 return
             }
             val sp = parts[1].toIntOrNull()?.coerceIn(0, Data.SPECIES.size - 1) ?: 0
             drawShroom(c, sp, x, y, size, 0, sin(t * 2f + x), (t + x) % 4f < 0.12f, false)
             text.textSize = 12f * dp; text.color = Color.WHITE
-            c.drawText(parts[0], x, y + 17f * dp, text)
+            sporeText(c, parts[0], x, y + 17f * dp, text)
             text.textSize = 10f * dp; text.color = TEXT_DIM
-            c.drawText(Data.SPECIES[sp].name, x, y + 30f * dp, text)
+            sporeText(c, Data.SPECIES[sp].name, x, y + 30f * dp, text)
             text.color = Color.WHITE
         }
         if (s.family[0].isNotEmpty()) {
@@ -7422,16 +7447,16 @@ class GameView(context: Context) : View(context) {
             for (k in 0..1) member(s.family[k], pxs[k], py, 62f * dp)
         } else {
             drawShroom(c, professor.species, w / 2, py, 70f * dp, 0, sin(t * 2f), (t % 4f) < 0.12f, false, who = professor)
-            text.textSize = 13f * dp; c.drawText("Professor Spore", w / 2, py + 20f * dp, text)
+            text.textSize = 13f * dp; sporeText(c, "Professor Spore", w / 2, py + 20f * dp, text)
             link(w / 2, py + 30f * dp, w / 2, cy - 80f * dp)
         }
         drawShroom(c, s.species, w / 2, cy, 84f * dp, s.mood(), sin(t * 2.5f), (t % 3f) < 0.12f, false, shiny = s.shiny, who = s)
-        text.textSize = 16f * dp; c.drawText(s.name, w / 2, cy + 22f * dp, text)
+        text.textSize = 16f * dp; sporeText(c, s.name, w / 2, cy + 22f * dp, text)
         // brothers and sisters still in the garden
         val sibs = lab.garden.filter { it !== s && it.family[0].isNotEmpty() && setOf(it.family[0], it.family[1]) == setOf(s.family[0], s.family[1]) }
         if (sibs.isNotEmpty()) {
             text.textSize = 11f * dp; text.color = TEXT_DIM
-            c.drawText("Siblings: " + sibs.joinToString(", ") { it.name }, w / 2, cy + 40f * dp, text)
+            sporeText(c, "Siblings: " + sibs.joinToString(", ") { it.name }, w / 2, cy + 40f * dp, text)
             text.color = Color.WHITE
         }
     }
@@ -7461,21 +7486,21 @@ class GameView(context: Context) : View(context) {
         drawShroom(c, s.species, pw.centerX(), pw.bottom - 18f * dp, pw.height() * 0.62f, 0, sin(t * 2f), (t % 3f) < 0.12f, false, shiny = s.shiny, who = s)
         // name & info
         text.textSize = 26f * dp; text.color = Color.WHITE
-        c.drawText(s.name, r.centerX(), pw.bottom + 36f * dp, text)
+        sporeText(c, s.name, r.centerX(), pw.bottom + 36f * dp, text)
         drawSexIcon(c, r.centerX() + text.measureText(s.name) / 2 + 16f * dp, pw.bottom + 27f * dp, 7.5f * dp, s.sex)
         text.textSize = 14f * dp; text.color = Color.argb(230, 255, 255, 255)
-        c.drawText((if (s.shiny) "✨ Shiny " else "") + sp.name, r.centerX(), pw.bottom + 58f * dp, text)
+        sporeText(c, (if (s.shiny) "✨ Shiny " else "") + sp.name, r.centerX(), pw.bottom + 58f * dp, text)
         val tags = ArrayList<String>()
         tags.add(Data.STAGE_NAMES[s.stage()]); tags.add(Data.TIER_NAMES[sp.tier]); tags.add(Data.TRAITS[s.trait])
         if (s.variant == 1) tags.add("Albino") else if (s.variant == 2) tags.add("Neon")
         text.textSize = 12f * dp
-        c.drawText(tags.joinToString(" · "), r.centerX(), pw.bottom + 78f * dp, text)
+        sporeText(c, tags.joinToString(" · "), r.centerX(), pw.bottom + 78f * dp, text)
         for (k in 0 until 5) {
             fill.color = if (k < s.hearts()) Color.rgb(255, 90, 140) else Color.argb(90, 255, 255, 255)
             drawHeart(c, r.centerX() + (k - 2) * 20f * dp, pw.bottom + 94f * dp, 6f * dp)
         }
         text.textSize = 11f * dp; text.color = Color.argb(200, 255, 255, 255)
-        c.drawText("Shroomology · made by Omnymara", r.centerX(), r.bottom - 18f * dp, text)
+        sporeText(c, "Shroomology · made by Omnymara", r.centerX(), r.bottom - 18f * dp, text)
         text.color = Color.WHITE
     }
 
@@ -7563,7 +7588,7 @@ class GameView(context: Context) : View(context) {
                 c.drawPath(path, fill)
             }
             text.color = Color.rgb(70, 30, 100); text.textAlign = Paint.Align.LEFT
-            for ((k, l) in lines.withIndex()) c.drawText(l, bx + 10f * dp, by + 18f * dp + k * 15f * dp, text)
+            for ((k, l) in lines.withIndex()) sporeText(c, l, bx + 10f * dp, by + 18f * dp + k * 15f * dp, text)
             text.textAlign = Paint.Align.CENTER; text.color = Color.WHITE
         }
     }
@@ -7787,7 +7812,7 @@ class GameView(context: Context) : View(context) {
             fill.shader = LinearGradient(0f, r.top, 0f, r.bottom, Color.rgb(150, 110, 230), Color.rgb(100, 70, 180), Shader.TileMode.CLAMP)
             c.drawRoundRect(r, 12f * dp, 12f * dp, fill); fill.shader = null
             text.textSize = 26f * dp; text.color = Color.argb(200, 255, 255, 255)
-            c.drawText("?", r.centerX(), r.centerY() + 9f * dp, text); text.color = Color.WHITE
+            sporeText(c, "?", r.centerX(), r.centerY() + 9f * dp, text); text.color = Color.WHITE
         } else {
             fill.color = if (mmDone[i]) Color.rgb(60, 120, 95) else Color.rgb(245, 238, 255)
             c.drawRoundRect(r, 12f * dp, 12f * dp, fill)
@@ -7802,14 +7827,14 @@ class GameView(context: Context) : View(context) {
         fill.shader = LinearGradient(0f, 0f, 0f, h, Color.rgb(50, 32, 92), Color.rgb(24, 16, 44), Shader.TileMode.CLAMP)
         c.drawRect(0f, 0f, w, h, fill); fill.shader = null
         text.textAlign = Paint.Align.LEFT; text.textSize = 22f * dp
-        c.drawText(when (mini) { 1 -> "Spore Catch"; 3 -> "Hide & Seek"; else -> "Memory Match" }, 18f * dp, 42f * dp, text)
+        sporeText(c, when (mini) { 1 -> "Spore Catch"; 3 -> "Hide & Seek"; else -> "Memory Match" }, 18f * dp, 42f * dp, text)
         text.textAlign = Paint.Align.CENTER
         if (mini == 1) {
             // timer bar + score
             fill.color = Color.argb(50, 255, 255, 255); c.drawRoundRect(18f * dp, 58f * dp, w - 18f * dp, 66f * dp, 4f * dp, 4f * dp, fill)
             fill.color = MINT; c.drawRoundRect(18f * dp, 58f * dp, 18f * dp + (w - 36f * dp) * (miniT / 30f).coerceIn(0f, 1f), 66f * dp, 4f * dp, 4f * dp, fill)
             text.textSize = 30f * dp; text.color = DUST
-            c.drawText("$miniScore", w / 2, topBar + 50f * dp, text); text.color = Color.WHITE
+            sporeText(c, "$miniScore", w / 2, topBar + 50f * dp, text); text.color = Color.WHITE
             for (d in drops) {
                 when (d.kind) {
                     0 -> { fill.shader = RadialGradient(d.x - 3f * dp, d.y - 3f * dp, 11f * dp, Color.rgb(255, 245, 190), DUST, Shader.TileMode.CLAMP)
@@ -7826,17 +7851,17 @@ class GameView(context: Context) : View(context) {
             val catcher = Shroom(-5L, catchSpecies).apply { expr = face; exprT = 1f; xp = 600f }
             drawShroom(c, catchSpecies, catchX, cy, 80f * dp, 0, sin(t * 6f), false, false, who = catcher)
             if (!miniOver) { text.textSize = 13f * dp; text.color = TEXT_DIM
-                c.drawText("Drag to catch golden spores ✦ · avoid the stinky green ones!", w / 2, h - 30f * dp, text); text.color = Color.WHITE }
+                sporeText(c, "Drag to catch golden spores ✦ · avoid the stinky green ones!", w / 2, h - 30f * dp, text); text.color = Color.WHITE }
         } else if (mini == 3) {
             fill.color = Color.rgb(78, 140, 104)
             c.drawRect(0f, topBar + 70f * dp, w, h, fill)
             text.textSize = 14f * dp; text.color = TEXT_DIM
-            c.drawText("Round ${min(hsRound, 3)}/3 · taps left: $hsTaps · found: $miniScore", w / 2, topBar + 50f * dp, text)
-            if (!miniOver) c.drawText("Watch for rustling bushes, then tap to peek!", w / 2, h - 30f * dp, text)
+            sporeText(c, "Round ${min(hsRound, 3)}/3 · taps left: $hsTaps · found: $miniScore", w / 2, topBar + 50f * dp, text)
+            if (!miniOver) sporeText(c, "Watch for rustling bushes, then tap to peek!", w / 2, h - 30f * dp, text)
             text.color = Color.WHITE
         } else {
             text.textSize = 14f * dp; text.color = TEXT_DIM
-            c.drawText("Find the matching mushrooms · moves: $mmMoves", w / 2, topBar + 50f * dp, text); text.color = Color.WHITE
+            sporeText(c, "Find the matching mushrooms · moves: $mmMoves", w / 2, topBar + 50f * dp, text); text.color = Color.WHITE
         }
         if (miniOver) {
             fill.color = Color.argb(170, 10, 6, 24); c.drawRect(0f, 0f, w, h, fill)
@@ -7844,12 +7869,12 @@ class GameView(context: Context) : View(context) {
             val card = miniCard(w, h)
             panel(c, card, 24f * dp, PANEL_LIGHT)
             text.textSize = 28f * dp
-            c.drawText(when (mini) { 1 -> "Score: $miniScore"; 3 -> "Found $miniScore of 9!"; else -> "Done in $mmMoves moves!" }, w / 2, card.top + 62f * dp, text)
+            sporeText(c, when (mini) { 1 -> "Score: $miniScore"; 3 -> "Found $miniScore of 9!"; else -> "Done in $mmMoves moves!" }, w / 2, card.top + 62f * dp, text)
             text.textSize = 15f * dp; text.color = TEXT_DIM
             val best = when (mini) { 1 -> "Best: ${prefs.getInt("bestCatch", 0)}"; 3 -> "Best: ${prefs.getInt("bestHide", 0)} found"; else -> "Best: ${prefs.getInt("bestMemory", 0)} moves" }
-            c.drawText(best, w / 2, card.top + 92f * dp, text)
+            sporeText(c, best, w / 2, card.top + 92f * dp, text)
             text.textSize = 20f * dp; text.color = DUST
-            c.drawText(if (miniReward > 0) "+$miniReward ✦" else "Daily mini-game dust limit reached", w / 2, card.top + 150f * dp, text)
+            sporeText(c, if (miniReward > 0) "+$miniReward ✦" else "Daily mini-game dust limit reached", w / 2, card.top + 150f * dp, text)
             text.color = Color.WHITE
         }
         for (b in buttons) drawButton(c, b)
@@ -7860,12 +7885,12 @@ class GameView(context: Context) : View(context) {
         val r3 = RectF(pad, top + 2 * 158f * dp, w - pad, top + 2 * 158f * dp + 148f * dp)
         panel(c, r3, 20f * dp)
         text.textAlign = Paint.Align.LEFT; text.textSize = 19f * dp
-        c.drawText("Hide & Seek", r3.left + 120f * dp, r3.top + 34f * dp, text)
+        sporeText(c, "Hide & Seek", r3.left + 120f * dp, r3.top + 34f * dp, text)
         text.textSize = 12f * dp; text.color = TEXT_DIM
         for ((k, l) in wrap("Your mushrooms hide in the bushes. Watch for rustling leaves and find them!", r3.width() - 140f * dp).withIndex())
-            c.drawText(l, r3.left + 120f * dp, r3.top + 54f * dp + k * 16f * dp, text)
+            sporeText(c, l, r3.left + 120f * dp, r3.top + 54f * dp + k * 16f * dp, text)
         text.color = DUST
-        c.drawText("Best: ${prefs.getInt("bestHide", 0)} / 9 found", r3.left + 120f * dp, r3.top + 96f * dp, text)
+        sporeText(c, "Best: ${prefs.getInt("bestHide", 0)} / 9 found", r3.left + 120f * dp, r3.top + 96f * dp, text)
         text.color = Color.WHITE; text.textAlign = Paint.Align.CENTER
         drawBush(c, r3.left + 60f * dp, r3.top + 110f * dp, 46f * dp, sin(t * 9f) * (if ((t % 3f) < 0.6f) 1f else 0f))
         drawShroom(c, 1, r3.left + 78f * dp, r3.top + 92f * dp - abs(sin(t * 1.5f)) * 10f * dp, 26f * dp, 0, 0f, false, false)
@@ -7874,12 +7899,12 @@ class GameView(context: Context) : View(context) {
             panel(c, r, 20f * dp)
             text.textAlign = Paint.Align.LEFT
             text.textSize = 19f * dp
-            c.drawText(if (g == 0) "Spore Catch" else "Memory Match", r.left + 120f * dp, r.top + 38f * dp, text)
+            sporeText(c, if (g == 0) "Spore Catch" else "Memory Match", r.left + 120f * dp, r.top + 38f * dp, text)
             text.textSize = 12f * dp; text.color = TEXT_DIM
             val lines = wrap(if (g == 0) "Catch falling golden spores in 30 seconds. Dodge the stinky ones!" else "Flip cards to find the matching mushroom pairs in as few moves as you can.", r.width() - 140f * dp)
-            for ((k, l) in lines.withIndex()) c.drawText(l, r.left + 120f * dp, r.top + 60f * dp + k * 16f * dp, text)
+            for ((k, l) in lines.withIndex()) sporeText(c, l, r.left + 120f * dp, r.top + 60f * dp + k * 16f * dp, text)
             text.color = DUST
-            c.drawText(if (g == 0) "Best: ${prefs.getInt("bestCatch", 0)}" else "Best: ${prefs.getInt("bestMemory", 999).let { if (it == 999) "-" else "$it moves" }}", r.left + 120f * dp, r.top + 108f * dp, text)
+            sporeText(c, if (g == 0) "Best: ${prefs.getInt("bestCatch", 0)}" else "Best: ${prefs.getInt("bestMemory", 999).let { if (it == 999) "-" else "$it moves" }}", r.left + 120f * dp, r.top + 108f * dp, text)
             text.color = Color.WHITE; text.textAlign = Paint.Align.CENTER
             if (g == 0) {
                 fill.shader = RadialGradient(r.left + 60f * dp, r.top + 70f * dp, 14f * dp, Color.rgb(255, 245, 190), DUST, Shader.TileMode.CLAMP)
@@ -7891,12 +7916,12 @@ class GameView(context: Context) : View(context) {
                     fill.color = if (k == 0) Color.rgb(150, 110, 230) else Color.rgb(245, 238, 255)
                     c.drawRoundRect(cr, 8f * dp, 8f * dp, fill)
                     if (k == 1) drawShroom(c, 6, cr.centerX(), cr.bottom - 6f * dp, 26f * dp, 0, 0f, false, false)
-                    else { text.textSize = 18f * dp; c.drawText("?", cr.centerX(), cr.centerY() + 6f * dp, text) }
+                    else { text.textSize = 18f * dp; sporeText(c, "?", cr.centerX(), cr.centerY() + 6f * dp, text) }
                 }
             }
         }
         text.textSize = 11f * dp; text.color = TEXT_DIM
-        c.drawText("Mini-games pay up to 160 ✦ a day", w / 2, top + 3 * 158f * dp + 10f * dp, text)
+        sporeText(c, "Mini-games pay up to 160 ✦ a day", w / 2, top + 3 * 158f * dp + 10f * dp, text)
         text.color = Color.WHITE
     }
 
@@ -7919,7 +7944,7 @@ class GameView(context: Context) : View(context) {
             c.drawRoundRect(block, 10f * dp, 10f * dp, fill); fill.shader = null
             fill.color = shade(colors[place], 0.35f); c.drawRoundRect(block.left, block.top, block.right, block.top + 8f * dp, 6f * dp, 6f * dp, fill)
             text.textSize = 34f * dp; text.color = Color.argb(150, 60, 40, 20)
-            c.drawText("${place + 1}", block.centerX(), block.top + 46f * dp, text)
+            sporeText(c, "${place + 1}", block.centerX(), block.top + 46f * dp, text)
             // the contestant stands on top
             val mine = if (e.mine) lab.garden.firstOrNull { it.name == e.name } else null
             val sz = (if (place == 0) 70f else 58f) * dp
@@ -7930,18 +7955,18 @@ class GameView(context: Context) : View(context) {
             forcedFace = null
             if (place == 0) uiIcon(c, "ribbon", block.centerX() + sz * 0.45f, block.top - sz * 0.95f, 28f * dp)
             text.textSize = 13f * dp; text.color = if (e.mine) DUST else Color.WHITE
-            c.drawText(e.name + if (e.mine) " ★" else "", block.centerX(), baseY + 18f * dp, text)
+            sporeText(c, e.name + if (e.mine) " ★" else "", block.centerX(), baseY + 18f * dp, text)
             text.textSize = 11f * dp; text.color = TEXT_DIM
-            c.drawText("${e.score} pts", block.centerX(), baseY + 33f * dp, text)
+            sporeText(c, "${e.score} pts", block.centerX(), baseY + 33f * dp, text)
         }
         res.getOrNull(3)?.let { e ->
             text.textSize = 12f * dp; text.color = if (e.mine) DUST else TEXT_DIM
-            c.drawText("4th: ${e.name}${if (e.mine) " ★" else ""} · ${e.score} pts", w / 2, baseY + 58f * dp, text)
+            sporeText(c, "4th: ${e.name}${if (e.mine) " ★" else ""} · ${e.score} pts", w / 2, baseY + 58f * dp, text)
         }
         if (res.none { it.mine }.not()) {
             val my = res.indexOfFirst { it.mine }
             text.textSize = 13f * dp; text.color = MINT
-            c.drawText(arrayOf("Your mushroom won! 🏆", "Second place, so close!", "Third place, nice!", "Fourth place, try a cute outfit next time!")[my.coerceIn(0, 3)], w / 2, baseY + 82f * dp, text)
+            sporeText(c, arrayOf("Your mushroom won! 🏆", "Second place, so close!", "Third place, nice!", "Fourth place, try a cute outfit next time!")[my.coerceIn(0, 3)], w / 2, baseY + 82f * dp, text)
         }
         text.color = Color.WHITE
     }
@@ -7970,10 +7995,10 @@ class GameView(context: Context) : View(context) {
             c.restore()
             drawShroom(c, professor.species, w / 2 - bw * 0.62f, by + 40f * dp, 70f * dp, 0, sin(t * 2f), (t % 4f) < 0.12f, false, facing = 1f, who = professor)
             text.textSize = 17f * dp; text.color = Color.WHITE
-            c.drawText("A brand-new diary!", w / 2, cy - 70f * dp, text)
+            sporeText(c, "A brand-new diary!", w / 2, cy - 70f * dp, text)
             text.textSize = 13f * dp; text.color = TEXT_DIM
-            c.drawText("Professor Spore writes down your garden's story:", w / 2, cy - 48f * dp, text)
-            c.drawText("new friends, discoveries and big moments.", w / 2, cy - 31f * dp, text)
+            sporeText(c, "Professor Spore writes down your garden's story:", w / 2, cy - 48f * dp, text)
+            sporeText(c, "new friends, discoveries and big moments.", w / 2, cy - 31f * dp, text)
             text.color = Color.WHITE
             return
         }
@@ -7988,9 +8013,9 @@ class GameView(context: Context) : View(context) {
             fill.color = Color.argb(40, 255, 255, 255)
             c.drawRoundRect(pad - 6f * dp, y, w - pad + 6f * dp, y + bh, 12f * dp, 12f * dp, fill)
             text.textSize = 11f * dp; text.color = ACCENT
-            c.drawText(date, pad, y + 20f * dp, text)
+            sporeText(c, date, pad, y + 20f * dp, text)
             text.textSize = 13.5f * dp; text.color = Color.WHITE
-            for ((k, l) in lines.withIndex()) c.drawText(l, pad + 56f * dp, y + 20f * dp + k * 18f * dp, text)
+            for ((k, l) in lines.withIndex()) sporeText(c, l, pad + 56f * dp, y + 20f * dp + k * 18f * dp, text)
             y += bh + 6f * dp
         }
         text.textAlign = Paint.Align.CENTER
@@ -8096,9 +8121,9 @@ class GameView(context: Context) : View(context) {
         val q = Data.QUESTS[ev]
         // chapter header
         text.textSize = 13f * dp; text.color = Color.argb((230 * fade).toInt(), Color.red(evC), Color.green(evC), Color.blue(evC))
-        c.drawText(if (sceneChapter == 3) "THE END" else "CHAPTER ${sceneChapter + 1}", w / 2, 92f * dp, text)
+        sporeText(c, if (sceneChapter == 3) "THE END" else "CHAPTER ${sceneChapter + 1}", w / 2, 92f * dp, text)
         text.textSize = 24f * dp; text.color = Color.argb((255 * fade).toInt(), 255, 255, 255)
-        c.drawText("${Data.EVENT_ICONS[ev]} ${q.title}", w / 2, 122f * dp, text)
+        sporeText(c, "${Data.EVENT_ICONS[ev]} ${q.title}", w / 2, 122f * dp, text)
         text.color = Color.WHITE
 
         val l = sceneLine()
@@ -8137,7 +8162,7 @@ class GameView(context: Context) : View(context) {
                 2 -> { fill.color = Color.rgb(255, 110, 160); for (k in 0..2) { val ph = (t * 0.7f + k * 0.33f) % 1f
                     drawHeart(c, ex + (k - 1) * 14f * dp + sin(t * 3f + k) * 4f * dp, ey - ph * 30f * dp, 7f * dp * (1f - ph * 0.4f)) } }
                 3 -> { fill.color = Color.WHITE; c.drawCircle(ex, ey, 15f * dp, fill)
-                    text.textSize = 20f * dp; text.color = ACCENT; c.drawText("!", ex, ey + 7f * dp, text); text.color = Color.WHITE }
+                    text.textSize = 20f * dp; text.color = ACCENT; sporeText(c, "!", ex, ey + 7f * dp, text); text.color = Color.WHITE }
                 4 -> { stroke.color = Color.argb(200, 180, 220, 255); stroke.strokeWidth = 2.5f * dp
                     for (k in 0..2) { val o = sin(t * 30f + k) * 3f * dp; c.drawLine(ex - 10f * dp + k * 10f * dp + o, ey - 8f * dp, ex - 14f * dp + k * 10f * dp + o, ey + 8f * dp, stroke) } }
             }
@@ -8153,7 +8178,7 @@ class GameView(context: Context) : View(context) {
             val tw = text.measureText(name) + 28f * dp
             val tag = RectF(box.left + 18f * dp, box.top - 15f * dp, box.left + 18f * dp + tw, box.top + 15f * dp)
             fill.color = if (speaker == 0) evC else ACCENT; c.drawRoundRect(tag, 15f * dp, 15f * dp, fill)
-            text.color = BG; c.drawText(name, tag.centerX(), tag.centerY() + 4.5f * dp, text)
+            text.color = BG; sporeText(c, name, tag.centerX(), tag.centerY() + 4.5f * dp, text)
         }
         val shown = l.text.take((sceneT * 42f).toInt().coerceAtMost(l.text.length))
         text.textSize = 16f * dp
@@ -8164,13 +8189,13 @@ class GameView(context: Context) : View(context) {
         for ((k, ln) in full.withIndex()) {   // reveal letter by letter, keeping the final line breaks
             if (left <= 0) break
             val part = ln.take(left)
-            c.drawText(part, if (speaker == 2) w / 2 else box.left + 22f * dp, box.top + 38f * dp + k * 23f * dp, text)
+            sporeText(c, part, if (speaker == 2) w / 2 else box.left + 22f * dp, box.top + 38f * dp + k * 23f * dp, text)
             left -= ln.length + 1
         }
         text.textAlign = Paint.Align.CENTER
         if (sceneTyped() && l.choices == null) {
             text.textSize = 12f * dp; text.color = Color.argb((140 + 100 * sin(t * 5f)).toInt().coerceIn(0, 255), 255, 255, 255)
-            c.drawText(if (sceneIdx == sceneLines.size - 1) "tap to close" else "tap ▼", box.right - 50f * dp, box.bottom - 14f * dp, text)
+            sporeText(c, if (sceneIdx == sceneLines.size - 1) "tap to close" else "tap ▼", box.right - 50f * dp, box.bottom - 14f * dp, text)
         }
         text.color = Color.WHITE
         for (b in buttons) if (b.id != "scene_tap") drawButton(c, b)
@@ -8239,7 +8264,7 @@ class GameView(context: Context) : View(context) {
                 c.drawRoundRect(x - s * 0.25f, y - s * 0.6f, x + s * 0.25f, y, s * 0.22f, s * 0.22f, fill)
                 fill.shader = null
                 text.textSize = s * 0.15f; text.color = Color.rgb(70, 70, 85)
-                c.drawText("BOO!", x, y - s * 0.33f, text); text.color = Color.WHITE
+                sporeText(c, "BOO!", x, y - s * 0.33f, text); text.color = Color.WHITE
                 fill.color = Color.rgb(100, 170, 90)
                 c.drawOval(x - s * 0.32f, y - s * 0.06f, x + s * 0.32f, y + s * 0.04f, fill)
             }
@@ -8818,7 +8843,7 @@ class GameView(context: Context) : View(context) {
 
     private fun drawStickers(c: Canvas, w: Float, top: Float) {
         text.textSize = 13f * dp; text.color = TEXT_DIM
-        c.drawText("${lab.stickers.count { it }} of ${Data.STICKERS.size} stickers · drag them around! · page ${stickerPage + 1}/${stickerPages()}", w / 2, top + 6f * dp, text)
+        sporeText(c, "${lab.stickers.count { it }} of ${Data.STICKERS.size} stickers · drag them around! · page ${stickerPage + 1}/${stickerPages()}", w / 2, top + 6f * dp, text)
         text.color = Color.WHITE
         val b = stickerBoard()
         // a cozy cork board page
@@ -8842,12 +8867,12 @@ class GameView(context: Context) : View(context) {
                 fill.shader = RadialGradient(sx - rad * 0.3f, sy - rad * 0.3f, rad, shade(st.color, 0.35f), st.color, Shader.TileMode.CLAMP)
                 c.drawCircle(sx, sy, rad - 4f * dp, fill); fill.shader = null
                 fill.color = Color.argb(110, 255, 255, 255); c.drawOval(sx - rad * 0.55f, sy - rad * 0.7f, sx, sy - rad * 0.35f, fill)
-                text.textSize = rad * 0.85f; c.drawText(st.icon, sx, sy + rad * 0.3f, text)
+                text.textSize = rad * 0.85f; sporeText(c, st.icon, sx, sy + rad * 0.3f, text)
             } else {
                 stroke.color = Color.argb(120, 255, 245, 230); stroke.strokeWidth = 2f * dp
                 stroke.pathEffect = android.graphics.DashPathEffect(floatArrayOf(6f * dp, 5f * dp), 0f)
                 c.drawCircle(sx, sy, rad - 2f * dp, stroke); stroke.pathEffect = null
-                text.textSize = rad * 0.7f; text.color = Color.argb(140, 255, 245, 230); c.drawText("?", sx, sy + rad * 0.25f, text); text.color = Color.WHITE
+                text.textSize = rad * 0.7f; text.color = Color.argb(140, 255, 245, 230); sporeText(c, "?", sx, sy + rad * 0.25f, text); text.color = Color.WHITE
             }
             c.restore()
             // the label sits on a little paper tag so it reads clearly on the cork
@@ -8858,7 +8883,7 @@ class GameView(context: Context) : View(context) {
             fill.color = if (got) Color.argb(235, 255, 248, 232) else Color.argb(170, 255, 248, 232)
             c.drawRoundRect(sx - lw / 2, ly, sx + lw / 2, ly + 6f * dp + lines.size * 13f * dp, 6f * dp, 6f * dp, fill)
             text.color = if (got) Color.rgb(70, 40, 20) else Color.rgb(120, 85, 55)
-            for ((k, ln) in lines.withIndex()) c.drawText(ln, sx, ly + 13f * dp + k * 13f * dp, text)
+            for ((k, ln) in lines.withIndex()) sporeText(c, ln, sx, ly + 13f * dp + k * 13f * dp, text)
             text.color = Color.WHITE
         }
     }
@@ -8967,13 +8992,13 @@ class GameView(context: Context) : View(context) {
         val card = settingsCard(w, h)
         panel(c, card, 26f * dp)
         text.textSize = 24f * dp
-        c.drawText("Settings", w / 2, card.top + 42f * dp, text)
+        sporeText(c, "Settings", w / 2, card.top + 42f * dp, text)
         // credits
         val by = card.top + 64f * dp + 6 * 52f * dp + 62f * dp
         text.textSize = 13f * dp; text.color = TEXT_DIM
-        c.drawText("Shroomology ${versionName()}", w / 2, by + 26f * dp, text)
+        sporeText(c, "Shroomology ${versionName()}", w / 2, by + 26f * dp, text)
         text.textSize = 15f * dp; text.color = ACCENT
-        c.drawText("Made by Omnymara", w / 2, by + 50f * dp, text)
+        sporeText(c, "Made by Omnymara", w / 2, by + 50f * dp, text)
         // a tiny mushroom next to the credit
         drawShroom(c, 1, w / 2 - text.measureText("Made by Omnymara") / 2 - 18f * dp, by + 54f * dp, 22f * dp, 0, sin(t * 2f), (t % 4f) < 0.12f, false)
         text.color = Color.WHITE
@@ -8990,7 +9015,7 @@ class GameView(context: Context) : View(context) {
         while (text.textSize > 10f * dp && text.measureText(label) + 34f * dp > r.width() - 12f * dp) text.textSize -= 0.5f * dp
         val ih = min(24f * dp, r.height() * 0.6f)
         val b = ui(icon)
-        if (b == null) { text.color = textColor; c.drawText(fallback, r.centerX(), r.centerY() + 5f * dp, text); text.color = Color.WHITE; return }
+        if (b == null) { text.color = textColor; sporeText(c, fallback, r.centerX(), r.centerY() + 5f * dp, text); text.color = Color.WHITE; return }
         val iw = b.width * ih / b.height
         val spore = label.endsWith(" ✦") && ui("spore") != null
         val words = if (spore) label.removeSuffix(" ✦") else label
@@ -8999,7 +9024,7 @@ class GameView(context: Context) : View(context) {
         val x0 = r.centerX() - total / 2
         uiIcon(c, icon, x0 + iw / 2, r.centerY(), ih)
         text.textAlign = Paint.Align.LEFT; text.color = textColor
-        c.drawText(words, x0 + iw + 6f * dp, r.centerY() + 5.5f * dp, text)
+        sporeText(c, words, x0 + iw + 6f * dp, r.centerY() + 5.5f * dp, text)
         if (spore) uiIcon(c, "spore", x0 + iw + 6f * dp + text.measureText(words) + sw / 2 + 1f * dp, r.centerY(), text.textSize * 1.25f)
         text.textAlign = Paint.Align.CENTER; text.color = Color.WHITE
     }
@@ -9008,7 +9033,7 @@ class GameView(context: Context) : View(context) {
         fill.color = Color.argb(40, 255, 255, 255)
         c.drawRoundRect(r, 14f * dp, 14f * dp, fill)
         text.textAlign = Paint.Align.LEFT; text.textSize = 16f * dp
-        c.drawText(label, r.left + 16f * dp, r.centerY() + 6f * dp, text)
+        sporeText(c, label, r.left + 16f * dp, r.centerY() + 6f * dp, text)
         text.textAlign = Paint.Align.CENTER
         val sprite = when (label) { "Music" -> if (on) "tog_music_on" else "tog_music_off"; "Sound effects" -> if (on) "tog_sound_on" else "tog_sound_off"; else -> null }
         if (sprite != null && ui(sprite) != null) {
@@ -9164,13 +9189,13 @@ class GameView(context: Context) : View(context) {
         drawShroom(c, professor.species, r.left + 36f * dp, r.top + 74f * dp, 44f * dp, 0, sin(t * 2f), (t % 4f) < 0.12f, false, who = professor)
         text.textAlign = Paint.Align.LEFT
         text.textSize = 12f * dp; text.color = ACCENT
-        c.drawText("PROFESSOR SPORE · " + tb.name, r.left + 72f * dp, r.top + 30f * dp, text)
+        sporeText(c, "PROFESSOR SPORE · " + tb.name, r.left + 72f * dp, r.top + 30f * dp, text)
         text.textSize = 18f * dp; text.color = Color.WHITE
-        c.drawText(lines[0], r.left + 72f * dp, r.top + 56f * dp, text)
+        sporeText(c, lines[0], r.left + 72f * dp, r.top + 56f * dp, text)
         var y = r.top + 104f * dp
         text.textSize = 14f * dp; text.color = Color.argb(230, 255, 255, 255)
         for (para in lines.drop(1)) {
-            for (l in wrap(para, r.width() - 48f * dp)) { c.drawText(l, r.left + 24f * dp, y, text); y += 20f * dp }
+            for (l in wrap(para, r.width() - 48f * dp)) { sporeText(c, l, r.left + 24f * dp, y, text); y += 20f * dp }
             y += 10f * dp
         }
         text.color = Color.WHITE; text.textAlign = Paint.Align.CENTER
@@ -9208,10 +9233,10 @@ class GameView(context: Context) : View(context) {
         val r = welcomeCard(w, h)
         fill.color = Color.rgb(38, 26, 70); c.drawRoundRect(r, 26f * dp, 26f * dp, fill)
         panel(c, r, 26f * dp, PANEL_LIGHT)
-        text.textSize = 26f * dp; c.drawText("Welcome back!", w / 2, r.top + 46f * dp, text)
+        text.textSize = 26f * dp; sporeText(c, "Welcome back!", w / 2, r.top + 46f * dp, text)
         val mins = lab.offlineMs / 60000
         text.textSize = 13f * dp; text.color = TEXT_DIM
-        c.drawText("You were away " + (if (mins >= 60) "${mins / 60}h ${mins % 60}m" else "${mins}m") + ". Your mushrooms kept working!", w / 2, r.top + 72f * dp, text)
+        sporeText(c, "You were away " + (if (mins >= 60) "${mins / 60}h ${mins % 60}m" else "${mins}m") + ". Your mushrooms kept working!", w / 2, r.top + 72f * dp, text)
         text.color = Color.WHITE
         // a few of your shrooms holding up spore dust
         val shown = lab.home().take(3)
@@ -9225,9 +9250,9 @@ class GameView(context: Context) : View(context) {
             c.drawCircle(x, dy, 10f * dp, fill); fill.shader = null
         }
         text.textSize = 30f * dp; text.color = DUST
-        c.drawText("+${lab.pendingOffline} ✦", w / 2, r.top + 240f * dp, text)
+        sporeText(c, "+${lab.pendingOffline} ✦", w / 2, r.top + 240f * dp, text)
         text.textSize = 11.5f * dp; text.color = TEXT_DIM
-        c.drawText(if (lab.pendingOffline >= LabState.OFFLINE_CAP) "That's the most they can make while you're away (${LabState.OFFLINE_CAP} ✦)" else "Up to ${LabState.OFFLINE_CAP} ✦ while you're away", w / 2, r.top + 262f * dp, text)
+        sporeText(c, if (lab.pendingOffline >= LabState.OFFLINE_CAP) "That's the most they can make while you're away (${LabState.OFFLINE_CAP} ✦)" else "Up to ${LabState.OFFLINE_CAP} ✦ while you're away", w / 2, r.top + 262f * dp, text)
         text.color = Color.WHITE
         for (b in buttons) drawButton(c, b)
     }
@@ -9297,10 +9322,10 @@ class GameView(context: Context) : View(context) {
         drawShroom(c, professor.species, r.left + 30f * dp, r.top + 64f * dp, 38f * dp, 0, sin(t * 2f), (t % 4f) < 0.12f, false, who = professor)
         text.textAlign = Paint.Align.LEFT
         text.textSize = 12f * dp; text.color = ACCENT
-        c.drawText("PROFESSOR SPORE", r.left + 60f * dp, r.top + 26f * dp, text)
+        sporeText(c, "PROFESSOR SPORE", r.left + 60f * dp, r.top + 26f * dp, text)
         text.textSize = 15f * dp; text.color = Color.WHITE
         val lines = wrap(tutText(), w - 120f * dp)
-        for ((k, line) in lines.withIndex()) c.drawText(line, r.left + 60f * dp, r.top + 50f * dp + k * 21f * dp, text)
+        for ((k, line) in lines.withIndex()) sporeText(c, line, r.left + 60f * dp, r.top + 50f * dp + k * 21f * dp, text)
         text.textAlign = Paint.Align.CENTER
         for (b in buttons) if (b.id.startsWith("tut_")) drawButton(c, b)
     }
