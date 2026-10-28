@@ -694,8 +694,8 @@ class GameView(context: Context) : View(context) {
             val pr = dustPill(w)
             val hx = pr.left - 44f * dp
             list.add(Button("help", RectF(hx, 15f * dp, hx + 36f * dp, 51f * dp), "?", STYLE_NORMAL) { helpTab = tab; sound.play(Fx.POP, 0.5f, 1.2f) })
-            // the green + on the dust counter opens the packs
-            list.add(Button("dust_plus", RectF(pr.right - 6f * dp, pr.top - 2f * dp, pr.right + 34f * dp, pr.bottom + 2f * dp), "", STYLE_GHOST, custom = { _, _ -> }) {
+            // tapping the spore dust counter opens the spore packs in the Shop
+            list.add(Button("dust_plus", RectF(pr.left, pr.top - 2f * dp, pr.right, pr.bottom + 2f * dp), "", STYLE_GHOST, custom = { _, _ -> }) {
                 tab = Tab.SHOP; shopTab = 7; shopScroll = 0f; shopVel = 0f; selected = -1; sound.play(Fx.POP, 0.6f, 1.1f)
             })
         }
@@ -2407,7 +2407,7 @@ class GameView(context: Context) : View(context) {
         val tw = text.measureText("${max(0f, shownDust).toInt()}")
         val h = 44f * dp
         val pw = uiStretchWidth("spore_bar", h, 0.73f, 0.83f) + tw + 10f * dp
-        return RectF(w - 86f * dp - pw, 11f * dp, w - 86f * dp, 11f * dp + h)
+        return RectF(w - 62f * dp - pw, 11f * dp, w - 62f * dp, 11f * dp + h)
     }
 
     private fun drawTopBar(c: Canvas, w: Float) {
@@ -2424,6 +2424,8 @@ class GameView(context: Context) : View(context) {
         if (shownDust < 0f) shownDust = lab.dust.toFloat()
         val label = "${shownDust.toInt()}"
         val pr = dustPill(w)
+        val pressedDust = pressedId == "dust_plus"
+        if (pressedDust) { c.save(); c.scale(0.94f, 0.94f, pr.centerX(), pr.centerY()) }   // squish when tapped
         if (ui("spore_bar") != null) {
             val b = ui("spore_bar")!!
             uiStretch(c, "spore_bar", pr, 0.73f, 0.83f)
@@ -2432,19 +2434,13 @@ class GameView(context: Context) : View(context) {
             text.color = Color.argb(90, 30, 10, 60); sporeText(c, label, rx, pr.centerY() + 8f * dp, text)
             text.color = Color.rgb(255, 246, 214); sporeText(c, label, rx, pr.centerY() + 6.5f * dp, text)
             text.textAlign = Paint.Align.LEFT
-            // a green "+" bubble: tap it for spore packs
-            val px = pr.right + 16f * dp; val py = pr.centerY()
-            fill.color = Color.rgb(30, 90, 50); c.drawCircle(px, py + 1.5f * dp, 14.5f * dp, fill)
-            fill.color = Color.rgb(110, 225, 140); c.drawCircle(px, py, 14f * dp, fill)
-            fill.color = Color.argb(90, 255, 255, 255); c.drawOval(px - 9f * dp, py - 11f * dp, px + 4f * dp, py - 4f * dp, fill)
-            stroke.color = Color.WHITE; stroke.strokeWidth = 3.2f * dp; stroke.strokeCap = Paint.Cap.ROUND
-            c.drawLine(px - 6f * dp, py, px + 6f * dp, py, stroke); c.drawLine(px, py - 6f * dp, px, py + 6f * dp, stroke)
         } else {
             text.textSize = 18f * dp
             fill.color = Color.argb(110, 0, 0, 0); c.drawRoundRect(pr, 17f * dp, 17f * dp, fill)
             fill.color = DUST; drawSparkle(c, pr.left + 18f * dp, pr.centerY(), 4f * dp)
             text.color = Color.WHITE; sporeText(c, label, pr.left + 32f * dp, pr.centerY() + 6.5f * dp, text)
         }
+        if (pressedDust) c.restore()
         text.color = Color.WHITE
         text.textAlign = Paint.Align.CENTER
     }
