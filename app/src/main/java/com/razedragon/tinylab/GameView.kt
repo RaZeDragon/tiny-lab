@@ -3243,7 +3243,7 @@ class GameView(context: Context) : View(context) {
     /** Silhouettes of the giant mushrooms near the moon, so they can cover it. */
     private val moonMask = Path()
     /** The moon hangs in the open sky between the status strip and the mushroom skyline. */
-    private fun moonPos() = Pair(width * 0.8f, topBar + stripH() + (horizon() - topBar - stripH()) * 0.3f)
+    private fun moonPos() = Pair(width * 0.8f, topBar + stripH() + (horizon() - topBar - stripH()) * 0.22f)
 
     /** A soft glowing moon with a few craters. */
     private fun drawMoon(c: Canvas, x: Float, y: Float) {
