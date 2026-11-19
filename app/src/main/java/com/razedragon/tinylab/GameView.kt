@@ -2249,7 +2249,7 @@ class GameView(context: Context) : View(context) {
         val W = LabState.WORLD
         fun pick(prefix: String, n: Int) = prefix + (1 + r.nextInt(n))
         fun glowShroom(gx: Float, gz: Float, h: Float) { val k = r.nextInt(GLOW_SHROOMS.size); out.add(LawnItem(gx, gz, GLOW_SHROOMS[k], h, r.nextBoolean(), GLOW_COLS[k])) }
-        fun inPatchArea(gx: Float, gz: Float) = gx in 1.15f..1.92f && gz in 0.05f..0.82f
+        fun inPatchArea(gx: Float, gz: Float) = gx in 0.95f..2.05f && gz in 0.05f..0.9f
         // the hedge along the horizon: leafy bushes shoulder to shoulder, purple boulders, flowers, glowing mushrooms
         var x = -0.6f
         while (x < W + 0.6f) {
@@ -2690,12 +2690,12 @@ class GameView(context: Context) : View(context) {
             s.tx = (s.gx + (Random.nextFloat() - 0.5f) * 0.9f).coerceIn(0.08f, LabState.WORLD - 0.08f)
             s.tz = (s.gz + (Random.nextFloat() - 0.5f) * 0.6f).coerceIn(0.05f, 0.98f)
             if (s.area != 0 || !inPatch(s.tx, s.tz)) break
-            if (tries == 7) { s.tx = 1.1f; s.tz = (s.gz + 0.3f).coerceIn(0.05f, 0.98f) }
+            if (tries == 7) { s.tx = 0.85f; s.tz = (s.gz + 0.3f).coerceIn(0.05f, 0.98f) }
         }
     }
 
     /** The veggie patch's footprint on the meadow (plots, fence posts and sign). */
-    private fun inPatch(gx: Float, gz: Float) = gx in 1.2f..1.87f && gz in 0.12f..0.74f
+    private fun inPatch(gx: Float, gz: Float) = gx in 1.0f..1.99f && gz in 0.1f..0.82f
 
     private fun startAct(s: Shroom, act: Int, target: Int) {
         s.act = act; s.actTarget = target
@@ -2852,6 +2852,8 @@ class GameView(context: Context) : View(context) {
      *  darker with spots, gills and a rim of light, and each layer slides at its own speed when you swipe. */
     private fun drawSkyline(c: Canvas, w: Float, hz: Float, th: Theme) {
         val layers = 3
+        moonMask.reset()
+        val (mX, _) = moonPos()
         for (layer in 0 until layers) {
             val depthF = layer / (layers - 1f)                    // 0 far .. 1 near
             val base = if (layer == 0) th.forest1 else th.forest2
@@ -2900,6 +2902,7 @@ class GameView(context: Context) : View(context) {
                 path.quadTo(nx + sw + lean * 0.4f, baseY - stemH * 0.5f, nx + sw * 1.25f, baseY)
                 path.close()
                 fill.color = mix(col, th.skyBottom, 0.12f); c.drawPath(path, fill)
+                if (abs(nx - mX) < 90f * dp) moonMask.op(path, Path.Op.UNION)
                 fill.color = Color.argb(40, 0, 0, 0)       // shade on the right side of the stem
                 c.drawRect(nx + sw * 0.25f + lean * 0.6f, topY, nx + sw * 1.1f, baseY, fill)
                 // gills: a darker band under the cap
@@ -2914,6 +2917,7 @@ class GameView(context: Context) : View(context) {
                 path.quadTo(cx, topY + capH * 0.12f, cx - capW / 2, topY)
                 path.close()
                 fill.color = col; c.drawPath(path, fill)
+                if (abs(nx - mX) < 90f * dp) moonMask.op(path, Path.Op.UNION)
                 c.save(); c.clipPath(path)
                 // soft shading and a rim of light from the upper left
                 fill.color = Color.argb(45, 0, 0, 0)
@@ -2945,6 +2949,7 @@ class GameView(context: Context) : View(context) {
     private fun drawGardenScene(c: Canvas, w: Float, h: Float) {
         val hz = horizon()
         val th = Data.THEMES[lab.theme]
+        val skyY = moonPos().second
         // sky
         fill.shader = LinearGradient(0f, 0f, 0f, hz, th.skyTop, th.skyBottom, Shader.TileMode.CLAMP)
         c.drawRect(0f, 0f, w, hz + 2f * dp, fill)
@@ -2961,17 +2966,17 @@ class GameView(context: Context) : View(context) {
         }
         when (lab.theme) {
             5 -> { // big orange harvest moon
-                fill.shader = RadialGradient(w * 0.75f, hz * 0.66f, 70f * dp, Color.argb(120, 255, 170, 80), Color.argb(0, 255, 170, 80), Shader.TileMode.CLAMP)
-                c.drawCircle(w * 0.75f, hz * 0.66f, 70f * dp, fill); fill.shader = null
-                fill.color = Color.rgb(255, 190, 110); c.drawCircle(w * 0.75f, hz * 0.66f, 32f * dp, fill)
-                fill.color = Color.rgb(240, 160, 90); c.drawCircle(w * 0.75f - 9f * dp, hz * 0.66f - 6f * dp, 6f * dp, fill)
-                c.drawCircle(w * 0.75f + 10f * dp, hz * 0.66f + 8f * dp, 4f * dp, fill)
+                fill.shader = RadialGradient(w * 0.75f, skyY, 70f * dp, Color.argb(120, 255, 170, 80), Color.argb(0, 255, 170, 80), Shader.TileMode.CLAMP)
+                c.drawCircle(w * 0.75f, skyY, 70f * dp, fill); fill.shader = null
+                fill.color = Color.rgb(255, 190, 110); c.drawCircle(w * 0.75f, skyY, 32f * dp, fill)
+                fill.color = Color.rgb(240, 160, 90); c.drawCircle(w * 0.75f - 9f * dp, skyY - 6f * dp, 6f * dp, fill)
+                c.drawCircle(w * 0.75f + 10f * dp, skyY + 8f * dp, 4f * dp, fill)
             }
             1, 2, 6 -> { // sun
                 val sc = when (lab.theme) { 1 -> Color.rgb(255, 245, 170); 6 -> Color.rgb(255, 240, 200); else -> Color.rgb(255, 190, 110) }
-                fill.shader = RadialGradient(w * 0.78f, hz * 0.66f, 60f * dp, sc, Color.argb(0, Color.red(sc), Color.green(sc), Color.blue(sc)), Shader.TileMode.CLAMP)
-                c.drawCircle(w * 0.78f, hz * 0.66f, 60f * dp, fill); fill.shader = null
-                fill.color = sc; c.drawCircle(w * 0.78f, hz * 0.66f, 22f * dp, fill)
+                fill.shader = RadialGradient(w * 0.78f, skyY, 60f * dp, sc, Color.argb(0, Color.red(sc), Color.green(sc), Color.blue(sc)), Shader.TileMode.CLAMP)
+                c.drawCircle(w * 0.78f, skyY, 60f * dp, fill); fill.shader = null
+                fill.color = sc; c.drawCircle(w * 0.78f, skyY, 22f * dp, fill)
                 if (lab.theme == 1) { // drifting clouds
                     fill.color = Color.argb(200, 255, 255, 255)
                     for (k in 0..2) {
@@ -3235,6 +3240,11 @@ class GameView(context: Context) : View(context) {
         }
     }
 
+    /** Silhouettes of the giant mushrooms near the moon, so they can cover it. */
+    private val moonMask = Path()
+    /** The moon hangs in the open sky between the status strip and the mushroom skyline. */
+    private fun moonPos() = Pair(width * 0.8f, topBar + stripH() + (horizon() - topBar - stripH()) * 0.3f)
+
     /** A soft glowing moon with a few craters. */
     private fun drawMoon(c: Canvas, x: Float, y: Float) {
         val rain = LabState.raining()
@@ -3363,7 +3373,14 @@ class GameView(context: Context) : View(context) {
         if (area == 0) {
             for (cr in critters) if (cr.type == 0) drawCritter(c, cr)
             drawNight(c, w)
-            if (lab.theme !in intArrayOf(1, 2, 3, 5, 6)) drawMoon(c, w * 0.78f, horizon() * 0.66f)
+            if (lab.theme !in intArrayOf(1, 2, 3, 5, 6)) {
+                // drawn after the night tint so it glows, but clipped so the giant mushrooms stand in front of it
+                val (mx, my) = moonPos()
+                c.save()
+                @Suppress("DEPRECATION") c.clipPath(moonMask, android.graphics.Region.Op.DIFFERENCE)
+                drawMoon(c, mx, my)
+                c.restore()
+            }
             drawAmbient(c, w)
             drawSeasonAir(c, w)
         }
@@ -6037,8 +6054,8 @@ class GameView(context: Context) : View(context) {
     // ---------- The veggie patch (in the meadow, to the right) ----------
 
     private var growPick = -1      // plot waiting for a seed
-    private fun plotGx(i: Int) = 1.3f + (i % 3) * 0.22f + (i / 3) * 0.05f
-    private fun plotGz(i: Int) = 0.36f + (i / 3) * 0.26f
+    private fun plotGx(i: Int) = 1.17f + (i % 3) * 0.34f
+    private fun plotGz(i: Int) = 0.32f + (i / 3) * 0.34f
 
     private fun tapPlot(i: Int) {
         val now = System.currentTimeMillis()
@@ -6705,7 +6722,7 @@ class GameView(context: Context) : View(context) {
     private class Snowman(val gx: Float, val gz: Float, var prog: Float = 0f)
     private val snowmen = ArrayList<Snowman>()
     private val PUDDLES = listOf(0.25f to 0.55f, 0.72f to 0.35f, 0.55f to 0.85f, 1.2f to 0.6f, 1.75f to 0.4f)
-    private val LEAF_PILES = listOf(0.15f to 0.3f, 0.82f to 0.62f, 0.4f to 0.92f, 1.3f to 0.3f, 1.85f to 0.75f)
+    private val LEAF_PILES = listOf(0.15f to 0.3f, 0.82f to 0.62f, 0.4f to 0.92f, 1.55f to 0.97f, 0.95f to 0.2f)
     private val pileKick = FloatArray(5)
 
     private fun snowy() = area == 0 && !LabState.raining() && (Data.season() == 3 || eventNow() == 2)
